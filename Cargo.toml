@@ -10,4 +10,8 @@ documentation = "https://docs.rs/adrs"
 readme = "README.md"
 edition = "2018"
 
+[lib]
+name = "adrs"
+path = "src/adrs/lib.rs" 
+
 [dependencies]
