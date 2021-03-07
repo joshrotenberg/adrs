@@ -1,0 +1,13 @@
+[package]
+name = "adrs"
+version = "0.1.0"
+authors = ["josh rotenberg <joshrotenberg@gmail.com>"]
+description = "Architectural Decision Record command line tool"
+license = "MIT/Apache-2.0"
+homepage = "https://github.com/joshrotenberg/adrs"
+repository = "https://github.com/joshrotenberg/adrs.git"
+documentation = "https://docs.rs/adrs"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
