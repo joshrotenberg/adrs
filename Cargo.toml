@@ -14,4 +14,8 @@ edition = "2018"
 name = "adrs"
 path = "src/adrs/lib.rs" 
 
+[[bin]]
+name = "adrs"
+
 [dependencies]
+clap = "2.33.3"
