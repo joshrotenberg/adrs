@@ -70,7 +70,7 @@ pub fn build() -> App<'static, 'static> {
         .subcommand(SubCommand::with_name("config").about("Show configuration"))
         .subcommand(
             SubCommand::with_name("generate")
-                .about("Show configuration")
+                .about("Generate summary documentation")
                 .arg(
                     Arg::with_name("TYPE")
                         .takes_value(true)
