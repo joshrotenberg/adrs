@@ -34,4 +34,48 @@ pub fn build() -> App<'static, 'static> {
                         .help("Link to a previous ADR"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("link")
+                .about("Link together two ADRs")
+                .arg(
+                    Arg::with_name("SOURCE")
+                        .short("s")
+                        .long("source")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("TARGET")
+                        .short("t")
+                        .long("target")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("LINK")
+                        .short("l")
+                        .long("link")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("REVERSE-LINK")
+                        .short("r")
+                        .long("reverse-link")
+                        .takes_value(true)
+                        .required(true),
+                ),
+        )
+        .subcommand(SubCommand::with_name("list").about("List the ADRs"))
+        .subcommand(SubCommand::with_name("config").about("Show configuration"))
+        .subcommand(
+            SubCommand::with_name("generate")
+                .about("Show configuration")
+                .arg(
+                    Arg::with_name("TYPE")
+                        .takes_value(true)
+                        .required(true)
+                        .possible_values(&["toc", "graph"]),
+                ),
+        )
 }
