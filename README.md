@@ -1,6 +1,6 @@
 # adrs
 
-![Build status](https://github.com/joshrotenberg/adrs/workflows/Elixir%20CI/badge.svg)
+![Build status](https://github.com/joshrotenberg/adrs/workflows/Build/badge.svg)
 [![crates.io](https://img.shields.io/crates/d/adrs.svg)](https://crates.io/crates/adrs)
 [![docs](https://docs.rs/adrs/badge.svg)](https://docs.rs/adrs)
 [![Rust](https://github.com/joshrotenberg/adrs/workflows/Rust/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ARust)
