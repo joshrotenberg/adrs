@@ -8,7 +8,7 @@ use std::path::Path;
 
 const INIT_ADR_FILE_NAME: &'static str = "0001-record-architecture-decisions.md";
 
-pub fn run(matches: &ArgMatches) -> Result<(), Box<dyn Error>> {
+pub(crate) fn run(matches: &ArgMatches) -> Result<(), Box<dyn Error>> {
     if let Some(directory) = matches.value_of("DIRECTORY") {
         fs::create_dir_all(directory)?;
         let path = Path::new(directory).join(INIT_ADR_FILE_NAME);
