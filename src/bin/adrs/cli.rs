@@ -9,7 +9,7 @@ pub fn build() -> App<'static, 'static> {
                 .about("Initialize a new ADR directory")
                 .arg(
                     Arg::with_name("DIRECTORY")
-                        .default_value("doc/adr")
+                        .default_value(crate::commands::ADR_DEFAULT_DIRECTORY)
                         .help("specify the ADR directory"),
                 ),
         )

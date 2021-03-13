@@ -1,8 +1,7 @@
 use adrs::ADR;
 
-#[test]
+// #[test]
 fn test_new() {
-
-    let mut adr = ADR::new("./foo");
-    println!("{:?}", adr);
+    let adr = ADR::new().title("My New ADR").render();
+     dbg!(adr);
 }

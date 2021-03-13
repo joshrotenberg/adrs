@@ -20,3 +20,6 @@ name = "adrs"
 [dependencies]
 clap = "2.33.3"
 chrono = "0.4"
+handlebars = "3.5.3"
+thiserror = "1.0"
+heck = "0.3.1"
