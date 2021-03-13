@@ -1,8 +1,11 @@
 # adrs
 
+![Build status](https://github.com/joshrotenberg/adrs/workflows/Elixir%20CI/badge.svg)
 [![crates.io](https://img.shields.io/crates/d/adrs.svg)](https://crates.io/crates/adrs)
 [![docs](https://docs.rs/adrs/badge.svg)](https://docs.rs/adrs)
 [![Rust](https://github.com/joshrotenberg/adrs/workflows/Rust/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ARust)
+[![dependency status](https://deps.rs/repo/github/joshrotenberg/adrs/status.svg)](https://deps.rs/repo/github/joshrotenberg/adrs)
+
 
 `adrs` is a command-line tool for managing [Architectural Decision Records][0]. 
 
