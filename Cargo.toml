@@ -1,25 +1,30 @@
 [package]
-name = "adrs"
-version = "0.1.0"
 authors = ["josh rotenberg <joshrotenberg@gmail.com>"]
 description = "Architectural Decision Record command line tool"
-license = "MIT/Apache-2.0"
-homepage = "https://github.com/joshrotenberg/adrs"
-repository = "https://github.com/joshrotenberg/adrs.git"
 documentation = "https://docs.rs/adrs"
-readme = "README.md"
 edition = "2018"
+homepage = "https://github.com/joshrotenberg/adrs"
+license = "MIT/Apache-2.0"
+name = "adrs"
+readme = "README.md"
+repository = "https://github.com/joshrotenberg/adrs.git"
+version = "0.1.0"
 
 [lib]
 name = "adrs"
-path = "src/adrs/lib.rs" 
+path = "src/adrs/lib.rs"
 
 [[bin]]
 name = "adrs"
 
 [dependencies]
-clap = "2.33.3"
 chrono = "0.4"
+clap = "2.33.3"
 handlebars = "3.5.3"
-thiserror = "1.0"
 heck = "0.3.1"
+thiserror = "1.0"
+
+[dev-dependencies]
+assert_cmd = "1.0.3"
+assert_fs = "1.0.1"
+predicates = "1.0.7"
