@@ -4,15 +4,16 @@ pub fn build() -> App<'static, 'static> {
     App::new("adrs")
         .version(env!("CARGO_PKG_VERSION"))
         .setting(AppSettings::SubcommandRequiredElseHelp)
-        .subcommand(
-            SubCommand::with_name("init")
-                .about("Initialize a new ADR directory")
-                .arg(
-                    Arg::with_name("DIRECTORY")
-                        .default_value(crate::commands::ADR_DEFAULT_DIRECTORY)
-                        .help("specify the ADR directory"),
-                ),
+        .arg(
+            Arg::with_name("DIRECTORY")
+                .short("d")
+                .long("directory")
+                .default_value("woof")
+                .global(true)
+                .default_value(crate::commands::ADR_DEFAULT_DIRECTORY)
+                .help("Specify the ADR directory"),
         )
+        .subcommand(SubCommand::with_name("init").about("Initialize a new ADR directory"))
         .subcommand(
             SubCommand::with_name("new")
                 .about("Create a new, numbered ADR")
