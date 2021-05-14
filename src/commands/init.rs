@@ -6,7 +6,7 @@ use std::error::Error;
 use std::fs::{self, File};
 use std::path::Path;
 
-const INIT_ADR_FILE_NAME: &'static str = "0001-record-architecture-decisions.md";
+const INIT_ADR_FILE_NAME: &str = "0001-record-architecture-decisions.md";
 
 pub(crate) fn run(matches: &ArgMatches) -> Result<(), Box<dyn Error>> {
     if let Some(directory) = matches.value_of("DIRECTORY") {

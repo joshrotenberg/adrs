@@ -33,7 +33,7 @@ impl Default for Status {
 
 // Struct representing an ADR for parsing and/or rendering.
 #[derive(Debug, Clone)]
-pub struct ADR<'a> {
+pub struct Adr<'a> {
     pub directory: &'a str,
     pub filename: Option<String>,
     pub index: u16,
@@ -47,7 +47,13 @@ pub struct ADR<'a> {
     is_rendered: bool,
 }
 
-impl<'a> ADR<'a> {
+impl<'a> Default for Adr<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<'a> Adr<'a> {
     // Create a new ADR with the default status, default directory location and current date.
     pub fn new() -> Self {
         Self {
@@ -67,13 +73,13 @@ impl<'a> ADR<'a> {
 
     // Set the top level directory for the ADR, overriding the default. This can be a relative or fully qualified path.
     pub fn directory(mut self, directory: &'a str) -> Self {
-        self.directory = directory.as_ref();
+        self.directory = directory;
         self
     }
 
     // Set the ADR title. This field is required for rendering.
     pub fn title(mut self, title: &'a str) -> Self {
-        self.title = Some(title.as_ref());
+        self.title = Some(title);
         self
     }
 
@@ -85,19 +91,19 @@ impl<'a> ADR<'a> {
 
     // Set the ADR's context text.
     pub fn context(mut self, context: &'a str) -> Self {
-        self.context = Some(context.as_ref());
+        self.context = Some(context);
         self
     }
 
     // Set the ADR's decision text.
     pub fn decision(mut self, decision: &'a str) -> Self {
-        self.decision = Some(decision.as_ref());
+        self.decision = Some(decision);
         self
     }
 
     // Set the ADR's consequences text.
     pub fn consequences(mut self, consequences: &'a str) -> Self {
-        self.consequences = Some(consequences.as_ref());
+        self.consequences = Some(consequences);
         self
     }
 
@@ -151,7 +157,7 @@ impl<'a> ADR<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ADR;
+    use crate::Adr;
 
     #[derive(Debug, Default)]
     pub struct What<'a> {
@@ -178,7 +184,7 @@ mod tests {
 
     // #[test]
     fn test_generate_filename() {
-        let adr = ADR::new().directory("what").title("the").render();
+        let adr = Adr::new().directory("what").title("the").render();
 
         // .generate_filename();
         // let x = adr.filename;
