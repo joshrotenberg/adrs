@@ -11,6 +11,15 @@ repository = "https://github.com/joshrotenberg/adrs.git"
 version = "0.1.0"
 
 [dependencies]
+anyhow = "1.0.80"
 clap = { version = "4.5.1", features = ["derive"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
+tinytemplate = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+time = { version = "0.3.34", features = ["local-offset", "formatting", "macros"] }
+edit = "0.1.5"
+
+[dev-dependencies]
+assert_cmd = "2.0.14"
+assert_fs = "1.1.1"

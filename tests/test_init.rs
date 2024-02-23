@@ -25,12 +25,34 @@ fn test_init_with_directory() {
     Command::cargo_bin("adrs")
         .unwrap()
         .arg("init")
-        .arg("-d")
         .arg(tmp_dir.path())
         .assert()
         .success();
 
     assert!(Path::new(tmp_dir.path())
         .join("0001-record-architecture-decisions.md")
+        .exists());
+}
+
+#[test]
+fn test_init_with_file_already_in_directory() {
+    let tmp_dir = TempDir::new().unwrap();
+    std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(format!(
+            "{}/0001-record-architecture-decisions.md",
+            tmp_dir.path().to_str().unwrap()
+        ))
+        .unwrap();
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("init")
+        .arg(tmp_dir.path())
+        .assert()
+        .success();
+
+    assert!(Path::new(tmp_dir.path())
+        .join("0002-record-architecture-decisions.md")
         .exists());
 }

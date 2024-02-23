@@ -1,4 +1,22 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
+use serde::Serialize;
+use std::{fs::create_dir_all, path::PathBuf};
+
+use crate::adr::AdrBuilder;
+
+mod adr;
+
+#[derive(Debug, Serialize)]
+struct TemplateContext {
+    title: String,
+    number: i32,
+    date: String,
+    status: String,
+    context: String,
+    decision: String,
+    consequences: String,
+}
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -13,8 +31,8 @@ enum Commands {
     /// Initializes the directory of architecture decision records
     Init {
         /// Directory to initialize
-        #[arg(short, long, default_value = "doc/adr")]
-        directory: String,
+        #[arg(default_value = "doc/adr")]
+        directory: PathBuf,
     },
     /// Create a new, numbered ADR
     New {
@@ -54,7 +72,7 @@ enum GenerateCommands {
     Graph {},
 }
 
-fn main() {
+fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::TRACE)
         .init();
@@ -63,7 +81,16 @@ fn main() {
 
     match &cli.command {
         Commands::Init { directory } => {
-            tracing::debug!(?directory);
+            create_dir_all(directory)?;
+            let adr = AdrBuilder::new()
+                .title("Record architecture decisions")
+                .status("Accepted")
+                .context("We need to record the architectural decisions made on this project.")
+                .decision("We will use ADRs to record the decisions made on this project.")
+                .consequences("We will have a record of the decisions made on this project.")
+                .write(directory)?;
+
+            tracing::debug!("Created {}", adr);
         }
         Commands::New {
             superceded,
@@ -100,4 +127,5 @@ fn main() {
             }
         },
     }
+    Ok(())
 }
