@@ -79,12 +79,7 @@ impl AdrBuilder {
         let mut tt = TinyTemplate::new();
         tt.add_template("adr", TEMPLATE)?;
         let rendered = tt.render("adr", &context)?;
-        let x = format!(
-            "{}/{:0>4}-{}.md",
-            path.display(), // .into().to_string(),
-            next_adr_number,
-            filename
-        );
+        let x = format!("{}/{:0>4}-{}.md", path.display(), next_adr_number, filename);
         std::fs::write(&x, rendered)?;
         Ok(x)
     }

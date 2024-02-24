@@ -58,7 +58,11 @@ enum Commands {
         reverse_link: String,
     },
     /// List ADRs
-    List {},
+    List {
+        /// Directory to list
+        #[arg(default_value = "doc/adr")]
+        directory: PathBuf,
+    },
     /// Show the current configuration
     Config {},
     /// Generates summary documentation about the ADRs
@@ -91,6 +95,11 @@ fn main() -> Result<()> {
                 .write(directory)?;
 
             tracing::debug!("Created {}", adr);
+            std::fs::write(
+                std::env::current_dir()?.join(".adr-dir"),
+                directory.to_str().unwrap(),
+            )?;
+            tracing::debug!("Wrote .adr-dir");
         }
         Commands::New {
             superceded,
@@ -112,8 +121,14 @@ fn main() -> Result<()> {
             tracing::debug!(?target);
             tracing::debug!(?reverse_link);
         }
-        Commands::List {} => {
+        Commands::List { directory } => {
             tracing::debug!("list");
+            let entries = std::fs::read_dir(directory)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                tracing::debug!(?path);
+            }
         }
         Commands::Config {} => {
             tracing::debug!("config");
