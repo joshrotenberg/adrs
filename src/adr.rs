@@ -8,14 +8,14 @@ use tinytemplate::TinyTemplate;
 static TEMPLATE: &str = include_str!("../templates/nygard.md");
 
 #[derive(Debug, Serialize)]
-struct AdrContext {
-    title: String,
-    number: i32,
-    date: String,
-    status: String,
-    context: String,
-    decision: String,
-    consequences: String,
+pub struct AdrContext {
+    pub title: String,
+    pub number: i32,
+    pub date: String,
+    pub status: String,
+    pub context: String,
+    pub decision: String,
+    pub consequences: String,
 }
 
 pub struct AdrBuilder {

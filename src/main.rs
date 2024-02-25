@@ -1,11 +1,17 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use serde::Serialize;
-use std::{fs::create_dir_all, path::PathBuf};
+use std::{
+    fs::create_dir_all,
+    path::{Path, PathBuf},
+};
+use time::macros::format_description;
 
-use crate::adr::AdrBuilder;
+// use crate::adr::{AdrBuilder, AdrContext};
 
-mod adr;
+// mod adr;
+mod init;
+mod new;
 
 #[derive(Debug, Serialize)]
 struct TemplateContext {
@@ -28,36 +34,22 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initializes the directory of architecture decision records
-    Init {
-        /// Directory to initialize
-        #[arg(default_value = "doc/adr")]
-        directory: PathBuf,
-    },
-    /// Create a new, numbered ADR
-    New {
-        /// A reference to a previous decision to supercede with this new one
-        #[arg(short, long)]
-        superceded: Option<Vec<String>>,
-        /// Link the new ADR to a previous ADR
-        #[arg(short, long)]
-        link: Option<Vec<String>>,
-        /// Title of the new ADR
-        #[arg(trailing_var_arg = true, required = true)]
-        title: Vec<String>,
-    },
-    /// Link ADRs
+    /// Initializes the directory of Architecture Decision Records
+    Init(init::InitArgs),
+    /// Create a new, numbered Architectural Decision Record
+    New(new::NewArgs),
+    /// Link Architectural Decision Records
     Link {
-        /// The source ADR number or file name match
+        /// The source Architectural Decision Record number or file name match
         source: i32,
-        /// Description of the link to create in the source ADR
+        /// Description of the link to create in the source Architectural Decision Record
         link: String,
-        /// The target ADR number or file name match
+        /// The target Architectural Decision Record number or file name match
         target: i32,
-        /// Description of the link to create in the target ADR
+        /// Description of the link to create in the target Architectural Decision Record
         reverse_link: String,
     },
-    /// List ADRs
+    /// List Architectural Decision Records
     List {
         /// Directory to list
         #[arg(default_value = "doc/adr")]
@@ -65,7 +57,7 @@ enum Commands {
     },
     /// Show the current configuration
     Config {},
-    /// Generates summary documentation about the ADRs
+    /// Generates summary documentation about the Architectural Decision Records
     #[command(subcommand)]
     Generate(GenerateCommands),
 }
@@ -84,31 +76,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Init { directory } => {
-            create_dir_all(directory)?;
-            let adr = AdrBuilder::new()
-                .title("Record architecture decisions")
-                .status("Accepted")
-                .context("We need to record the architectural decisions made on this project.")
-                .decision("We will use ADRs to record the decisions made on this project.")
-                .consequences("We will have a record of the decisions made on this project.")
-                .write(directory)?;
-
-            tracing::debug!("Created {}", adr);
-            std::fs::write(
-                std::env::current_dir()?.join(".adr-dir"),
-                directory.to_str().unwrap(),
-            )?;
-            tracing::debug!("Wrote .adr-dir");
+        Commands::Init(args) => {
+            init::run(args)?;
         }
-        Commands::New {
-            superceded,
-            link,
-            title,
-        } => {
-            tracing::debug!(?title);
-            tracing::debug!(?superceded);
-            tracing::debug!(?link);
+        Commands::New(args) => {
+            new::run(args)?;
         }
         Commands::Link {
             source,
@@ -143,4 +115,61 @@ fn main() -> Result<()> {
         },
     }
     Ok(())
+}
+
+pub(crate) fn now() -> Result<String> {
+    let now = time::OffsetDateTime::now_local()?;
+    let x = now.format(format_description!("[year]-[month]-[day]"))?;
+    Ok(x)
+}
+
+pub(crate) fn adr_filename(title: &str) -> String {
+    title
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join("-")
+        .to_lowercase()
+}
+
+pub(crate) fn next_adr_sequence(path: impl AsRef<Path>) -> Result<i32> {
+    let entries = std::fs::read_dir(path)?;
+    let mut max = 0;
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            let file_name = path.file_name().unwrap().to_str().unwrap();
+            if file_name.starts_with(char::is_numeric) {
+                if let Some((num, _rest)) = file_name.split_once('-') {
+                    if let Ok(number) = num.parse::<i32>() {
+                        if number > max {
+                            max = number;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(max + 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_fs::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn test_generate_filename() {
+        let title = "Record Architecture Decisions";
+        let result = adr_filename(title);
+        assert_eq!(result, "record-architecture-decisions");
+    }
+
+    #[test]
+    fn test_next_adr_number() {
+        let tmp_dir = TempDir::new().unwrap();
+        let result = next_adr_sequence(tmp_dir.path());
+        assert_eq!(result.unwrap(), 1);
+    }
 }
