@@ -1,4 +1,7 @@
-use std::fs::{read_dir, read_to_string};
+use std::{
+    fs::{read_dir, read_to_string},
+    num::ParseIntError,
+};
 
 use anyhow::Result;
 use clap::Args;
@@ -18,7 +21,7 @@ pub(crate) struct NewArgs {
     superceded: Vec<String>,
     /// Link the new Architectural Decision to a previous Architectural Decision Record
     #[arg(short, long)]
-    link: Option<Vec<String>>,
+    link: Vec<String>,
     /// Title of the new Architectural Decision Record
     #[arg(trailing_var_arg = true, required = true)]
     title: Vec<String>,
@@ -30,6 +33,7 @@ struct NewAdrContext {
     title: String,
     date: String,
     superceded: Vec<(String, String)>,
+    linked: Vec<(String, String, String)>,
 }
 
 pub(crate) fn run(args: &NewArgs) -> Result<()> {
@@ -51,13 +55,38 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
             (parts.1.to_string(), best_match)
         })
         .collect::<Vec<(_, _)>>();
+
     tracing::debug!(?superceded);
+
+    let linked = args
+        .link
+        .iter()
+        .map(|link| link.split(':').collect())
+        .map(|parts: Vec<_>| {
+            let linked_adr = best_match(&adr_dir, parts[0]).unwrap();
+            let link_name = parts[1];
+            // XXX: deal with the reverse link 
+            let reverse_link = parts[2];
+
+            let lines = read_to_string(linked_adr.clone())
+                .unwrap()
+                .lines()
+                .map(String::from)
+                .collect::<Vec<_>>();
+            let first = lines.first().unwrap().clone();
+            let parts = first.split_once(char::is_whitespace).unwrap();
+
+            (link_name.to_owned(), parts.1.to_string(), linked_adr)
+        })
+        .collect::<Vec<_>>();
+    tracing::debug!(?linked);
 
     let new_context = NewAdrContext {
         number: next_adr_sequence(&adr_dir)?,
         date: now()?,
         title: args.title.join(" "),
         superceded,
+        linked,
     };
 
     let mut tt = TinyTemplate::new();
@@ -74,6 +103,7 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
     std::fs::write(&filename, edited)?;
 
     tracing::debug!("Created {}", filename);
+    println!("{}", filename);
 
     Ok(())
 }
@@ -110,10 +140,23 @@ fn best_match_str(path: &str, s: &str) -> Result<String> {
         .collect::<Vec<(_, _)>>();
     adrs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-    tracing::debug!(?adrs);
-    let first = adrs.first().unwrap();
+    // tracing::debug!(?adrs);
+    let first = adrs.first().expect("No ADR matched");
     Ok(first.0.to_str().unwrap().to_string())
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use std::num::ParseIntError;
+
+    #[test]
+    fn test_stuff() {
+        let nums = vec!["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+
+        let x = nums
+            .iter()
+            .map(|n| n.parse::<i32>())
+            .collect::<Result<Vec<_>, ParseIntError>>();
+        dbg!(x);
+    }
+}
