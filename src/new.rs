@@ -1,7 +1,4 @@
-use std::{
-    fs::{read_dir, read_to_string},
-    num::ParseIntError,
-};
+use std::fs::{read_dir, read_to_string};
 
 use anyhow::Result;
 use clap::Args;
@@ -65,8 +62,8 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         .map(|parts: Vec<_>| {
             let linked_adr = best_match(&adr_dir, parts[0]).unwrap();
             let link_name = parts[1];
-            // XXX: deal with the reverse link 
-            let reverse_link = parts[2];
+            // XXX: deal with the reverse link
+            let _reverse_link = parts[2];
 
             let lines = read_to_string(linked_adr.clone())
                 .unwrap()
