@@ -39,7 +39,7 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         .superceded
         .iter()
         .map(|s| {
-            let best_match = best_match(&adr_dir, &s).unwrap();
+            let best_match = best_match(&adr_dir, s).unwrap();
             let lines = read_to_string(best_match.clone())
                 .unwrap()
                 .lines()
@@ -57,7 +57,7 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         number: next_adr_sequence(&adr_dir)?,
         date: now()?,
         title: args.title.join(" "),
-        superceded: superceded,
+        superceded,
     };
 
     let mut tt = TinyTemplate::new();

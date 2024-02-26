@@ -1,15 +1,9 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use serde::Serialize;
-use std::{
-    fs::create_dir_all,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use time::macros::format_description;
 
-// use crate::adr::{AdrBuilder, AdrContext};
-
-// mod adr;
 mod init;
 mod new;
 
