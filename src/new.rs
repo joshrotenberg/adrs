@@ -3,6 +3,8 @@ use std::fs::{read_dir, read_to_string};
 use anyhow::Result;
 use clap::Args;
 use edit::edit;
+use pulldown_cmark::{Event, HeadingLevel, Tag};
+use pulldown_cmark_to_cmark::cmark_resume;
 use serde::Serialize;
 use tinytemplate::TinyTemplate;
 
@@ -55,6 +57,8 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
 
     tracing::debug!(?superceded);
 
+    let title = args.title.join(" ");
+    let number = next_adr_sequence(&adr_dir)?;
     let linked = args
         .link
         .iter()
@@ -62,8 +66,7 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         .map(|parts: Vec<_>| {
             let linked_adr = best_match(&adr_dir, parts[0]).unwrap();
             let link_name = parts[1];
-            // XXX: deal with the reverse link
-            let _reverse_link = parts[2];
+            let reverse_link = parts[2];
 
             let lines = read_to_string(linked_adr.clone())
                 .unwrap()
@@ -72,6 +75,12 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
                 .collect::<Vec<_>>();
             let first = lines.first().unwrap().clone();
             let parts = first.split_once(char::is_whitespace).unwrap();
+            let filename = format!("{:0>4}-{}.md", number, adr_filename(&title));
+            append_status(
+                &linked_adr,
+                format!("{} [{}. {}]({})", reverse_link, number, title, filename).as_str(),
+            )
+            .unwrap();
 
             (link_name.to_owned(), parts.1.to_string(), linked_adr)
         })
@@ -79,9 +88,9 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
     tracing::debug!(?linked);
 
     let new_context = NewAdrContext {
-        number: next_adr_sequence(&adr_dir)?,
+        number: number,
         date: now()?,
-        title: args.title.join(" "),
+        title,
         superceded,
         linked,
     };
@@ -137,23 +146,117 @@ fn best_match_str(path: &str, s: &str) -> Result<String> {
         .collect::<Vec<(_, _)>>();
     adrs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-    // tracing::debug!(?adrs);
     let first = adrs.first().expect("No ADR matched");
     Ok(first.0.to_str().unwrap().to_string())
 }
 
+fn get_status(path: &str) -> Result<Vec<String>> {
+    let markdown_input = read_to_string(path)?;
+    let mut in_status = false;
+    let mut status_lines = Vec::new();
+
+    for line in markdown_input.lines() {
+        if line.starts_with("## Status") {
+            in_status = true;
+        } else if line.starts_with("## ") && in_status {
+            in_status = false;
+        } else if in_status {
+            if !line.is_empty() {
+                status_lines.push(line.to_owned());
+            }
+        }
+    }
+    Ok(status_lines)
+}
+
+fn append_status(path: &str, status: &str) -> Result<()> {
+    let markdown_input = read_to_string(path)?;
+    let mut buf = String::with_capacity(markdown_input.len() + 128);
+
+    let mut state = None;
+    let mut in_status = false;
+    for (event, offset) in pulldown_cmark::Parser::new(&markdown_input).into_offset_iter() {
+        match event {
+            Event::End(Tag::Heading(HeadingLevel::H2, _, _)) => {
+                if markdown_input[offset].starts_with("## Status") {
+                    in_status = true;
+                }
+            }
+            Event::End(Tag::Paragraph) => {
+                if in_status {
+                    buf = buf + "\n\n" + status;
+                }
+                in_status = false;
+            }
+            _ => {}
+        };
+        state = cmark_resume(std::iter::once(event), &mut buf, state.take())?.into();
+    }
+    if let Some(state) = state {
+        state.finalize(&mut buf)?;
+    }
+    std::fs::write(path, buf)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use std::num::ParseIntError;
+    use std::fs::read_to_string;
+
+    use pulldown_cmark::{Event, HeadingLevel, Tag};
+
+    use super::best_match;
 
     #[test]
-    fn test_stuff() {
-        let nums = vec!["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+    fn tqwkjen() {
+        let markdown_input = read_to_string(best_match("doc/adr", "1").unwrap()).unwrap();
+        let mut in_status = false;
+        let mut status_lines = Vec::new();
 
-        let x = nums
-            .iter()
-            .map(|n| n.parse::<i32>())
-            .collect::<Result<Vec<_>, ParseIntError>>();
-        dbg!(x);
+        for line in markdown_input.lines() {
+            if line.starts_with("## Status") {
+                in_status = true;
+            } else if line.starts_with("## ") && in_status {
+                in_status = false;
+            } else if in_status {
+                if !line.is_empty() {
+                    status_lines.push(line);
+                }
+            }
+        }
+        dbg!(status_lines);
+    }
+    use pulldown_cmark_to_cmark::cmark_resume;
+
+    #[test]
+    fn woof() -> anyhow::Result<()> {
+        let markdown_input = read_to_string(best_match("doc/adr", "1").unwrap()).unwrap();
+        let mut buf = String::with_capacity(markdown_input.len() + 128);
+
+        let mut state = None;
+        let mut in_status = false;
+        for (event, offset) in pulldown_cmark::Parser::new(&markdown_input).into_offset_iter() {
+            match event {
+                Event::End(Tag::Heading(HeadingLevel::H2, _, _)) => {
+                    if markdown_input[offset].starts_with("## Status") {
+                        in_status = true;
+                    }
+                }
+                Event::End(Tag::Paragraph) => {
+                    if in_status {
+                        buf = buf + "\n\ndoof\n\nbar";
+                    }
+                    in_status = false;
+                }
+                _ => {}
+            };
+            state = cmark_resume(std::iter::once(event), &mut buf, state.take())?.into();
+        }
+        if let Some(state) = state {
+            state.finalize(&mut buf)?;
+        }
+        println!("{}", buf);
+
+        Ok(())
     }
 }
