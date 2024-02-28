@@ -88,12 +88,11 @@ fn main() -> Result<()> {
             tracing::debug!(?reverse_link);
         }
         Commands::List { directory } => {
-            tracing::debug!("list");
             let entries = std::fs::read_dir(directory)?;
             for entry in entries {
                 let entry = entry?;
                 let path = entry.path();
-                tracing::debug!(?path);
+                println!("{}", path.display());
             }
         }
         Commands::Config {} => {

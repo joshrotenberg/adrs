@@ -1,6 +1,6 @@
 use std::fs::{read_dir, read_to_string};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Args;
 use edit::edit;
 use pulldown_cmark::{Event, HeadingLevel, Tag};
@@ -38,53 +38,13 @@ struct NewAdrContext {
 pub(crate) fn run(args: &NewArgs) -> Result<()> {
     let adr_dir = read_to_string(".adr-dir")?;
 
-    let superceded = args
-        .superceded
-        .iter()
-        .map(|s| {
-            let best_match = best_match(&adr_dir, s).unwrap();
-            let lines = read_to_string(best_match.clone())
-                .unwrap()
-                .lines()
-                .map(String::from)
-                .collect::<Vec<_>>();
-            let first = lines.first().unwrap().clone();
-
-            let parts = first.split_once(char::is_whitespace).unwrap();
-            (parts.1.to_string(), best_match)
-        })
-        .collect::<Vec<(_, _)>>();
-
-    tracing::debug!(?superceded);
-
     let title = args.title.join(" ");
     let number = next_adr_sequence(&adr_dir)?;
-    let linked = args
-        .link
-        .iter()
-        .map(|link| link.split(':').collect())
-        .map(|parts: Vec<_>| {
-            let linked_adr = best_match(&adr_dir, parts[0]).unwrap();
-            let link_name = parts[1];
-            let reverse_link = parts[2];
 
-            let lines = read_to_string(linked_adr.clone())
-                .unwrap()
-                .lines()
-                .map(String::from)
-                .collect::<Vec<_>>();
-            let first = lines.first().unwrap().clone();
-            let parts = first.split_once(char::is_whitespace).unwrap();
-            let filename = format!("{:0>4}-{}.md", number, adr_filename(&title));
-            append_status(
-                &linked_adr,
-                format!("{} [{}. {}]({})", reverse_link, number, title, filename).as_str(),
-            )
-            .unwrap();
+    let superceded = create_superceded(&adr_dir, &args.superceded)?;
+    tracing::debug!(?superceded);
 
-            (link_name.to_owned(), parts.1.to_string(), linked_adr)
-        })
-        .collect::<Vec<_>>();
+    let linked = create_linked(&adr_dir, number, &title, &args.link)?;
     tracing::debug!(?linked);
 
     let new_context = NewAdrContext {
@@ -114,12 +74,64 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
     Ok(())
 }
 
+fn create_superceded(adr_dir: &str, superceded: &Vec<String>) -> Result<Vec<(String, String)>> {
+    let mut v = Vec::new();
+    for s in superceded {
+        let best_match = best_match(adr_dir, s)?;
+
+        let title = get_adr_title(&best_match)?;
+        v.push((title, best_match));
+    }
+    Ok(v)
+}
+
+fn create_linked(
+    adr_dir: &str,
+    number: i32,
+    title: &str,
+    linked: &Vec<String>,
+) -> Result<Vec<(String, String, String)>> {
+    let mut v = Vec::new();
+    for s in linked {
+        let parts = s.split(':').collect::<Vec<_>>();
+        let linked_adr = best_match(adr_dir, parts[0])?;
+        let linked_name = parts[1];
+        let reverse_link = parts[2];
+        tracing::debug!(?linked_adr);
+
+        append_status(
+            &linked_adr,
+            format!("{} [{}. {}]({})", reverse_link, number, title, linked_adr).as_str(),
+        )?;
+
+        let title = get_adr_title(&linked_adr)?;
+        v.push((linked_name.to_string(), title, linked_adr))
+    }
+    Ok(v)
+}
+
+fn get_adr_title(path: &str) -> Result<String> {
+    let lines = read_to_string(path)?
+        .lines()
+        .map(String::from)
+        .collect::<Vec<_>>();
+    if let Some(first) = lines.first() {
+        if let Some((_, rest)) = first.split_once(char::is_whitespace) {
+            return Ok(rest.to_string());
+        }
+        bail!("Couldn't find a title for ADR");
+    }
+    bail!("Couldn't find a title for ADR");
+}
+
 fn best_match(path: &str, s: &str) -> Result<String> {
     let x = s.parse::<i32>();
-    match x {
+    let r = match x {
         Ok(n) => best_match_i32(path, n),
         Err(_) => best_match_str(path, s),
-    }
+    };
+    tracing::debug!(?r);
+    r
 }
 
 fn best_match_i32(path: &str, n: i32) -> Result<String> {

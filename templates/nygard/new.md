@@ -7,10 +7,12 @@ Date: {date}
 Accepted
 {{ for adr in superceded }}
 Supercedes [{adr.0}]({adr.1})
-{{ endfor }}
-{{ for adr in linked }}
+{{- endfor }}
+
+{{- for adr in linked }}
 { adr.0 } [{adr.1}]({adr.2})
-{{ endfor }}
+{{- endfor }}
+
 ## Context
 
 The issue motivating this decision, and any context that influences or constrains the decision.
