@@ -88,7 +88,7 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
     tracing::debug!(?linked);
 
     let new_context = NewAdrContext {
-        number: number,
+        number,
         date: now()?,
         title,
         superceded,
@@ -150,25 +150,6 @@ fn best_match_str(path: &str, s: &str) -> Result<String> {
     Ok(first.0.to_str().unwrap().to_string())
 }
 
-fn get_status(path: &str) -> Result<Vec<String>> {
-    let markdown_input = read_to_string(path)?;
-    let mut in_status = false;
-    let mut status_lines = Vec::new();
-
-    for line in markdown_input.lines() {
-        if line.starts_with("## Status") {
-            in_status = true;
-        } else if line.starts_with("## ") && in_status {
-            in_status = false;
-        } else if in_status {
-            if !line.is_empty() {
-                status_lines.push(line.to_owned());
-            }
-        }
-    }
-    Ok(status_lines)
-}
-
 fn append_status(path: &str, status: &str) -> Result<()> {
     let markdown_input = read_to_string(path)?;
     let mut buf = String::with_capacity(markdown_input.len() + 128);
@@ -197,66 +178,4 @@ fn append_status(path: &str, status: &str) -> Result<()> {
     }
     std::fs::write(path, buf)?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs::read_to_string;
-
-    use pulldown_cmark::{Event, HeadingLevel, Tag};
-
-    use super::best_match;
-
-    #[test]
-    fn tqwkjen() {
-        let markdown_input = read_to_string(best_match("doc/adr", "1").unwrap()).unwrap();
-        let mut in_status = false;
-        let mut status_lines = Vec::new();
-
-        for line in markdown_input.lines() {
-            if line.starts_with("## Status") {
-                in_status = true;
-            } else if line.starts_with("## ") && in_status {
-                in_status = false;
-            } else if in_status {
-                if !line.is_empty() {
-                    status_lines.push(line);
-                }
-            }
-        }
-        dbg!(status_lines);
-    }
-    use pulldown_cmark_to_cmark::cmark_resume;
-
-    #[test]
-    fn woof() -> anyhow::Result<()> {
-        let markdown_input = read_to_string(best_match("doc/adr", "1").unwrap()).unwrap();
-        let mut buf = String::with_capacity(markdown_input.len() + 128);
-
-        let mut state = None;
-        let mut in_status = false;
-        for (event, offset) in pulldown_cmark::Parser::new(&markdown_input).into_offset_iter() {
-            match event {
-                Event::End(Tag::Heading(HeadingLevel::H2, _, _)) => {
-                    if markdown_input[offset].starts_with("## Status") {
-                        in_status = true;
-                    }
-                }
-                Event::End(Tag::Paragraph) => {
-                    if in_status {
-                        buf = buf + "\n\ndoof\n\nbar";
-                    }
-                    in_status = false;
-                }
-                _ => {}
-            };
-            state = cmark_resume(std::iter::once(event), &mut buf, state.take())?.into();
-        }
-        if let Some(state) = state {
-            state.finalize(&mut buf)?;
-        }
-        println!("{}", buf);
-
-        Ok(())
-    }
 }
