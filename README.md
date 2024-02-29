@@ -5,10 +5,9 @@
 [![Rust](https://github.com/joshrotenberg/adrs/workflows/CI/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ACI)
 [![dependency status](https://deps.rs/repo/github/joshrotenberg/adrs/status.svg)](https://deps.rs/repo/github/joshrotenberg/adrs)
 
-
 `adrs` is a command-line tool for managing [Architectural Decision Records][0].
 
-### Status
+## Status
 
 Currently in development. The first milestone is feature parity and rough compatibility with [adr-tools][1].
 
@@ -18,17 +17,16 @@ Possible extended feature ideas:
 * Integrated git support.
 * Built-in HTTP server support to present ADRs via the web.
 
-
-### Installation
+## Installation
 
 For now:
 
 1. clone this repository
-2. run `cargo install --path .` in the root of the repo
+1. run `cargo install --path .` in the root of the repo
 
-### Command Line
+## Command Line
 
-```
+```zsh
 Architectural Decision Record command line tool
 
 Usage: adrs <COMMAND>
@@ -49,7 +47,7 @@ Options:
 
 ## Contributing
 
-Contributions absolutely welcome. 
+Contributions absolutely welcome.
 
 ## License
 

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use time::macros::format_description;
 
 mod cmd;
@@ -18,7 +18,7 @@ struct TemplateContext {
 }
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(version, about, long_about = None )]
 #[command(propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
@@ -43,11 +43,7 @@ enum Commands {
         reverse_link: String,
     },
     /// List Architectural Decision Records
-    List {
-        /// Directory to list
-        #[arg(default_value = "doc/adr")]
-        directory: PathBuf,
-    },
+    List(cmd::list::ListArgs),
     /// Show the current configuration
     Config {},
     /// Generates summary documentation about the Architectural Decision Records
@@ -86,13 +82,8 @@ fn main() -> Result<()> {
             tracing::debug!(?target);
             tracing::debug!(?reverse_link);
         }
-        Commands::List { directory } => {
-            let entries = std::fs::read_dir(directory)?;
-            for entry in entries {
-                let entry = entry?;
-                let path = entry.path();
-                println!("{}", path.display());
-            }
+        Commands::List(args) => {
+            cmd::list::run(args)?;
         }
         Commands::Config {} => {
             tracing::debug!("config");
