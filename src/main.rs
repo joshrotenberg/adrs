@@ -4,8 +4,7 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use time::macros::format_description;
 
-mod init;
-mod new;
+mod cmd;
 
 #[derive(Debug, Serialize)]
 struct TemplateContext {
@@ -29,9 +28,9 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initializes the directory of Architecture Decision Records
-    Init(init::InitArgs),
+    Init(cmd::init::InitArgs),
     /// Create a new, numbered Architectural Decision Record
-    New(new::NewArgs),
+    New(cmd::new::NewArgs),
     /// Link Architectural Decision Records
     Link {
         /// The source Architectural Decision Record number or file name match
@@ -71,10 +70,10 @@ fn main() -> Result<()> {
 
     match &cli.command {
         Commands::Init(args) => {
-            init::run(args)?;
+            cmd::init::run(args)?;
         }
         Commands::New(args) => {
-            new::run(args)?;
+            cmd::new::run(args)?;
         }
         Commands::Link {
             source,

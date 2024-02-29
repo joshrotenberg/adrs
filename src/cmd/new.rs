@@ -10,7 +10,7 @@ use tinytemplate::TinyTemplate;
 
 use crate::{adr_filename, next_adr_sequence, now};
 
-static NEW_TEMPLATE: &str = include_str!("../templates/nygard/new.md");
+static NEW_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");
 
 #[derive(Debug, Args)]
 #[command(version, about, long_about = None)]
