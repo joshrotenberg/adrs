@@ -22,6 +22,8 @@ edit = "0.1.5"
 strsim = "0.11.0"
 pulldown-cmark = "0.9"
 pulldown-cmark-to-cmark = "11.2.0"
+walkdir = "2.4.0"
+fuzzy-matcher = "0.3.7"
 
 [dev-dependencies]
 serial_test = "3.0.0"

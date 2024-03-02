@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::path::Path;
 use time::macros::format_description;
 
+pub mod adr;
 mod cmd;
 
 #[derive(Debug, Serialize)]
@@ -32,16 +33,7 @@ enum Commands {
     /// Create a new, numbered Architectural Decision Record
     New(cmd::new::NewArgs),
     /// Link Architectural Decision Records
-    Link {
-        /// The source Architectural Decision Record number or file name match
-        source: i32,
-        /// Description of the link to create in the source Architectural Decision Record
-        link: String,
-        /// The target Architectural Decision Record number or file name match
-        target: i32,
-        /// Description of the link to create in the target Architectural Decision Record
-        reverse_link: String,
-    },
+    Link(cmd::link::LinkArgs),
     /// List Architectural Decision Records
     List(cmd::list::ListArgs),
     /// Show the current configuration
@@ -71,16 +63,8 @@ fn main() -> Result<()> {
         Commands::New(args) => {
             cmd::new::run(args)?;
         }
-        Commands::Link {
-            source,
-            link,
-            target,
-            reverse_link,
-        } => {
-            tracing::debug!(?source);
-            tracing::debug!(?link);
-            tracing::debug!(?target);
-            tracing::debug!(?reverse_link);
+        Commands::Link(args) => {
+            cmd::link::run(args)?;
         }
         Commands::List(args) => {
             cmd::list::run(args)?;

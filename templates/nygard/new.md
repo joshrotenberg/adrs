@@ -5,12 +5,11 @@ Date: {date}
 ## Status
 
 Accepted
-{{ for adr in superceded }}
-Supercedes [{adr.0}]({adr.1})
+{{ for supercedes in superceded }}
+{supercedes}
 {{- endfor }}
-
-{{- for adr in linked }}
-{ adr.0 } [{adr.1}]({adr.2})
+{{ for link in linked }}
+{link}
 {{- endfor }}
 
 ## Context
