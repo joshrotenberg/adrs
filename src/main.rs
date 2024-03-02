@@ -1,8 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use serde::Serialize;
-use std::path::Path;
-use time::macros::format_description;
 
 pub mod adr;
 mod cmd;
@@ -84,59 +82,38 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn now() -> Result<String> {
-    let now = time::OffsetDateTime::now_local()?;
-    let x = now.format(format_description!("[year]-[month]-[day]"))?;
-    Ok(x)
-}
+// pub(crate) fn now() -> Result<String> {
+//     let now = time::OffsetDateTime::now_local()?;
+//     let x = now.format(format_description!("[year]-[month]-[day]"))?;
+//     Ok(x)
+// }
 
-pub(crate) fn adr_filename(title: &str) -> String {
-    title
-        .split_whitespace()
-        .collect::<Vec<&str>>()
-        .join("-")
-        .to_lowercase()
-}
+// pub(crate) fn adr_filename(title: &str) -> String {
+//     title
+//         .split_whitespace()
+//         .collect::<Vec<&str>>()
+//         .join("-")
+//         .to_lowercase()
+// }
 
-pub(crate) fn next_adr_sequence(path: impl AsRef<Path>) -> Result<i32> {
-    let entries = std::fs::read_dir(path)?;
-    let mut max = 0;
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() {
-            let file_name = path.file_name().unwrap().to_str().unwrap();
-            if file_name.starts_with(char::is_numeric) {
-                if let Some((num, _rest)) = file_name.split_once('-') {
-                    if let Ok(number) = num.parse::<i32>() {
-                        if number > max {
-                            max = number;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(max + 1)
-}
-
-#[cfg(test)]
-mod tests {
-    use assert_fs::TempDir;
-
-    use super::*;
-
-    #[test]
-    fn test_generate_filename() {
-        let title = "Record Architecture Decisions";
-        let result = adr_filename(title);
-        assert_eq!(result, "record-architecture-decisions");
-    }
-
-    #[test]
-    fn test_next_adr_number() {
-        let tmp_dir = TempDir::new().unwrap();
-        let result = next_adr_sequence(tmp_dir.path());
-        assert_eq!(result.unwrap(), 1);
-    }
-}
+// pub(crate) fn next_adr_sequence(path: impl AsRef<Path>) -> Result<i32> {
+//     let entries = std::fs::read_dir(path)?;
+//     let mut max = 0;
+//     for entry in entries {
+//         let entry = entry?;
+//         let path = entry.path();
+//         if path.is_file() {
+//             let file_name = path.file_name().unwrap().to_str().unwrap();
+//             if file_name.starts_with(char::is_numeric) {
+//                 if let Some((num, _rest)) = file_name.split_once('-') {
+//                     if let Ok(number) = num.parse::<i32>() {
+//                         if number > max {
+//                             max = number;
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     Ok(max + 1)
+// }

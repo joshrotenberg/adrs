@@ -6,7 +6,6 @@ use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 use pulldown_cmark_to_cmark::cmark_resume;
-use time::format_description;
 use time::macros::format_description;
 use walkdir::WalkDir;
 
@@ -17,7 +16,7 @@ pub(crate) fn now() -> Result<String> {
     Ok(x)
 }
 
-pub(crate) fn format_adr_path(adr_dir: &str, sequence: i32, title: &str) -> PathBuf {
+pub(crate) fn format_adr_path(adr_dir: &Path, sequence: i32, title: &str) -> PathBuf {
     Path::new(adr_dir).join(format!(
         "{:0>4}-{}.md",
         sequence,
@@ -45,12 +44,11 @@ pub(crate) fn find_adr_by_str(path: &Path, s: &str) -> Result<PathBuf> {
 
     let mut adrs = list_adrs(path)?
         .into_iter()
-        .filter_map(
-            |filename| match matcher.fuzzy_match(filename.to_str().unwrap(), s) {
-                Some(score) => Some((filename, score)),
-                None => None,
-            },
-        )
+        .filter_map(|filename| {
+            matcher
+                .fuzzy_match(filename.to_str().unwrap(), s)
+                .map(|score| (filename, score))
+        })
         .collect::<Vec<(_, _)>>();
 
     adrs.sort_by(|a, b| match b.1.partial_cmp(&a.1) {
@@ -69,7 +67,7 @@ pub(crate) fn find_adr_by_number(path: &Path, n: i32) -> Result<PathBuf> {
 
     let target = target.to_str().expect("ADR path is not valid");
 
-    let adrs = list_adrs(&path)?;
+    let adrs = list_adrs(path)?;
     let m = adrs
         .iter()
         .find(|filename| filename.to_str().unwrap().starts_with(target));
@@ -116,7 +114,7 @@ pub(crate) fn get_title(path: &Path) -> Result<String> {
 
 // append the status to the ADR
 pub(crate) fn append_status(path: &Path, status: &str) -> Result<()> {
-    let markdown_input = std::fs::read_to_string(&path)?;
+    let markdown_input = std::fs::read_to_string(path)?;
     let mut buf = String::with_capacity(markdown_input.len() + status.len() + 2);
 
     let mut state = None;
@@ -163,43 +161,4 @@ pub(crate) fn next_adr_number(path: impl AsRef<Path>) -> Result<i32> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hmm() {
-        let path = Path::new("doc/adr");
-        let entries = WalkDir::new(path)
-            .into_iter()
-            .filter(|entry| {
-                let entry = entry.as_ref().unwrap();
-                entry.file_type().is_file()
-                    && entry
-                        .file_name()
-                        .to_str()
-                        .unwrap()
-                        .starts_with(char::is_numeric)
-            })
-            .collect::<Vec<_>>();
-
-        dbg!(entries.len() + 1);
-    }
-    #[test]
-    fn test_find_adr() {
-        let n = next_adr_number("doc/adr").unwrap();
-        dbg!(n);
-        // let result = find_adr_by_str("doc/adr", "bar").unwrap();
-        // dbg!(result);
-        // let result = find_adr_by_number("doc/adr", 2).unwrap();
-        // dbg!(result);
-
-        // // let result = find_adr("doc/adr", "4");
-        // // dbg!(result);
-
-        // let file = find_adr(Path::new("doc/adr"), "1").unwrap();
-        // let title = get_title(&file).unwrap();
-        // dbg!(title);
-
-        // append_status(&file, "another status").unwrap();
-    }
-}
+mod tests {}

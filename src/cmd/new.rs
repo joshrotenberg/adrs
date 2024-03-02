@@ -1,20 +1,12 @@
-use std::{
-    fs::{read_dir, read_to_string},
-    vec,
-};
+use std::fs::read_to_string;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use clap::Args;
 use edit::edit;
-use pulldown_cmark::{Event, HeadingLevel, Tag};
-use pulldown_cmark_to_cmark::cmark_resume;
 use serde::Serialize;
 use tinytemplate::TinyTemplate;
 
-use crate::{
-    adr::{append_status, find_adr, format_adr_path, get_title, next_adr_number},
-    adr_filename, next_adr_sequence, now,
-};
+use crate::adr::{append_status, find_adr, format_adr_path, get_title, next_adr_number, now};
 
 static NEW_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");
 
@@ -60,7 +52,7 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let path = format_adr_path(adr_dir.as_str(), number, &title);
+    let path = format_adr_path(adr_dir.as_ref(), number, &title);
     let linked = args
         .link
         .iter()
