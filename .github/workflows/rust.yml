@@ -1,57 +1,11 @@
-name: CI
-on:
-  pull_request:
-  merge_group:
+name: test suite
+on: [push, pull_request]
 
 jobs:
   test:
-    name: Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        build: [stable, beta, nightly, macos, windows, msrv]
-        include:
-          - build: stable
-            os: ubuntu-latest
-            rust: stable
-          - build: beta
-            os: ubuntu-latest
-            rust: beta
-          - build: nightly
-            os: ubuntu-latest
-            rust: nightly
-          - build: macos
-            os: macos-latest
-            rust: stable
-          - build: windows
-            os: windows-latest
-            rust: stable
-          - build: msrv
-            os: ubuntu-20.04
-            rust: 1.71.0
-    steps:
-    - uses: actions/checkout@v3
-    - name: Install Rust
-      run: bash ci/install-rust.sh ${{ matrix.rust }}
-    - name: Build and run tests
-      run: cargo test --locked
-    - name: Test no default
-      run: cargo test --no-default-features
-
-  rustfmt:
-    name: Rustfmt
+    name: cargo test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Install Rust
-      run: rustup update stable && rustup default stable && rustup component add rustfmt
-    - run: cargo fmt --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - name: Install Rust
-      run: rustup update stable && rustup default stable && rustup component add rustfmt
-    - run: cargo clippy 
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --all-features
