@@ -39,7 +39,7 @@ pub(crate) fn run(args: &InitArgs) -> Result<()> {
     let mut tt = TinyTemplate::new();
     tt.add_template("init_adr", INIT_TEMPLATE)?;
     let rendered = tt.render("init_adr", &init_context)?;
-    std::fs::write(&filename, rendered)?;
+    std::fs::write(filename, rendered)?;
 
     std::fs::write(
         std::env::current_dir()?.join(".adr-dir"),

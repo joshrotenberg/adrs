@@ -17,9 +17,9 @@ pub(crate) fn run(args: &EditArgs) -> Result<()> {
 
     let adr = find_adr(Path::new(&adr_dir), &args.name)?;
     let content = read_to_string(adr.clone())?;
-    let edited = edit(&content)?;
+    let edited = edit(content)?;
 
-    std::fs::write(&adr.as_path(), edited)?;
+    std::fs::write(adr.as_path(), edited)?;
 
     Ok(())
 }
