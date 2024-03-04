@@ -2,13 +2,12 @@
 
 [![crates.io](https://img.shields.io/crates/d/adrs.svg)](https://crates.io/crates/adrs)
 [![docs](https://docs.rs/adrs/badge.svg)](https://docs.rs/adrs)
-[![Rust](https://github.com/joshrotenberg/adrs/workflows/Rust/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ARust)
+[![Rust](https://github.com/joshrotenberg/adrs/workflows/CI/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ACI)
 [![dependency status](https://deps.rs/repo/github/joshrotenberg/adrs/status.svg)](https://deps.rs/repo/github/joshrotenberg/adrs)
-
 
 `adrs` is a command-line tool for managing [Architectural Decision Records][0].
 
-### Status
+## Status
 
 Currently in development. The first milestone is feature parity and rough compatibility with [adr-tools][1].
 
@@ -18,38 +17,41 @@ Possible extended feature ideas:
 * Integrated git support.
 * Built-in HTTP server support to present ADRs via the web.
 
-
-### Installation
+## Installation
 
 For now:
 
 1. clone this repository
-2. run `cargo install --path .` in the root of the repo
+1. run `cargo install --path .` in the root of the repo
 
-### Command Line
+## Command Line
 
-```
-adrs 0.1.0
+```zsh
+Architectural Decision Record command line tool
 
-USAGE:
-    adrs <SUBCOMMAND>
+Usage: adrs <COMMAND>
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+Commands:
+  init      Initializes the directory of Architecture Decision Records
+  new       Create a new, numbered Architectural Decision Record
+  link      Link Architectural Decision Records
+  list      List Architectural Decision Records
+  config    Show the current configuration
+  generate  Generates summary documentation about the Architectural Decision Records
+  help      Print this message or the help of the given subcommand(s)
 
-SUBCOMMANDS:
-    config      Show configuration
-    generate    Generate summary documentation
-    help        Prints this message or the help of the given subcommand(s)
-    init        Initialize a new ADR directory
-    link        Link together two ADRs
-    list        List the ADRs
-    new         Create a new, numbered ADR
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
 ## Contributing
+
+Contributions absolutely welcome.
+
 ## License
+
+See [LICENSE-MIT](LICENSE-MIT) or [LICENSE-APACHE-2.0](LICENSE-APACHE-.20).
 
 ## Authors
 

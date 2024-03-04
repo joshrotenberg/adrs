@@ -3,6 +3,7 @@ use assert_fs::fixture::TempDir;
 use std::path::Path;
 
 #[test]
+#[serial_test::serial]
 fn test_init_default() {
     let tmp_dir = TempDir::new().unwrap();
     std::env::set_current_dir(tmp_dir.path()).unwrap();
@@ -17,15 +18,22 @@ fn test_init_default() {
         .join("doc/adr")
         .join("0001-record-architecture-decisions.md")
         .exists());
+
+    assert_eq!(
+        std::fs::read_to_string(format!("{}/.adr-dir", tmp_dir.path().to_str().unwrap())).unwrap(),
+        "doc/adr"
+    );
 }
 
 #[test]
+#[serial_test::serial]
 fn test_init_with_directory() {
     let tmp_dir = TempDir::new().unwrap();
+    std::env::set_current_dir(tmp_dir.path()).unwrap();
+
     Command::cargo_bin("adrs")
         .unwrap()
         .arg("init")
-        .arg("-d")
         .arg(tmp_dir.path())
         .assert()
         .success();
@@ -33,4 +41,41 @@ fn test_init_with_directory() {
     assert!(Path::new(tmp_dir.path())
         .join("0001-record-architecture-decisions.md")
         .exists());
+
+    assert_eq!(
+        std::fs::read_to_string(format!("{}/.adr-dir", tmp_dir.path().to_str().unwrap())).unwrap(),
+        tmp_dir.path().to_str().unwrap()
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn test_init_with_file_already_in_directory() {
+    let tmp_dir = TempDir::new().unwrap();
+    std::env::set_current_dir(tmp_dir.path()).unwrap();
+
+    std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(format!(
+            "{}/0001-record-architecture-decisions.md",
+            tmp_dir.path().to_str().unwrap()
+        ))
+        .unwrap();
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("init")
+        .arg(tmp_dir.path())
+        .assert()
+        .success();
+
+    assert!(Path::new(tmp_dir.path())
+        .join("0002-record-architecture-decisions.md")
+        .exists());
+
+    assert_eq!(
+        std::fs::read_to_string(format!("{}/.adr-dir", tmp_dir.path().to_str().unwrap())).unwrap(),
+        tmp_dir.path().to_str().unwrap()
+    );
 }

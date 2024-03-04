@@ -10,18 +10,19 @@ readme = "README.md"
 repository = "https://github.com/joshrotenberg/adrs.git"
 version = "0.1.0"
 
-[[bin]]
-doc = false
-name = "adrs"
-
 [dependencies]
-chrono = "0.4"
-clap = "2.33.3"
-handlebars = "3.5.3"
-heck = "0.3.1"
-thiserror = "1.0"
+anyhow = "1.0.80"
+clap = { version = "4.5.1", features = ["derive"] }
+tinytemplate = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+time = { version = "0.3.34", features = ["local-offset", "formatting", "macros"] }
+edit = "0.1.5"
+pulldown-cmark = "0.9"
+pulldown-cmark-to-cmark = "11.2.0"
+walkdir = "2.4.0"
+fuzzy-matcher = "0.3.7"
 
 [dev-dependencies]
-assert_cmd = "1.0.3"
-assert_fs = "1.0.1"
-predicates = "1.0.7"
+serial_test = "3.0.0"
+assert_cmd = "2.0.14"
+assert_fs = "1.1.1"

@@ -1,6 +1,6 @@
-# 1. Record architecture decisions
+# {number}. Record architecture decisions
 
-Date: {{date}} 
+Date: {date}
 
 ## Status
 
@@ -17,3 +17,4 @@ We will use Architecture Decision Records, as [described by Michael Nygard](http
 ## Consequences
 
 See Michael Nygard's article, linked above. For a lightweight ADR toolset, see Nat Pryce's [adr-tools](https://github.com/npryce/adr-tools).
+
