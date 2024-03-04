@@ -35,16 +35,10 @@ enum Commands {
     /// List Architectural Decision Records
     List(cmd::list::ListArgs),
     /// Show the current configuration
-    Config {},
+    Config(cmd::config::ConfigArgs),
     /// Generates summary documentation about the Architectural Decision Records
     #[command(subcommand)]
-    Generate(GenerateCommands),
-}
-
-#[derive(Debug, Subcommand)]
-enum GenerateCommands {
-    Toc {},
-    Graph {},
+    Generate(cmd::generate::GenerateCommands),
 }
 
 fn main() -> Result<()> {
@@ -67,53 +61,12 @@ fn main() -> Result<()> {
         Commands::List(args) => {
             cmd::list::run(args)?;
         }
-        Commands::Config {} => {
-            tracing::debug!("config");
+        Commands::Config(args) => {
+            cmd::config::run(args)?;
         }
-        Commands::Generate(c) => match c {
-            GenerateCommands::Toc {} => {
-                tracing::debug!("generate toc");
-            }
-            GenerateCommands::Graph {} => {
-                tracing::debug!("generate graph");
-            }
-        },
+        Commands::Generate(args) => {
+            cmd::generate::run(args)?;
+        }
     }
     Ok(())
 }
-
-// pub(crate) fn now() -> Result<String> {
-//     let now = time::OffsetDateTime::now_local()?;
-//     let x = now.format(format_description!("[year]-[month]-[day]"))?;
-//     Ok(x)
-// }
-
-// pub(crate) fn adr_filename(title: &str) -> String {
-//     title
-//         .split_whitespace()
-//         .collect::<Vec<&str>>()
-//         .join("-")
-//         .to_lowercase()
-// }
-
-// pub(crate) fn next_adr_sequence(path: impl AsRef<Path>) -> Result<i32> {
-//     let entries = std::fs::read_dir(path)?;
-//     let mut max = 0;
-//     for entry in entries {
-//         let entry = entry?;
-//         let path = entry.path();
-//         if path.is_file() {
-//             let file_name = path.file_name().unwrap().to_str().unwrap();
-//             if file_name.starts_with(char::is_numeric) {
-//                 if let Some((num, _rest)) = file_name.split_once('-') {
-//                     if let Ok(number) = num.parse::<i32>() {
-//                         if number > max {
-//                             max = number;
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     Ok(max + 1)
-// }

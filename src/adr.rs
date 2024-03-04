@@ -57,8 +57,7 @@ pub(crate) fn find_adr_by_str(path: &Path, s: &str) -> Result<PathBuf> {
     });
 
     let first = adrs.first().expect("No ADR matched");
-    // Ok(first.0.to_str().unwrap().to_string())
-    Ok(first.0.clone()) //.to_str().unwrap().to_string())
+    Ok(first.0.clone())
 }
 
 // takes the top level directory and a number to match and returns the best matching filename
@@ -76,18 +75,18 @@ pub(crate) fn find_adr_by_number(path: &Path, n: i32) -> Result<PathBuf> {
             let msg = format!("No ADR found for {}", n);
             Err(anyhow::anyhow!(msg))
         }
-        // Some(x) => Ok(x.to_str().unwrap().to_string()),
         Some(x) => Ok(x.clone()),
     }
 }
 
-// returns a list of all the ADRs in the directory
+// returns a sorted list of all the ADRs in the directory
 pub(crate) fn list_adrs(path: &Path) -> Result<Vec<PathBuf>> {
-    let adrs = read_dir(path)?
+    let mut adrs = read_dir(path)?
         .map(|entry| entry.unwrap().path())
         .filter(|filename| filename.is_file())
         .collect::<Vec<_>>();
 
+    adrs.sort();
     Ok(adrs)
 }
 
