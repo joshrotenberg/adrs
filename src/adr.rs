@@ -16,6 +16,7 @@ pub(crate) fn now() -> Result<String> {
     Ok(x)
 }
 
+// format the ADR path
 pub(crate) fn format_adr_path(adr_dir: &Path, sequence: i32, title: &str) -> PathBuf {
     Path::new(adr_dir).join(format!(
         "{:0>4}-{}.md",

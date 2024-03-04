@@ -8,7 +8,7 @@ use crate::adr::{self, append_status};
 #[derive(Debug, Args)]
 pub(crate) struct LinkArgs {
     /// The source Architectural Decision Record number or file name match
-    source: i32,
+    source: String,
     /// Description of the link to create in the source Architectural Decision Record
     link: String,
     /// The target Architectural Decision Record number or file name match
@@ -20,7 +20,7 @@ pub(crate) struct LinkArgs {
 pub(crate) fn run(args: &LinkArgs) -> Result<()> {
     let adr_dir = read_to_string(".adr-dir")?;
 
-    let source = adr::find_adr(Path::new(&adr_dir), &args.source.to_string())?;
+    let source = adr::find_adr(Path::new(&adr_dir), &args.source)?;
     let source_filename = source.file_name().unwrap().to_str().unwrap();
     let source_title = adr::get_title(&source)?;
 

@@ -13,8 +13,6 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0.80"
 clap = { version = "4.5.1", features = ["derive"] }
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
 tinytemplate = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 time = { version = "0.3.34", features = ["local-offset", "formatting", "macros"] }
@@ -23,9 +21,6 @@ pulldown-cmark = "0.9"
 pulldown-cmark-to-cmark = "11.2.0"
 walkdir = "2.4.0"
 fuzzy-matcher = "0.3.7"
-graphviz-rust = "0.7.2"
-dot-generator = "0.2.0"
-dot-structures = "0.1.1"
 
 [dev-dependencies]
 serial_test = "3.0.0"

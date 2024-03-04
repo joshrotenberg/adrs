@@ -30,6 +30,8 @@ enum Commands {
     Init(cmd::init::InitArgs),
     /// Create a new, numbered Architectural Decision Record
     New(cmd::new::NewArgs),
+    /// Edit an existing Architectural Decision Record
+    Edit(cmd::edit::EditArgs),
     /// Link Architectural Decision Records
     Link(cmd::link::LinkArgs),
     /// List Architectural Decision Records
@@ -42,10 +44,6 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .init();
-
     let cli = Cli::parse();
 
     match &cli.command {
@@ -54,6 +52,9 @@ fn main() -> Result<()> {
         }
         Commands::New(args) => {
             cmd::new::run(args)?;
+        }
+        Commands::Edit(args) => {
+            cmd::edit::run(args)?;
         }
         Commands::Link(args) => {
             cmd::link::run(args)?;

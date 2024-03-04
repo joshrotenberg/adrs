@@ -41,14 +41,10 @@ pub(crate) fn run(args: &InitArgs) -> Result<()> {
     let rendered = tt.render("init_adr", &init_context)?;
     std::fs::write(&filename, rendered)?;
 
-    tracing::debug!("Created {}", filename.display());
-
     std::fs::write(
         std::env::current_dir()?.join(".adr-dir"),
         args.directory.to_str().unwrap(),
     )?;
-
-    tracing::debug!("Wrote .adr-dir");
 
     Ok(())
 }
