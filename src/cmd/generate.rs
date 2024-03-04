@@ -1,41 +1,74 @@
 use std::{
-    fs::{read_dir, read_to_string},
+    fs::read_to_string,
     path::{Path, PathBuf},
 };
 
-use crate::adr::{self, get_title, list_adrs};
+use crate::adr::{get_links, get_title, list_adrs};
 use anyhow::Result;
-use clap::Subcommand;
+use clap::{Args, Subcommand};
+
+#[derive(Debug, Args)]
+pub(crate) struct TocArgs {
+    /// Precede the table of contents with the given intro text
+    #[clap(long, short)]
+    intro: Option<PathBuf>,
+    /// Follow the table of contents with the given outro text
+    #[clap(long, short)]
+    outro: Option<PathBuf>,
+    /// Prefix each decision file link with the given string
+    #[clap(long, short)]
+    prefix: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct GraphArgs {
+    /// Link extension
+    #[clap(long, short, default_value = "html")]
+    extension: String,
+    /// Link prefix
+    #[clap(long, short)]
+    prefix: Option<String>,
+}
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum GenerateCommands {
-    Toc {},
-    Graph {},
+    Toc(TocArgs),
+    Graph(GraphArgs),
 }
 
 pub(crate) fn run(args: &GenerateCommands) -> Result<()> {
     match args {
-        GenerateCommands::Toc {} => run_toc(),
-        GenerateCommands::Graph {} => run_graph(),
+        GenerateCommands::Toc(args) => run_toc(args),
+        GenerateCommands::Graph(args) => run_graph(args),
     }
 }
 
-fn run_toc() -> Result<()> {
+fn run_toc(args: &TocArgs) -> Result<()> {
     let adr_dir = read_to_string(".adr-dir")?;
-    let entries = read_dir(adr_dir)?;
-    println! {"# Architecture Decision Records\n"};
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        let title = get_title(path.as_path())?;
-        let file_name = path.file_name().unwrap().to_str().unwrap();
+    let adrs = list_adrs(Path::new(&adr_dir))?;
 
-        println!("* [{}]({})", title, file_name);
+    println! {"# Architecture Decision Records\n"};
+    if let Some(intro) = &args.intro {
+        println!("{}", read_to_string(intro)?);
+    }
+    for path in adrs {
+        let title = get_title(&path)?;
+        let mut path = PathBuf::from(&path.file_name().unwrap().to_str().unwrap().to_owned());
+
+        path = match &args.prefix {
+            Some(prefix) => PathBuf::from(prefix).join(path),
+            None => path,
+        };
+
+        println!("* [{}]({})", title, &path.display());
+    }
+    if let Some(outro) = &args.outro {
+        println!("\n{}", read_to_string(outro)?);
     }
     Ok(())
 }
 
-fn run_graph() -> Result<()> {
+fn run_graph(args: &GraphArgs) -> Result<()> {
     let adr_dir = read_to_string(".adr-dir")?;
     let adrs = list_adrs(Path::new(&adr_dir))?;
 
@@ -45,14 +78,20 @@ fn run_graph() -> Result<()> {
             let title = get_title(path.as_path()).unwrap();
             let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
             let number = filename.split('-').next().unwrap().parse::<i32>().unwrap();
-            (number, title, filename)
+            let links = get_links(path.as_path()).unwrap();
+            (number, title, filename, links)
         })
         .collect::<Vec<_>>();
 
     println!("digraph {{\n  node [shape=plaintext]\n  subgraph {{");
-    for (number, title, filename) in items {
+    for (number, title, filename, _links) in &items {
         let mut path = PathBuf::from(&filename);
-        path.set_extension("html");
+        path.set_extension(args.extension.as_str());
+
+        path = match &args.prefix {
+            Some(prefix) => PathBuf::from(prefix).join(path),
+            None => path,
+        };
 
         println!(
             "\t_{} [label=\"{}\"; URL=\"{}\"];",
@@ -61,7 +100,7 @@ fn run_graph() -> Result<()> {
             &path.display()
         );
 
-        if number > 1 {
+        if *number > 1 {
             println!(
                 "\t_{} -> _{} [style=\"dotted\", weight=1];",
                 number - 1,
@@ -69,6 +108,16 @@ fn run_graph() -> Result<()> {
             );
         }
     }
-    println!("  }}\n}}");
+    println!("  }}");
+    for (number, _title, _filename, links) in &items {
+        for (link, title, _file) in links {
+            let linked_number = title.split_once(". ").unwrap().0;
+            println!(
+                "  _{} -> _{} [label=\"{}\", weight=0];",
+                number, linked_number, link
+            )
+        }
+    }
+    println!("}}");
     Ok(())
 }

@@ -111,6 +111,55 @@ pub(crate) fn get_title(path: &Path) -> Result<String> {
     Err(anyhow::anyhow!("No title found for ADR"))
 }
 
+// get the statuses of the ADR
+pub(crate) fn get_status(path: &Path) -> Result<Vec<String>> {
+    let markdown = std::fs::read_to_string(path)?;
+    let parser = Parser::new(&markdown).into_offset_iter();
+    let mut in_status = false;
+    let mut buf = String::new();
+    for (event, offset) in parser {
+        match event {
+            Event::Start(Tag::Heading(HeadingLevel::H2, _, _)) => {
+                in_status = markdown[offset].starts_with("## Status");
+            }
+            Event::Start(Tag::Paragraph) => {
+                if in_status {
+                    buf += &markdown[offset];
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(buf.lines().map(|s| s.to_string()).collect())
+}
+
+// get only the statuses that are links
+pub(crate) fn get_links(path: &Path) -> Result<Vec<(String, String, String)>> {
+    let status = get_status(path)?;
+    let mut links = Vec::new();
+    for s in &status {
+        let link = Parser::new(s).collect::<Vec<_>>();
+        if link.len() > 3 {
+            for event in &link {
+                if let Event::Start(Tag::Link(_, _, _)) = event {
+                    let parts = s
+                        .split(&['[', ']', '(', ')'])
+                        .filter(|&s| !s.is_empty())
+                        .map(|s| s.trim())
+                        .collect::<Vec<_>>();
+                    let d = (
+                        parts[0].to_owned(),
+                        parts[1].to_owned(),
+                        parts[2].to_owned(),
+                    );
+                    links.push(d)
+                }
+            }
+        }
+    }
+    Ok(links)
+}
+
 // append the status to the ADR
 pub(crate) fn append_status(path: &Path, status: &str) -> Result<()> {
     let markdown_input = std::fs::read_to_string(path)?;
