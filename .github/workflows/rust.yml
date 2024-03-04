@@ -1,6 +1,10 @@
 name: test suite
 on: [push, pull_request]
 
+env:
+  EDITOR: cat
+  VISUAL: cat
+
 jobs:
   test:
     name: cargo test
