@@ -21,3 +21,7 @@ jobs:
         run: cargo build --tests --release
       - name: cargo test
         run: cargo test --release
+      - name: cargo clippy
+        run: cargo clippy --release
+      - name: cargo fmt
+        run: cargo fmt -- --check
