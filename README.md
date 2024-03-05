@@ -9,12 +9,11 @@
 
 ## Status
 
-Currently in development. The first milestone is feature parity and rough compatibility with [adr-tools][1].
+Currently in development. This first preview version has feature parity and rough compatibility with [adr-tools][1].
 
 Possible extended feature ideas:
 
-* Support [MADR][2] in addition to Nygard.
-* Integrated git support.
+* Support [MADR][2] and custom templates in addition to Nygard.
 * Built-in HTTP server support to present ADRs via the web.
 
 ## Installation
@@ -34,6 +33,7 @@ Usage: adrs <COMMAND>
 Commands:
   init      Initializes the directory of Architecture Decision Records
   new       Create a new, numbered Architectural Decision Record
+  edit      Edit an existing Architectural Decision Record
   link      Link Architectural Decision Records
   list      List Architectural Decision Records
   config    Show the current configuration
