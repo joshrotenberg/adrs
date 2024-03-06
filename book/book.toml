@@ -1,0 +1,11 @@
+[book]
+authors = ["josh rotenberg"]
+language = "en"
+multilingual = false
+src = "src"
+title = "adrs documentation"
+
+[output.html]
+site-url = "/adrs-book/"
+git-repository-url = "https://github.com/joshrotenberg/adrs/tree/main/book"
+edit-url-template = "https://github.com/joshrotenberg/adrs/edit/main/book/{path}"
