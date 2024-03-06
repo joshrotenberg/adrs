@@ -9,3 +9,7 @@ title = "adrs documentation"
 site-url = "/adrs-book/"
 git-repository-url = "https://github.com/joshrotenberg/adrs/tree/main/book"
 edit-url-template = "https://github.com/joshrotenberg/adrs/edit/main/book/{path}"
+
+[preprocessor.toc]
+command = "mdbook-toc"
+renderer = ["html"]
