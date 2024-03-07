@@ -48,8 +48,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     continue-on-error: true
-    # env:
-      # RUSTFLAGS: ${{ matrix.rustflags || '' }}
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -67,6 +65,10 @@ jobs:
       - name: build
         if: matrix.os != 'ubuntu-latest'
         run: cargo build --release --locked --target ${{ matrix.target }}
+      
+      - name: build (cross)
+        if: matrix.os == 'ubuntu-latest'
+        run: cross build --release --locked --target ${{ matrix.target }}
 
       - name: upload artifacts
         uses: actions/upload-artifact@v4
@@ -100,7 +102,6 @@ jobs:
     name: Publish Cargo Package
     runs-on: ubuntu-latest
     needs: [upload_artifacts]
-    # if: ${{ needs.release_please.outputs.release_created == 'true' }}
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v4
