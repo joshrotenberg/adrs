@@ -38,7 +38,7 @@ fn test_new_default() {
     )
     .unwrap();
 
-    let events = Parser::new(&s).into_offset_iter();
+    let events = Parser::new(s).into_offset_iter();
     for (event, offset) in events {
         if let Event::End(Tag::Heading(HeadingLevel::H1, _, _)) = event {
             assert_eq!(&s[offset], "# 2. Test new\n");
@@ -88,7 +88,7 @@ fn test_new_superceded() {
     )
     .unwrap();
 
-    let events = Parser::new(&s).into_offset_iter();
+    let events = Parser::new(s).into_offset_iter();
     for (event, offset) in events {
         if let Event::End(Tag::Heading(HeadingLevel::H1, _, _)) = event {
             assert_eq!(&s[offset], "# 3. Test new\n");
@@ -131,7 +131,7 @@ fn test_new_link() {
     )
     .unwrap();
 
-    let events = Parser::new(&s).into_offset_iter();
+    let events = Parser::new(s).into_offset_iter();
     for (event, offset) in events {
         if let Event::End(Tag::Heading(HeadingLevel::H1, _, _)) = event {
             assert_eq!(&s[offset], "# 2. Test Link\n");
