@@ -6,7 +6,10 @@ use edit::edit;
 use serde::Serialize;
 use tinytemplate::TinyTemplate;
 
-use crate::adr::{append_status, find_adr, format_adr_path, get_title, next_adr_number, now};
+use crate::adr::{
+    self, append_status, find_adr, format_adr_path, get_title, next_adr_number, now,
+    read_adr_dir_file,
+};
 
 static NEW_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");
 
@@ -34,9 +37,10 @@ struct NewAdrContext {
 }
 
 pub(crate) fn run(args: &NewArgs) -> Result<()> {
-    let adr_dir = read_to_string(".adr-dir")?;
-    let title = args.title.join(" ");
+    let adr_dir = read_adr_dir_file()?;
     let number = next_adr_number(&adr_dir)?;
+
+    let title = args.title.join(" ");
 
     let superceded = args
         .superceded

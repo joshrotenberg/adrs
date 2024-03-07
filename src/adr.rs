@@ -1,4 +1,4 @@
-use std::fs::read_dir;
+use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -7,7 +7,6 @@ use fuzzy_matcher::FuzzyMatcher;
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 use pulldown_cmark_to_cmark::cmark_resume;
 use time::macros::format_description;
-use walkdir::WalkDir;
 
 // format the current date
 pub(crate) fn now() -> Result<String> {
@@ -84,7 +83,15 @@ pub(crate) fn find_adr_by_number(path: &Path, n: i32) -> Result<PathBuf> {
 pub(crate) fn list_adrs(path: &Path) -> Result<Vec<PathBuf>> {
     let mut adrs = read_dir(path)?
         .map(|entry| entry.unwrap().path())
-        .filter(|filename| filename.is_file())
+        .filter(|filename| {
+            filename
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with(char::is_numeric)
+                && filename.is_file()
+        })
         .collect::<Vec<_>>();
 
     adrs.sort();
@@ -193,20 +200,16 @@ pub(crate) fn append_status(path: &Path, status: &str) -> Result<()> {
     Ok(())
 }
 
+// read the .adr-dir file
+pub(crate) fn read_adr_dir_file() -> Result<PathBuf> {
+    let dir = read_to_string(".adr-dir")?;
+    Ok(PathBuf::from(dir.trim()))
+}
+
+// get the next ADR number
 pub(crate) fn next_adr_number(path: impl AsRef<Path>) -> Result<i32> {
-    let entries = WalkDir::new(path)
-        .into_iter()
-        .filter(|entry| {
-            let entry = entry.as_ref().unwrap();
-            entry.file_type().is_file()
-                && entry
-                    .file_name()
-                    .to_str()
-                    .unwrap()
-                    .starts_with(char::is_numeric)
-        })
-        .collect::<Vec<_>>();
-    Ok(entries.len() as i32 + 1)
+    let adrs = list_adrs(path.as_ref())?;
+    Ok(adrs.len() as i32 + 1)
 }
 
 #[cfg(test)]

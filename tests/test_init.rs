@@ -75,3 +75,33 @@ fn test_init_with_file_already_in_directory() {
         temp.path().to_str().unwrap()
     );
 }
+
+#[test]
+#[serial_test::serial]
+fn test_init_issue_4() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("init")
+        .arg("docs/ADRs")
+        .assert()
+        .success();
+
+    temp.child("docs/ADRs/0001-record-architecture-decisions.md")
+        .assert(predicates::path::exists());
+
+    assert_eq!(
+        std::fs::read_to_string(format!("{}/.adr-dir", temp.path().to_str().unwrap())).unwrap(),
+        "docs/ADRs"
+    );
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("foo")
+        .assert()
+        .success();
+}

@@ -24,6 +24,7 @@ struct InitAdrContext {
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<()> {
+    dbg!(args.directory.to_str().unwrap());
     create_dir_all(&args.directory)?;
 
     let number = next_adr_number(&args.directory)?;

@@ -3,7 +3,7 @@ use std::{fs::read_to_string, path::Path};
 use anyhow::Result;
 use clap::Args;
 
-use crate::adr::{self, append_status};
+use crate::adr::{self, append_status, read_adr_dir_file};
 
 #[derive(Debug, Args)]
 pub(crate) struct LinkArgs {
@@ -18,7 +18,7 @@ pub(crate) struct LinkArgs {
 }
 
 pub(crate) fn run(args: &LinkArgs) -> Result<()> {
-    let adr_dir = read_to_string(".adr-dir")?;
+    let adr_dir = read_adr_dir_file()?;
 
     let source = adr::find_adr(Path::new(&adr_dir), &args.source)?;
     let source_filename = source.file_name().unwrap().to_str().unwrap();
