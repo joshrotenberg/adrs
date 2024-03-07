@@ -24,7 +24,7 @@ fn test_list() {
         .unwrap()
         .arg("list")
         .assert()
-        .stdout(path.as_os_str().to_str().unwrap());
+        .stdout(path.to_str().unwrap());
 
     Command::cargo_bin("adrs")
         .unwrap()
@@ -39,7 +39,7 @@ fn test_list() {
         .unwrap()
         .arg("list")
         .assert()
-        .stdout(path.as_os_str().to_str().unwrap());
+        .stdout(path.to_str().unwrap());
 }
 
 #[test]
