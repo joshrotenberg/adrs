@@ -1,27 +1,65 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "book/**"
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "book/**"
+      - "**.md"
 
 env:
-  EDITOR: cat
-  VISUAL: cat
+  RUSTFLAGS: "-D warnings"
 
 jobs:
-  test:
-    name: Test
-    strategy:
-      matrix:
-        os: [ubuntu-22.04, macos-13, windows-2022]
-    runs-on: ${{ matrix.os }}
+  rustfmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo fetch
-      - name: cargo test build
-        run: cargo build --tests --release
-      - name: cargo test
-        run: cargo test --release
-      - name: cargo clippy
-        run: cargo clippy --release
-      - name: cargo fmt
-        run: cargo fmt -- --check
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+  
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: test
+        run: cargo test --all-targets --all-features
