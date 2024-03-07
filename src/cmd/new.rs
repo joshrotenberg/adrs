@@ -1,5 +1,3 @@
-use std::fs::read_to_string;
-
 use anyhow::Result;
 use clap::Args;
 use edit::edit;
@@ -7,8 +5,7 @@ use serde::Serialize;
 use tinytemplate::TinyTemplate;
 
 use crate::adr::{
-    self, append_status, find_adr, format_adr_path, get_title, next_adr_number, now,
-    read_adr_dir_file,
+    append_status, find_adr, format_adr_path, get_title, next_adr_number, now, read_adr_dir_file,
 };
 
 static NEW_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");

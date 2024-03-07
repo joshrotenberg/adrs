@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::adr::{self, get_links, get_title, list_adrs, read_adr_dir_file};
+use crate::adr::{get_links, get_title, list_adrs, read_adr_dir_file};
 use anyhow::Result;
 use clap::{Args, Subcommand};
 

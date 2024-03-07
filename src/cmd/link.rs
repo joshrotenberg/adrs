@@ -1,4 +1,4 @@
-use std::{fs::read_to_string, path::Path};
+use std::path::Path;
 
 use anyhow::Result;
 use clap::Args;
