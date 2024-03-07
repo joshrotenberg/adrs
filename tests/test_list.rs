@@ -19,11 +19,12 @@ fn test_list() {
 
     temp.child(".adr-dir").assert(predicates::path::exists());
 
+    let path = Path::new("doc/adr/0001-record-architecture-decisions.md\n");
     Command::cargo_bin("adrs")
         .unwrap()
         .arg("list")
         .assert()
-        .stdout("doc/adr/0001-record-architecture-decisions.md\n");
+        .stdout(path.as_os_str().to_str().unwrap());
 
     Command::cargo_bin("adrs")
         .unwrap()
@@ -32,11 +33,13 @@ fn test_list() {
         .assert()
         .success();
 
+    let path =
+        Path::new("doc/adr/0001-record-architecture-decisions.md\ndoc/adr/0002-another-adr.md\n");
     Command::cargo_bin("adrs")
         .unwrap()
         .arg("list")
         .assert()
-        .stdout("doc/adr/0001-record-architecture-decisions.md\ndoc/adr/0002-another-adr.md\n");
+        .stdout(path.as_os_str().to_str().unwrap());
 }
 
 #[test]
