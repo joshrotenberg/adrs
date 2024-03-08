@@ -63,11 +63,11 @@ jobs:
 
       - name: build
         if: matrix.os != 'ubuntu-latest'
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
       
       - name: build (cross)
         if: matrix.os == 'ubuntu-latest'
-        run: cross build --release --locked --target ${{ matrix.target }}
+        run: cross build --release --target ${{ matrix.target }}
 
       - name: ls
         run: ls -l target/${{ matrix.target }}/release 
