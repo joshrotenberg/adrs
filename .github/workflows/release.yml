@@ -70,6 +70,9 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: cross build --release --locked --target ${{ matrix.target }}
 
+      - name: ls
+        run: ls -l target/${{ matrix.target }}/release 
+
       - name: upload artifacts
         uses: actions/upload-artifact@v4
         with:
