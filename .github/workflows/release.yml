@@ -99,7 +99,7 @@ jobs:
         run: for file in adrs-*/adrs-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
 
       - name: publish 
-        run: gh release create ${{ github.ref_name }} --generate-notes 
+        run: gh release edit ${{ github.ref_name }} --generate-notes 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
