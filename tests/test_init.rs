@@ -12,6 +12,7 @@ fn test_init_default() {
         .unwrap()
         .arg("init")
         .assert()
+        .stdout("doc/adr/0001-record-architecture-decisions.md\n")
         .success();
 
     temp.child("doc/adr/0001-record-architecture-decisions.md")

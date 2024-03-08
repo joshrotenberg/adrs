@@ -24,7 +24,6 @@ struct InitAdrContext {
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<()> {
-    dbg!(args.directory.to_str().unwrap());
     create_dir_all(&args.directory)?;
 
     let number = next_adr_number(&args.directory)?;
@@ -37,15 +36,17 @@ pub(crate) fn run(args: &InitArgs) -> Result<()> {
         date: now()?,
     };
 
-    let mut tt = TinyTemplate::new();
-    tt.add_template("init_adr", INIT_TEMPLATE)?;
-    let rendered = tt.render("init_adr", &init_context)?;
-    std::fs::write(filename, rendered)?;
-
     std::fs::write(
         std::env::current_dir()?.join(".adr-dir"),
         args.directory.to_str().unwrap(),
     )?;
+
+    let mut tt = TinyTemplate::new();
+    tt.add_template("init_adr", INIT_TEMPLATE)?;
+    let rendered = tt.render("init_adr", &init_context)?;
+    std::fs::write(&filename, rendered)?;
+
+    println!("{}", filename.display());
 
     Ok(())
 }
