@@ -98,10 +98,10 @@ jobs:
       - name: checksums
         run: for file in adrs-*/adrs-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
 
-      - name: publish 
-        run: gh release edit ${{ github.ref_name }} 
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: publish 
+      #   run: gh release edit ${{ github.ref_name }} 
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: add artifacts to release
         uses: softprops/action-gh-release@v1
