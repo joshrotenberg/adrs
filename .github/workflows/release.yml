@@ -98,11 +98,6 @@ jobs:
       - name: checksums
         run: for file in adrs-*/adrs-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
 
-      # - name: publish 
-      #   run: gh release edit ${{ github.ref_name }} 
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: add artifacts to release
         uses: softprops/action-gh-release@v1
         with:
@@ -122,19 +117,3 @@ jobs:
 
       - name: Build | Publish
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-  # update_brew_formula:
-  #   name: Update Brew Formula
-  #   runs-on: ubuntu-latest
-  #   needs: [release_please, upload_artifacts]
-  #   if: ${{ needs.release_please.outputs.release_created == 'true' }}
-  #   steps:
-  #     - uses: mislav/bump-homebrew-formula-action@v3.1
-  #       with:
-  #         formula-name: adrs
-  #         tag-name: ${{ needs.release_please.outputs.tag_name }}
-  #       env:
-  #         # Used for creating the formula update PR
-  #         COMMITTER_TOKEN: ${{ secrets.GH_PAT }}
-  #         # Used for verifying the SHA256 sum of the draft release
-  #         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
