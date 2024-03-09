@@ -17,10 +17,23 @@ Possible extended feature ideas:
 
 ## Installation
 
-For now:
+From source (requires the Rust [toolchain](https://rustup.rs)):
 
-1. clone this repository
-1. run `cargo install --path .` in the root of the repo
+```sh
+git clone https://github.com/joshrotenberg/adrs
+cd adrs
+cargo install
+```
+
+Via `cargo` (aslo requires the Rust toolchain):
+
+```sh
+cargo install adrs
+```
+
+Via a released binary:
+
+See [Releases](https://github.com/joshrotenberg/adrs/releases).
 
 ## Command Line
 
@@ -46,7 +59,7 @@ Options:
 
 ## Contributing
 
-Contributions absolutely welcome.
+Contributions absolutely welcome. See the current [issues](https://github.com/joshrotenberg/adrs/issues).
 
 ## License
 
