@@ -1,4 +1,4 @@
-use std::fs::{read_dir, read_to_string};
+use std::fs::{create_dir_all, read_dir, read_to_string};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -206,6 +206,16 @@ pub(crate) fn read_adr_dir_file() -> Result<PathBuf> {
     Ok(PathBuf::from(dir.trim()))
 }
 
+// find the ADR directory, defaulting to "doc/adr" and creating it if it doesn't exist
+pub(crate) fn find_adr_dir() -> Result<PathBuf> {
+    match read_adr_dir_file() {
+        Ok(dir) => Ok(dir),
+        _ => {
+            create_dir_all("doc/adr")?;
+            Ok(PathBuf::from("doc/adr"))
+        }
+    }
+}
 // get the next ADR number
 pub(crate) fn next_adr_number(path: impl AsRef<Path>) -> Result<i32> {
     let adrs = list_adrs(path.as_ref())?;
