@@ -3,6 +3,7 @@ use std::path::Path;
 use assert_cmd::Command;
 use assert_fs::prelude::*;
 use assert_fs::TempDir;
+use predicates::prelude::*;
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 
 #[test]
@@ -131,10 +132,23 @@ fn test_new_link() {
     )
     .unwrap();
 
+    let mut in_status = false;
+    let predicate_fn = predicate::str::contains("Accepted").or(predicate::str::contains(
+        "Amends [1. Record architecture decisions](0001-record-architecture-decisions.md)",
+    ));
+
     let events = Parser::new(s).into_offset_iter();
     for (event, offset) in events {
-        if let Event::End(Tag::Heading(HeadingLevel::H1, _, _)) = event {
-            assert_eq!(&s[offset], "# 2. Test Link\n");
+        match event {
+            Event::Start(Tag::Heading(HeadingLevel::H2, _, _)) => {
+                in_status = s[offset.clone()].starts_with("## Status");
+            }
+            _ => {}
+        };
+        if in_status {
+            if let Event::End(Tag::Paragraph) = event {
+                assert_eq!(true, predicate_fn.eval(&s[offset]));
+            }
         }
     }
 }

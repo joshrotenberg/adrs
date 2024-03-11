@@ -12,5 +12,8 @@ fn test_config() {
         .unwrap()
         .arg("config")
         .assert()
-        .stdout(predicate::str::contains("adrs_bin_dir=").and(predicate::str::contains("adrs_template_dir=embedded")));
+        .stdout(
+            predicate::str::contains("adrs_bin_dir=")
+                .and(predicate::str::contains("adrs_template_dir=embedded")),
+        );
 }
