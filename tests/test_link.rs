@@ -59,15 +59,12 @@ fn test_link() {
 
     let events = Parser::new(s).into_offset_iter();
     for (event, offset) in events {
-        match event {
-            Event::Start(Tag::Heading(HeadingLevel::H2, _, _)) => {
-                in_status = s[offset.clone()].starts_with("## Status");
-            }
-            _ => {}
-        };
+        if let Event::Start(Tag::Heading(HeadingLevel::H2, _, _)) = event {
+            in_status = s[offset.clone()].starts_with("## Status");
+        }
         if in_status {
             if let Event::End(Tag::Paragraph) = event {
-                assert_eq!(true, predicate_fn.eval(&s[offset]));
+                assert!(predicate_fn.eval(&s[offset]));
             }
         }
     }
