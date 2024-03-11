@@ -138,3 +138,21 @@ fn test_new_link() {
         }
     }
 }
+
+#[test]
+#[serial_test::serial]
+fn test_new_no_current_dir() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Test new without init")
+        .assert()
+        .success();
+
+    temp.child("doc/adr/0001-test-new-without-init.md")
+        .assert(predicates::path::exists());
+}
