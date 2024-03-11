@@ -1,6 +1,15 @@
+use std::path::Path;
+
 use assert_cmd::Command;
 use assert_fs::prelude::*;
 use assert_fs::TempDir;
+use predicates::prelude::*;
+use pulldown_cmark::Event;
+use pulldown_cmark::HeadingLevel;
+use pulldown_cmark::Parser;
+use pulldown_cmark::Tag;
+
+mod common;
 
 #[test]
 #[serial_test::serial]
@@ -28,39 +37,40 @@ fn test_link() {
     temp.child("doc/adr/0002-test-new.md")
         .assert(predicates::path::exists());
 
-    // let s = &std::fs::read_to_string(
-    //     Path::new(temp.path())
-    //         .join("doc/adr")
-    //         .join("0002-test-new.md"),
-    // )
-    // .unwrap();
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("link")
+        .arg("2")
+        .arg("Amends")
+        .arg("1")
+        .arg("Amended by")
+        .assert()
+        .success();
 
-    // let events = Parser::new(&s).into_offset_iter();
-    // for (event, offset) in events {
-    //     if let Event::End(Tag::Heading(HeadingLevel::H1, _, _)) = event {
-    //         assert_eq!(&s[offset], "# 2. Test new\n");
-    //     }
-    // }
+    let s = &std::fs::read_to_string(
+        Path::new(temp.path())
+            .join("doc/adr")
+            .join("0002-test-new.md"),
+    )
+    .unwrap();
 
-    // Command::cargo_bin("adrs")
-    //     .unwrap()
-    //     .arg("link")
-    //     .arg("2")
-    //     .arg("1")
-    //     .assert()
-    //     .success();
+    let mut in_status = false;
+    let predicate_fn = predicate::str::contains("Accepted").or(predicate::str::contains(
+        "Amends [1. Record architecture decisions](0001-record-architecture-decisions.md)",
+    ));
 
-    // let s = &std::fs::read_to_string(
-    //     Path::new(temp.path())
-    //         .join("doc/adr")
-    //         .join("0002-test-new.md"),
-    // )
-    // .unwrap();
-
-    // let events = Parser::new(&s).into_offset_iter();
-    // for (event, offset) in events {
-    //     if let Event::End(Tag::Heading(HeadingLevel::H1, _, _)) = event {
-    //         assert_eq!(&s[offset], "# 2. Test new\n\n## Links\n\n- [1. Record architecture decisions](0001-record-architecture-decisions.md)\n");
-    //     }
-    // }
+    let events = Parser::new(s).into_offset_iter();
+    for (event, offset) in events {
+        match event {
+            Event::Start(Tag::Heading(HeadingLevel::H2, _, _)) => {
+                in_status = s[offset.clone()].starts_with("## Status");
+            }
+            _ => {}
+        };
+        if in_status {
+            if let Event::End(Tag::Paragraph) = event {
+                assert_eq!(true, predicate_fn.eval(&s[offset]));
+            }
+        }
+    }
 }
