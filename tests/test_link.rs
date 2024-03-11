@@ -9,8 +9,6 @@ use pulldown_cmark::HeadingLevel;
 use pulldown_cmark::Parser;
 use pulldown_cmark::Tag;
 
-mod common;
-
 #[test]
 #[serial_test::serial]
 fn test_link() {
