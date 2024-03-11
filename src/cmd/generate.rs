@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::adr::{get_links, get_title, list_adrs, read_adr_dir_file};
+use crate::adr::{find_adr_dir, get_links, get_title, list_adrs, read_adr_dir_file};
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
@@ -44,7 +44,7 @@ pub(crate) fn run(args: &GenerateCommands) -> Result<()> {
 }
 
 fn run_toc(args: &TocArgs) -> Result<()> {
-    let adr_dir = read_adr_dir_file()?;
+    let adr_dir = find_adr_dir()?;
     let adrs = list_adrs(Path::new(&adr_dir))?;
 
     println! {"# Architecture Decision Records\n"};
