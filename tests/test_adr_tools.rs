@@ -53,4 +53,16 @@ fn test_autocomplete() {
 
 #[test]
 #[serial_test::serial]
-fn test_avoid_octal_numbers() {}
+fn test_avoid_octal_numbers() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("First Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0001-first-decision.md"));
+}
