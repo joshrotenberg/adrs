@@ -178,3 +178,162 @@ fn test_funny_characters() {
     temp.child("doc/adr/0003-bar.md")
         .assert(predicates::path::exists());
 }
+
+#[test]
+#[serial_test::serial]
+fn test_generate_contents_with_header_and_footer() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("First Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0001-first-decision.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Second Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0002-second-decision.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Third Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0003-third-decision.md"));
+
+    temp.child("intro.md")
+        .write_str("An intro.\n\nMultiple paragraphs.\n")
+        .unwrap();
+
+    temp.child("outro.md").write_str("An outro.\n").unwrap();
+
+    let markdown = r#"# Architecture Decision Records
+
+An intro.
+
+Multiple paragraphs.
+
+* [1. First Decision](0001-first-decision.md)
+* [2. Second Decision](0002-second-decision.md)
+* [3. Third Decision](0003-third-decision.md)
+
+An outro.
+
+"#;
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("generate")
+        .arg("toc")
+        .arg("-i")
+        .arg("intro.md")
+        .arg("-o")
+        .arg("outro.md")
+        .assert()
+        .success()
+        .stdout(markdown);
+}
+
+#[test]
+#[serial_test::serial]
+fn test_generate_contents_with_prefix() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("First Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0001-first-decision.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Second Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0002-second-decision.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Third Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0003-third-decision.md"));
+
+    let markdown = r#"# Architecture Decision Records
+
+* [1. First Decision](foo/doc/adr/0001-first-decision.md)
+* [2. Second Decision](foo/doc/adr/0002-second-decision.md)
+* [3. Third Decision](foo/doc/adr/0003-third-decision.md)
+"#;
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("generate")
+        .arg("toc")
+        .arg("-p")
+        .arg("foo/doc/adr")
+        .assert()
+        .success()
+        .stdout(markdown);
+}
+
+#[test]
+#[serial_test::serial]
+fn test_generate_contents() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("First Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0001-first-decision.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Second Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0002-second-decision.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Third Decision")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0003-third-decision.md"));
+
+    let markdown = r#"# Architecture Decision Records
+
+* [1. First Decision](0001-first-decision.md)
+* [2. Second Decision](0002-second-decision.md)
+* [3. Third Decision](0003-third-decision.md)
+"#;
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("generate")
+        .arg("toc")
+        .assert()
+        .success()
+        .stdout(markdown);
+}
