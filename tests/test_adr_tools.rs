@@ -81,7 +81,7 @@ fn test_avoid_octal_numbers() {
             let file = format!(
                 "{:04}-{}.md",
                 index + 1,
-                title.replace(" ", "-").to_ascii_lowercase()
+                title.replace(' ', "-").to_ascii_lowercase()
             );
             Command::cargo_bin("adrs")
                 .unwrap()
