@@ -22,7 +22,7 @@ pub(crate) fn format_adr_path(adr_dir: &Path, sequence: i32, title: &str) -> Pat
         sequence,
         title
             .split_terminator(|c| char::is_ascii_whitespace(&c) || char::is_ascii_punctuation(&c))
-            // .filter(|s| !s.is_empty())
+            .filter(|s| !s.is_empty())
             .collect::<Vec<&str>>()
             .join("-")
             .to_lowercase()
