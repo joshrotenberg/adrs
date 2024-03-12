@@ -21,7 +21,7 @@ pub(crate) fn format_adr_path(adr_dir: &Path, sequence: i32, title: &str) -> Pat
         "{:0>4}-{}.md",
         sequence,
         title
-            .split_whitespace()
+            .split(|c| char::is_ascii_whitespace(&c) || char::is_ascii_punctuation(&c))
             .collect::<Vec<&str>>()
             .join("-")
             .to_lowercase()
