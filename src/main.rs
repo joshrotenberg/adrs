@@ -1,20 +1,8 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use serde::Serialize;
 
 pub mod adr;
 mod cmd;
-
-#[derive(Debug, Serialize)]
-struct TemplateContext {
-    title: String,
-    number: i32,
-    date: String,
-    status: String,
-    context: String,
-    decision: String,
-    consequences: String,
-}
 
 #[derive(Parser)]
 #[command(version, about, long_about = None )]
