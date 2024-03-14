@@ -1,6 +1,6 @@
 # Summary
 
-- [Introduction](./introduction.md)
+- [Introduction](./README.md)
 - [Configuration](./configuration.md)
 - [Commands](./commands/README.md)
   - [init](./commands/init.md)
