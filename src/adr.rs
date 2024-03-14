@@ -261,7 +261,7 @@ pub(crate) fn next_adr_number(path: impl AsRef<Path>) -> Result<i32> {
 mod tests {
     use super::*;
     use assert_fs::prelude::*;
-    use assert_fs::{fixture::PathChild, TempDir};
+    use assert_fs::TempDir;
     use predicates::prelude::*;
 
     #[test]
