@@ -1,5 +1,6 @@
 # adrs
 
+![Crates.io Version](https://img.shields.io/crates/v/adrs)
 [![crates.io](https://img.shields.io/crates/d/adrs.svg)](https://crates.io/crates/adrs)
 [![Rust](https://github.com/joshrotenberg/adrs/workflows/CI/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ACI)
 [![dependency status](https://deps.rs/repo/github/joshrotenberg/adrs/status.svg)](https://deps.rs/repo/github/joshrotenberg/adrs)
