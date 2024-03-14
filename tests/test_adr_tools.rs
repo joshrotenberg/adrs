@@ -102,9 +102,10 @@ fn test_avoid_octal_numbers() {
         .collect::<Vec<String>>()
         .join("\n");
 
-    let predicate_fn =
-        predicates::str::is_match("# 9. Ninth decision\n\nDate: .*\n\n## Status\n\nAccepted")
-            .unwrap();
+    let predicate_fn = predicates::str::is_match(
+        r"# 9. Ninth decision\n\nDate: \d{4}-\d{2}-\d{2}\n\n## Status\n\nAccepted",
+    )
+    .unwrap();
 
     assert!(predicate_fn.eval(&lines));
 }
@@ -336,4 +337,98 @@ fn test_generate_contents() {
         .assert()
         .success()
         .stdout(markdown);
+}
+
+#[test]
+#[serial_test::serial]
+fn test_generate_graph() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains(
+            "doc/adr/0001-record-architecture-decisions.md",
+        ));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("An idea that seems good at the time")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains(
+            "doc/adr/0002-an-idea-that-seems-good-at-the-time.md",
+        ));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("-s")
+        .arg("2")
+        .arg("A better idea")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0003-a-better-idea.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("This will work")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0004-this-will-work.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("-s")
+        .arg("3")
+        .arg("The end")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("doc/adr/0005-the-end.md"));
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("generate")
+        .arg("graph")
+        .assert()
+        .success()
+        .stdout("digraph {\n  node [shape=plaintext]\n  subgraph {\n\t_1 [label=\"1. Record architecture decisions\"; URL=\"0001-record-architecture-decisions.html\"];\n\t_2 [label=\"2. An idea that seems good at the time\"; URL=\"0002-an-idea-that-seems-good-at-the-time.html\"];\n\t_1 -> _2 [style=\"dotted\", weight=1];\n\t_3 [label=\"3. A better idea\"; URL=\"0003-a-better-idea.html\"];\n\t_2 -> _3 [style=\"dotted\", weight=1];\n\t_4 [label=\"4. This will work\"; URL=\"0004-this-will-work.html\"];\n\t_3 -> _4 [style=\"dotted\", weight=1];\n\t_5 [label=\"5. The end\"; URL=\"0005-the-end.html\"];\n\t_4 -> _5 [style=\"dotted\", weight=1];\n  }\n  _3 -> _2 [label=\"Supercedes\", weight=0];\n  _5 -> _3 [label=\"Supercedes\", weight=0];\n}\n");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("generate")
+        .arg("graph")
+        .arg("-p")
+        .arg("http://example.com/")
+        .arg("-e")
+        .arg(".xxx")
+        .assert()
+        .success()
+    .stdout("digraph {\n  node [shape=plaintext]\n  subgraph {\n\t_1 [label=\"1. Record architecture decisions\"; URL=\"http://example.com/0001-record-architecture-decisions.xxx\"];\n\t_2 [label=\"2. An idea that seems good at the time\"; URL=\"http://example.com/0002-an-idea-that-seems-good-at-the-time.xxx\"];\n\t_1 -> _2 [style=\"dotted\", weight=1];\n\t_3 [label=\"3. A better idea\"; URL=\"http://example.com/0003-a-better-idea.xxx\"];\n\t_2 -> _3 [style=\"dotted\", weight=1];\n\t_4 [label=\"4. This will work\"; URL=\"http://example.com/0004-this-will-work.xxx\"];\n\t_3 -> _4 [style=\"dotted\", weight=1];\n\t_5 [label=\"5. The end\"; URL=\"http://example.com/0005-the-end.xxx\"];\n\t_4 -> _5 [style=\"dotted\", weight=1];\n  }\n  _3 -> _2 [label=\"Supercedes\", weight=0];\n  _5 -> _3 [label=\"Supercedes\", weight=0];\n}\n");
+}
+
+#[test]
+#[serial_test::serial]
+fn test_init_adr_repository() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("init")
+        .assert()
+        .success()
+        .stdout("doc/adr/0001-record-architecture-decisions.md\n");
+
+    temp.child("doc/adr/0001-record-architecture-decisions.md")
+        .assert(predicates::path::exists());
+
+    // TODO: test contents
 }
