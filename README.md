@@ -18,6 +18,13 @@ Possible extended feature ideas:
 
 ## Installation
 
+Homebrew:
+
+```sh
+brew tap joshrotenberg/brew
+brew install adrs
+```
+
 From source (requires the Rust [toolchain](https://rustup.rs)):
 
 ```sh
