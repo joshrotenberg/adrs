@@ -215,11 +215,7 @@ pub(crate) fn remove_status(path: &Path, status: &str) -> Result<()> {
     for (event, offset) in Parser::new(&markdown_input).into_offset_iter() {
         match event {
             Event::End(Tag::Heading(HeadingLevel::H2, _, _)) => {
-                if markdown_input[offset].starts_with("## Status") {
-                    in_status = true;
-                } else {
-                    in_status = false;
-                }
+                in_status = markdown_input[offset].starts_with("## Status");
             }
             Event::End(Tag::Paragraph) => {
                 let line = &markdown_input[offset];
