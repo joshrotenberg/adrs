@@ -10,7 +10,7 @@ use time::macros::format_description;
 
 // format the current date
 pub(crate) fn now() -> Result<String> {
-    let now = time::OffsetDateTime::now_local()?;
+    let now = time::OffsetDateTime::now_utc();
     let x = now.format(format_description!("[year]-[month]-[day]"))?;
     Ok(x)
 }
@@ -57,7 +57,11 @@ pub(crate) fn find_adr_by_str(path: &Path, s: &str) -> Result<PathBuf> {
         None => std::cmp::Ordering::Equal,
     });
 
-    let first = adrs.first().expect("No ADR matched");
+    if adrs.is_empty() {
+        let msg = format!("No ADR found for {}", s);
+        return Err(anyhow::anyhow!(msg));
+    }
+    let first = adrs.first().unwrap();
     Ok(first.0.clone())
 }
 
@@ -201,6 +205,40 @@ pub(crate) fn append_status(path: &Path, status: &str) -> Result<()> {
     Ok(())
 }
 
+// remove a status from the ADR
+pub(crate) fn remove_status(path: &Path, status: &str) -> Result<()> {
+    let markdown_input = std::fs::read_to_string(path)?;
+    let mut buf = String::with_capacity(markdown_input.len() + status.len() + 2);
+
+    let mut state = None;
+    let mut in_status = false;
+    for (event, offset) in Parser::new(&markdown_input).into_offset_iter() {
+        match event {
+            Event::End(Tag::Heading(HeadingLevel::H2, _, _)) => {
+                if markdown_input[offset].starts_with("## Status") {
+                    in_status = true;
+                } else {
+                    in_status = false;
+                }
+            }
+            Event::End(Tag::Paragraph) => {
+                let line = &markdown_input[offset];
+                if in_status && line.trim() == status {
+                    buf.truncate(buf.len() - line.len() - 1);
+                }
+            }
+            _ => {}
+        };
+        state = cmark_resume(std::iter::once(event), &mut buf, state.take())?.into();
+    }
+    if let Some(state) = state {
+        state.finalize(&mut buf)?;
+    }
+
+    std::fs::write(path, buf)?;
+    Ok(())
+}
+
 // read the .adr-dir file
 pub(crate) fn read_adr_dir_file() -> Result<PathBuf> {
     let dir = read_to_string(".adr-dir")?;
@@ -224,4 +262,291 @@ pub(crate) fn next_adr_number(path: impl AsRef<Path>) -> Result<i32> {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use assert_fs::prelude::*;
+    use assert_fs::{fixture::PathChild, TempDir};
+    use predicates::prelude::*;
+
+    #[test]
+    fn test_now() {
+        let now = now().unwrap();
+        let pf = predicates::str::is_match(r"^\d{4}-\d{2}-\d{2}").unwrap();
+        assert!(pf.eval(&now));
+    }
+
+    #[test]
+    fn test_format_adr_path() {
+        assert_eq!(
+            format_adr_path("doc/adr".as_ref(), 1, "Some Title"),
+            Path::new("doc/adr/0001-some-title.md")
+        );
+        assert_eq!(
+            format_adr_path("doc/adr".as_ref(), 20, "Something About Node.JS"),
+            Path::new("doc/adr/0020-something-about-node-js.md")
+        );
+        assert_eq!(
+            format_adr_path("alternative-dir".as_ref(), 2, "Slash/Slash/Slash/"),
+            Path::new("alternative-dir/0002-slash-slash-slash.md")
+        );
+        assert_eq!(
+            format_adr_path("doc/adr".as_ref(), 7, "-Bar-"),
+            Path::new("doc/adr/0007-bar.md")
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_find_adr() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md").touch().unwrap();
+        temp.child("doc/adr/0002-another-title.md").touch().unwrap();
+
+        assert_eq!(
+            find_adr("doc/adr", "some").unwrap(),
+            Path::new("doc/adr/0001-some-title.md")
+        );
+        assert_eq!(
+            find_adr("doc/adr", "1").unwrap(),
+            Path::new("doc/adr/0001-some-title.md")
+        );
+        assert_eq!(
+            find_adr("doc/adr", "another").unwrap(),
+            Path::new("doc/adr/0002-another-title.md")
+        );
+        assert_eq!(
+            find_adr("doc/adr", "2").unwrap(),
+            Path::new("doc/adr/0002-another-title.md")
+        );
+
+        assert!(find_adr(Path::new("doc/adr"), "xxxx").is_err());
+        assert!(find_adr(Path::new("doc/adr"), "1002").is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_find_adr_by_str() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md").touch().unwrap();
+        temp.child("doc/adr/0002-another-title.md").touch().unwrap();
+
+        assert_eq!(
+            find_adr_by_str(Path::new("doc/adr"), "some").unwrap(),
+            Path::new("doc/adr/0001-some-title.md")
+        );
+        assert_eq!(
+            find_adr_by_str(Path::new("doc/adr"), "another").unwrap(),
+            Path::new("doc/adr/0002-another-title.md")
+        );
+        assert!(find_adr_by_str(Path::new("doc/adr"), "xxxx").is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_find_adr_by_number() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md").touch().unwrap();
+        temp.child("doc/adr/0002-another-title.md").touch().unwrap();
+
+        assert_eq!(
+            find_adr_by_number(Path::new("doc/adr"), 1).unwrap(),
+            Path::new("doc/adr/0001-some-title.md")
+        );
+        assert_eq!(
+            find_adr_by_number(Path::new("doc/adr"), 2).unwrap(),
+            Path::new("doc/adr/0002-another-title.md")
+        );
+        assert!(find_adr_by_number(Path::new("doc/adr"), 1002).is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_list_adrs() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md").touch().unwrap();
+        temp.child("doc/adr/0002-another-title.md").touch().unwrap();
+
+        assert_eq!(
+            list_adrs(Path::new("doc/adr")).unwrap(),
+            vec![
+                Path::new("doc/adr/0001-some-title.md"),
+                Path::new("doc/adr/0002-another-title.md")
+            ]
+        );
+
+        temp.child("doc/adr/garbage.txt").touch().unwrap();
+        assert_eq!(
+            list_adrs(Path::new("doc/adr")).unwrap(),
+            vec![
+                Path::new("doc/adr/0001-some-title.md"),
+                Path::new("doc/adr/0002-another-title.md")
+            ]
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_get_title() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md")
+            .write_str("# 1. Some title\n\n## A Two\n\n")
+            .unwrap();
+
+        assert_eq!(
+            get_title(Path::new("doc/adr/0001-some-title.md")).unwrap(),
+            "1. Some title"
+        );
+
+        assert!(get_title(Path::new("doc/adr/0002-not-there.md")).is_err());
+
+        temp.child("doc/adr/0003-another-title.md")
+            .write_str("## Bad Markdown\n\n## A Two\n\n")
+            .unwrap();
+
+        assert!(get_title(Path::new("doc/adr/0003-another-title.md")).is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_get_status() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md")
+            .write_str("# 1. Some title\n\n## Status\n\nAccepted\n\n")
+            .unwrap();
+
+        assert_eq!(
+            get_status(Path::new("doc/adr/0001-some-title.md")).unwrap(),
+            vec!["Accepted"]
+        );
+
+        assert!(get_status(Path::new("doc/adr/0002-not-there.md")).is_err());
+
+        temp.child("doc/adr/0003-another-title.md")
+            .write_str("## Bad Markdown\n\n## Something else\n\n")
+            .unwrap();
+
+        assert!(get_status(Path::new("doc/adr/0003-another-title.md"))
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn get_links() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md")
+            .write_str("# 1. Some title\n\n## Status\n\nAccepted\n\nAmends [2. Some Link](http://example.com)\n\n")
+            .unwrap();
+
+        assert_eq!(
+            super::get_links(Path::new("doc/adr/0001-some-title.md")).unwrap(),
+            vec![(
+                String::from("Amends"),
+                String::from("2. Some Link"),
+                String::from("http://example.com")
+            ),]
+        );
+        temp.child("doc/adr/0002-no-links.md")
+            .write_str("# 1. Some title\n\n## Status\n\nAccepted\n\n")
+            .unwrap();
+        assert!(super::get_links(Path::new("doc/adr/0002-no-links.md"))
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_append_status() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md")
+            .write_str("# 1. Some title\n\n## Status\n\nAccepted\n\n")
+            .unwrap();
+
+        append_status(Path::new("doc/adr/0001-some-title.md"), "Rejected")
+            .expect("Failed to append status");
+
+        assert_eq!(
+            get_status(Path::new("doc/adr/0001-some-title.md")).unwrap(),
+            vec!["Accepted", "Rejected"]
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_remove_status() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md")
+            .write_str(
+                "# 1. Some title\n\n## Status\n\nAccepted\n\nRejected\n\n## Another header\n\n",
+            )
+            .unwrap();
+
+        assert_eq!(
+            get_status(Path::new("doc/adr/0001-some-title.md")).unwrap(),
+            vec!["Accepted", "Rejected"]
+        );
+        assert!(remove_status(Path::new("doc/adr/0001-some-title.md"), "Rejected").is_ok());
+
+        assert_eq!(
+            get_status(Path::new("doc/adr/0001-some-title.md")).unwrap(),
+            vec!["Accepted"]
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_read_adr_dir_file() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child(".adr-dir").write_str("doc/adr\n").unwrap();
+
+        assert_eq!(read_adr_dir_file().unwrap(), Path::new("doc/adr"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_find_adr_dir() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        assert_eq!(find_adr_dir().unwrap(), Path::new("doc/adr"));
+
+        temp.child(".adr-dir")
+            .write_str("alternative-dir\n")
+            .unwrap();
+
+        assert_eq!(find_adr_dir().unwrap(), Path::new("alternative-dir"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_next_adr_number() {
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        temp.child("doc/adr/0001-some-title.md").touch().unwrap();
+        temp.child("doc/adr/0002-another-title.md").touch().unwrap();
+        temp.child("doc/adr/garbage.md").touch().unwrap();
+
+        assert_eq!(next_adr_number("doc/adr").unwrap(), 3);
+    }
+}
