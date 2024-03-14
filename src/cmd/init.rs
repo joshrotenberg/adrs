@@ -1,6 +1,9 @@
-use std::{fs::create_dir_all, path::PathBuf};
+use std::{
+    fs::create_dir_all,
+    path::{Path, PathBuf},
+};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Args;
 use serde::Serialize;
 use tinytemplate::TinyTemplate;
@@ -24,15 +27,18 @@ struct InitAdrContext {
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<()> {
-    create_dir_all(&args.directory)?;
+    create_dir_all(&args.directory)
+        .with_context(|| format!("Unable to create {}", args.directory.display()))?;
 
-    let number = next_adr_number(&args.directory)?;
+    let number = next_adr_number(Path::new(&args.directory))
+        .context("Unable to determine next ADR number")?;
+
     let title = "Record architecture decisions";
 
     let filename = format_adr_path(&args.directory, number, title);
 
     let init_context = InitAdrContext {
-        number: next_adr_number(&args.directory)?,
+        number,
         date: now()?,
     };
 
@@ -43,8 +49,11 @@ pub(crate) fn run(args: &InitArgs) -> Result<()> {
 
     let mut tt = TinyTemplate::new();
     tt.add_template("init_adr", INIT_TEMPLATE)?;
-    let rendered = tt.render("init_adr", &init_context)?;
-    std::fs::write(&filename, rendered)?;
+    let rendered = tt
+        .render("init_adr", &init_context)
+        .context("Unable to render template")?;
+    std::fs::write(&filename, rendered)
+        .with_context(|| format!("Unable to write ADR file: {}", filename.display()))?;
 
     println!("{}", filename.display());
 

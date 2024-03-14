@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Args;
 
 use crate::adr::{find_adr_dir, list_adrs};
@@ -7,7 +7,7 @@ use crate::adr::{find_adr_dir, list_adrs};
 pub(crate) struct ListArgs {}
 
 pub(crate) fn run(_args: &ListArgs) -> Result<()> {
-    let adr_dir = find_adr_dir()?;
+    let adr_dir = find_adr_dir().context("No ADR directory found")?;
 
     let adrs = list_adrs(&adr_dir)?;
     for adr in adrs {

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Args;
 use edit::edit;
 use serde::Serialize;
@@ -35,7 +35,7 @@ struct NewAdrContext {
 }
 
 pub(crate) fn run(args: &NewArgs) -> Result<()> {
-    let adr_dir = find_adr_dir()?;
+    let adr_dir = find_adr_dir().context("No ADR directory found")?;
     let number = next_adr_number(&adr_dir)?;
 
     let title = args.title.join(" ");
