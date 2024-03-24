@@ -91,3 +91,56 @@ fn test_generate_graph() {
         .success()
         .stdout(graph);
 }
+
+#[test]
+#[serial_test::serial]
+fn test_generate_book() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("init")
+        .assert()
+        .success();
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Test new")
+        .assert()
+        .success();
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Test another")
+        .assert()
+        .success();
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("generate")
+        .arg("book")
+        .assert()
+        .success();
+
+    assert!(temp.child("book").join("book.toml").exists());
+    assert!(temp.child("book").join("src").join("SUMMARY.md").exists());
+    assert!(temp
+        .child("book")
+        .join("src")
+        .join("0001-record-architecture-decisions.md")
+        .exists());
+    assert!(temp
+        .child("book")
+        .join("src")
+        .join("0002-test-new.md")
+        .exists());
+    assert!(temp
+        .child("book")
+        .join("src")
+        .join("0003-test-another.md")
+        .exists());
+}
