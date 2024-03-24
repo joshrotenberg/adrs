@@ -13,7 +13,7 @@ the doc site can contain a lot more information, as well as general information 
 
 ## Decision
 
-`adrs` will have an [mdBook](https://github.com/rust-lang/mdBook)] based documentation site.
+`adrs` will have an [mdBook](https://github.com/rust-lang/mdBook) based documentation site.
 
 ## Consequences
 
