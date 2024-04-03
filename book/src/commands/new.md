@@ -3,7 +3,7 @@
 ## Overview
 
 `new` creates a new ADR, optionally linking it to or superceding a previous ADR. A single call can link
-and or supercede multiple previous ADRs.
+and/or supercede multiple previous ADRs.
 
 ## Help
 
@@ -16,8 +16,9 @@ Arguments:
   <TITLE>...  Title of the new Architectural Decision Record
 
 Options:
-  -s, --superceded <SUPERCEDED>  A reference to a previous decision to supercede with this new one
+  -s, --superseded <SUPERSEDED>  A reference to a previous decision to supersede with this new one
   -l, --link <LINK>              Link the new Architectural Decision to a previous Architectural Decision Record
+  -T, --template <TEMPLATE>      Use a custom template when generating the new Architectural Decision Record. Relative paths are resolved with respect to the directory specified in `.adr-dir` [env: ADRS_TEMPLATE_DIR=] [default: templates/template.md]
   -h, --help                     Print help
   -V, --version                  Print version
 ```
@@ -33,6 +34,10 @@ adrs new -s 2 This is a new idea
 
 # create a new ADR that links to a previous ADR
 adrs new -l "2:Amends:Amended by" This is a better idea
+
+# use an alternate template
+# the template is resolved relative to the directory specified in `.adr-dir`
+adrs new -T templates/alternate.md This is a different idea
 ```
 
 ## Issues

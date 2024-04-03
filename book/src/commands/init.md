@@ -3,7 +3,7 @@
 ## Overview
 
 The `init` command initializes a new ADR directory, using `doc/adr` by default. An alternate directory can optionally be supplied to the command
-to store ADRs in a different location. `init` will also create a `.adr-dir` file to store the directory location so that other commands
+to store ADRs in a different location. `init` will also create the `.adr-dir` file to store the directory location so that other commands
 can find the top level directory.
 
 `init` creates an initial ADR for you as well, noting the decision you've made to document your Architectural Decisions using ADRs.
@@ -28,9 +28,11 @@ Options:
 
 ```sh
 # use the default location
+# an initial ADR will be created in doc/adr/0001-record-architecture-decisions.md
 adrs init
 
 # put your ADRs somewhere else
+# creates some/other/place/0001-record-architecture-decisions.md
 adrs init some/other/place
 ```
 
