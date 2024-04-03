@@ -2,7 +2,7 @@
 
 ## Overview
 
-`edit` opens an ADR in your VISUAL/EDITOR that matches the given NAME argument.
+`edit` opens an ADR in your `VISUAL` or `EDITOR` that matches the given NAME argument.
 
 ## Help
 
@@ -22,9 +22,10 @@ Options:
 ## Examples
 
 ```sh
-# find and edit the first ADR 
+# find and edit the first ADR
 adrs edit 1  # looks for 0001-...
-adrs edit data # fuzzy match for filenames with the string data in them
+# find and edit the first ADR with the string "data" in the filename
+adrs edit data
 ```
 
 ## Issues

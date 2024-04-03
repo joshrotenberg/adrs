@@ -20,6 +20,9 @@ Options:
 
 ```sh
 adrs list
+0001-record-architecture-decisions.md
+0002-do-something-new.md
+0003-do-something-else.md
 ```
 
 ## Issues
