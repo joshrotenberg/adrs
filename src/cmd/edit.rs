@@ -1,10 +1,10 @@
 use std::{fs::read_to_string, path::Path};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Args;
 use edit::edit;
 
-use crate::adr::{find_adr, read_adr_dir_file};
+use crate::adr::{find_adr, find_adr_dir};
 
 #[derive(Debug, Args)]
 pub(crate) struct EditArgs {
@@ -13,7 +13,7 @@ pub(crate) struct EditArgs {
 }
 
 pub(crate) fn run(args: &EditArgs) -> Result<()> {
-    let adr_dir = read_adr_dir_file()?;
+    let adr_dir = find_adr_dir().context("No ADR directory found")?;
 
     let adr = find_adr(Path::new(&adr_dir), &args.name)?;
     let content = read_to_string(adr.clone())?;

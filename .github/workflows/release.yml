@@ -117,3 +117,19 @@ jobs:
 
       - name: Build | Publish
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  update_brew_formula:
+    name: Update Brew Formula
+    runs-on: ubuntu-latest
+    needs: [upload_artifacts]
+    steps:
+      - uses: mislav/bump-homebrew-formula-action@v3.1
+        with:
+          formula-name: adrs
+          formula-path: Formula/adrs.rb
+          base-branch: main
+          tag-name: ${{ github.ref_name }}
+          homebrew-tap: joshrotenberg/homebrew-brew
+        env:
+          COMMITTER_TOKEN: ${{ secrets.COMMITTER_TOKEN }}
+          # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

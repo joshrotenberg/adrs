@@ -1,5 +1,6 @@
 # adrs
 
+![Crates.io Version](https://img.shields.io/crates/v/adrs)
 [![crates.io](https://img.shields.io/crates/d/adrs.svg)](https://crates.io/crates/adrs)
 [![Rust](https://github.com/joshrotenberg/adrs/workflows/CI/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ACI)
 [![dependency status](https://deps.rs/repo/github/joshrotenberg/adrs/status.svg)](https://deps.rs/repo/github/joshrotenberg/adrs)
@@ -17,10 +18,30 @@ Possible extended feature ideas:
 
 ## Installation
 
-For now:
+Homebrew:
 
-1. clone this repository
-1. run `cargo install --path .` in the root of the repo
+```sh
+brew tap joshrotenberg/brew
+brew install adrs
+```
+
+From source (requires the Rust [toolchain](https://rustup.rs)):
+
+```sh
+git clone https://github.com/joshrotenberg/adrs
+cd adrs
+cargo install
+```
+
+Via `cargo` (aslo requires the Rust toolchain):
+
+```sh
+cargo install adrs
+```
+
+Via a released binary:
+
+See [Releases](https://github.com/joshrotenberg/adrs/releases).
 
 ## Command Line
 
@@ -46,7 +67,7 @@ Options:
 
 ## Contributing
 
-Contributions absolutely welcome.
+Contributions absolutely welcome. See the current [issues](https://github.com/joshrotenberg/adrs/issues).
 
 ## License
 

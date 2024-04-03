@@ -3,6 +3,7 @@ use std::path::Path;
 use assert_cmd::Command;
 use assert_fs::prelude::*;
 use assert_fs::TempDir;
+use predicates::prelude::*;
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 
 #[test]
@@ -131,10 +132,38 @@ fn test_new_link() {
     )
     .unwrap();
 
+    let mut in_status = false;
+    let predicate_fn = predicate::str::contains("Accepted").or(predicate::str::contains(
+        "Amends [1. Record architecture decisions](0001-record-architecture-decisions.md)",
+    ));
+
     let events = Parser::new(s).into_offset_iter();
     for (event, offset) in events {
-        if let Event::End(Tag::Heading(HeadingLevel::H1, _, _)) = event {
-            assert_eq!(&s[offset], "# 2. Test Link\n");
+        if let Event::Start(Tag::Heading(HeadingLevel::H2, _, _)) = event {
+            in_status = s[offset.clone()].starts_with("## Status");
+        }
+        if in_status {
+            if let Event::End(Tag::Paragraph) = event {
+                assert!(predicate_fn.eval(&s[offset]));
+            }
         }
     }
+}
+
+#[test]
+#[serial_test::serial]
+fn test_new_no_current_dir() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Test new without init")
+        .assert()
+        .success();
+
+    temp.child("doc/adr/0001-test-new-without-init.md")
+        .assert(predicates::path::exists());
 }

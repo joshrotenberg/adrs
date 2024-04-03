@@ -1,5 +1,5 @@
 [package]
-version = "0.2.7"
+version = "0.2.8"
 authors = ["josh rotenberg <joshrotenberg@gmail.com>"]
 description = "Architectural Decision Record command line tool"
 documentation = "https://github.com/joshrotenberg/adrs"
@@ -21,6 +21,7 @@ pulldown-cmark = "0.9"
 pulldown-cmark-to-cmark = "11.2.0"
 walkdir = "2.4.0"
 fuzzy-matcher = "0.3.7"
+whoami = "1.5.1"
 
 [dev-dependencies]
 serial_test = "3.0.0"

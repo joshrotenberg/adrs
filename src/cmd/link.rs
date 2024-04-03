@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Args;
 
-use crate::adr::{self, append_status, read_adr_dir_file};
+use crate::adr::{append_status, find_adr, find_adr_dir, get_title};
 
 #[derive(Debug, Args)]
 pub(crate) struct LinkArgs {
@@ -18,15 +18,17 @@ pub(crate) struct LinkArgs {
 }
 
 pub(crate) fn run(args: &LinkArgs) -> Result<()> {
-    let adr_dir = read_adr_dir_file()?;
+    let adr_dir = find_adr_dir().context("No ADR directory found")?;
 
-    let source = adr::find_adr(Path::new(&adr_dir), &args.source)?;
+    let source =
+        find_adr(Path::new(&adr_dir), &args.source).context("Unable to find source ADR")?;
     let source_filename = source.file_name().unwrap().to_str().unwrap();
-    let source_title = adr::get_title(&source)?;
+    let source_title = get_title(&source).context("Unable to get title for source ADR")?;
 
-    let target = adr::find_adr(Path::new(&adr_dir), &args.target.to_string())?;
+    let target = find_adr(Path::new(&adr_dir), &args.target.to_string())
+        .context("Unable to find target ADR")?;
     let target_filename = target.file_name().unwrap().to_str().unwrap();
-    let target_title = adr::get_title(&target)?;
+    let target_title = get_title(&target).context("Unable to get title for target ADR")?;
 
     let source_link = format!("{} [{}]({})", args.link, target_title, target_filename);
     let target_link = format!(
@@ -34,8 +36,8 @@ pub(crate) fn run(args: &LinkArgs) -> Result<()> {
         args.reverse_link, source_title, source_filename
     );
 
-    append_status(&source, &source_link)?;
-    append_status(&target, &target_link)?;
+    append_status(&source, &source_link).context("Unable to append status for source ADR")?;
+    append_status(&target, &target_link).context("Unable to append status for target ADR")?;
 
     Ok(())
 }

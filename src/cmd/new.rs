@@ -1,11 +1,12 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Args;
 use edit::edit;
 use serde::Serialize;
 use tinytemplate::TinyTemplate;
 
 use crate::adr::{
-    append_status, find_adr, format_adr_path, get_title, next_adr_number, now, read_adr_dir_file,
+    append_status, find_adr, find_adr_dir, format_adr_path, get_title, next_adr_number, now,
+    remove_status,
 };
 
 static NEW_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");
@@ -34,7 +35,7 @@ struct NewAdrContext {
 }
 
 pub(crate) fn run(args: &NewArgs) -> Result<()> {
-    let adr_dir = read_adr_dir_file()?;
+    let adr_dir = find_adr_dir().context("No ADR directory found")?;
     let number = next_adr_number(&adr_dir)?;
 
     let title = args.title.join(" ");
@@ -45,6 +46,8 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         .map(|adr| {
             let adr_path = find_adr(&adr_dir, adr).expect("No ADR found");
             let adr_title = get_title(&adr_path).expect("No title found");
+
+            remove_status(&adr_path, "Accepted").expect("Unable to update status");
             format!(
                 "Supercedes [{}]({})",
                 adr_title,
