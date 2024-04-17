@@ -32,6 +32,15 @@ fn test_generate_toc() {
         .stdout("# Architecture Decision Records\n\n* [1. Record architecture decisions](0001-record-architecture-decisions.md)\n* [2. Test new](0002-test-new.md)\n")
         .success();
 
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("generate")
+        .arg("toc")
+        .arg("--ordered")
+        .assert()
+        .stdout("# Architecture Decision Records\n\n1. [Record architecture decisions](0001-record-architecture-decisions.md)\n1. [Test new](0002-test-new.md)\n")
+        .success();
+
     temp.child("intro.txt").write_str("intro text").unwrap();
     temp.child("outro.txt").write_str("outro text").unwrap();
 
