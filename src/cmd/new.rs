@@ -14,9 +14,9 @@ static NEW_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");
 #[derive(Debug, Args)]
 #[command(version, about, long_about = None)]
 pub(crate) struct NewArgs {
-    /// A reference to a previous decision to supercede with this new one
-    #[arg(short, long)]
-    superceded: Vec<String>,
+    /// A reference to a previous decision to supersede with this new one
+    #[arg(short, long, alias("superceded"))]
+    superseded: Vec<String>,
     /// Link the new Architectural Decision to a previous Architectural Decision Record
     #[arg(short, long)]
     link: Vec<String>,
@@ -30,7 +30,7 @@ struct NewAdrContext {
     number: i32,
     title: String,
     date: String,
-    superceded: Vec<String>,
+    superseded: Vec<String>,
     linked: Vec<String>,
 }
 
@@ -40,8 +40,8 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
 
     let title = args.title.join(" ");
 
-    let superceded = args
-        .superceded
+    let superseded = args
+        .superseded
         .iter()
         .map(|adr| {
             let adr_path = find_adr(&adr_dir, adr).expect("No ADR found");
@@ -49,7 +49,7 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
 
             remove_status(&adr_path, "Accepted").expect("Unable to update status");
             format!(
-                "Supercedes [{}]({})",
+                "Supersedes [{}]({})",
                 adr_title,
                 adr_path.file_name().unwrap().to_str().unwrap(),
             )
@@ -86,7 +86,7 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         number,
         date: now()?,
         title: title.clone(),
-        superceded,
+        superseded,
         linked,
     };
 
