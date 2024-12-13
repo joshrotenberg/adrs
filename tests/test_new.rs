@@ -49,7 +49,7 @@ fn test_new_default() {
 
 #[test]
 #[serial_test::serial]
-fn test_new_superceded() {
+fn test_new_superseded() {
     let temp = TempDir::new().unwrap();
     std::env::set_current_dir(temp.path()).unwrap();
     std::env::set_var("EDITOR", "cat");
@@ -76,6 +76,8 @@ fn test_new_superceded() {
     Command::cargo_bin("adrs")
         .unwrap()
         .arg("new")
+        // `superceded` is a hidden alias for the correct spelling: `superseded`
+        // and is maintained for backwards compatibility
         .arg("--superceded")
         .arg("2")
         .arg("Test new")

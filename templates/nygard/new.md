@@ -5,8 +5,8 @@ Date: {date}
 ## Status
 
 Accepted
-{{ for supercedes in superceded }}
-{supercedes}
+{{ for supersedes in superseded }}
+{supersedes}
 {{- endfor }}
 {{ for link in linked }}
 {link}

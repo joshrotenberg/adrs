@@ -399,7 +399,7 @@ fn test_generate_graph() {
         .arg("graph")
         .assert()
         .success()
-        .stdout("digraph {\n  node [shape=plaintext]\n  subgraph {\n\t_1 [label=\"1. Record architecture decisions\"; URL=\"0001-record-architecture-decisions.html\"];\n\t_2 [label=\"2. An idea that seems good at the time\"; URL=\"0002-an-idea-that-seems-good-at-the-time.html\"];\n\t_1 -> _2 [style=\"dotted\", weight=1];\n\t_3 [label=\"3. A better idea\"; URL=\"0003-a-better-idea.html\"];\n\t_2 -> _3 [style=\"dotted\", weight=1];\n\t_4 [label=\"4. This will work\"; URL=\"0004-this-will-work.html\"];\n\t_3 -> _4 [style=\"dotted\", weight=1];\n\t_5 [label=\"5. The end\"; URL=\"0005-the-end.html\"];\n\t_4 -> _5 [style=\"dotted\", weight=1];\n  }\n  _3 -> _2 [label=\"Supercedes\", weight=0];\n  _5 -> _3 [label=\"Supercedes\", weight=0];\n}\n");
+        .stdout("digraph {\n  node [shape=plaintext]\n  subgraph {\n\t_1 [label=\"1. Record architecture decisions\"; URL=\"0001-record-architecture-decisions.html\"];\n\t_2 [label=\"2. An idea that seems good at the time\"; URL=\"0002-an-idea-that-seems-good-at-the-time.html\"];\n\t_1 -> _2 [style=\"dotted\", weight=1];\n\t_3 [label=\"3. A better idea\"; URL=\"0003-a-better-idea.html\"];\n\t_2 -> _3 [style=\"dotted\", weight=1];\n\t_4 [label=\"4. This will work\"; URL=\"0004-this-will-work.html\"];\n\t_3 -> _4 [style=\"dotted\", weight=1];\n\t_5 [label=\"5. The end\"; URL=\"0005-the-end.html\"];\n\t_4 -> _5 [style=\"dotted\", weight=1];\n  }\n  _3 -> _2 [label=\"Supersedes\", weight=0];\n  _5 -> _3 [label=\"Supersedes\", weight=0];\n}\n");
 
     Command::cargo_bin("adrs")
         .unwrap()
@@ -411,7 +411,7 @@ fn test_generate_graph() {
         .arg(".xxx")
         .assert()
         .success()
-    .stdout("digraph {\n  node [shape=plaintext]\n  subgraph {\n\t_1 [label=\"1. Record architecture decisions\"; URL=\"http://example.com/0001-record-architecture-decisions.xxx\"];\n\t_2 [label=\"2. An idea that seems good at the time\"; URL=\"http://example.com/0002-an-idea-that-seems-good-at-the-time.xxx\"];\n\t_1 -> _2 [style=\"dotted\", weight=1];\n\t_3 [label=\"3. A better idea\"; URL=\"http://example.com/0003-a-better-idea.xxx\"];\n\t_2 -> _3 [style=\"dotted\", weight=1];\n\t_4 [label=\"4. This will work\"; URL=\"http://example.com/0004-this-will-work.xxx\"];\n\t_3 -> _4 [style=\"dotted\", weight=1];\n\t_5 [label=\"5. The end\"; URL=\"http://example.com/0005-the-end.xxx\"];\n\t_4 -> _5 [style=\"dotted\", weight=1];\n  }\n  _3 -> _2 [label=\"Supercedes\", weight=0];\n  _5 -> _3 [label=\"Supercedes\", weight=0];\n}\n");
+    .stdout("digraph {\n  node [shape=plaintext]\n  subgraph {\n\t_1 [label=\"1. Record architecture decisions\"; URL=\"http://example.com/0001-record-architecture-decisions.xxx\"];\n\t_2 [label=\"2. An idea that seems good at the time\"; URL=\"http://example.com/0002-an-idea-that-seems-good-at-the-time.xxx\"];\n\t_1 -> _2 [style=\"dotted\", weight=1];\n\t_3 [label=\"3. A better idea\"; URL=\"http://example.com/0003-a-better-idea.xxx\"];\n\t_2 -> _3 [style=\"dotted\", weight=1];\n\t_4 [label=\"4. This will work\"; URL=\"http://example.com/0004-this-will-work.xxx\"];\n\t_3 -> _4 [style=\"dotted\", weight=1];\n\t_5 [label=\"5. The end\"; URL=\"http://example.com/0005-the-end.xxx\"];\n\t_4 -> _5 [style=\"dotted\", weight=1];\n  }\n  _3 -> _2 [label=\"Supersedes\", weight=0];\n  _5 -> _3 [label=\"Supersedes\", weight=0];\n}\n");
 }
 
 #[test]
