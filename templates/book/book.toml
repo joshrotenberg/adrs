@@ -1,7 +1,7 @@
 [book]
-title = "{title}"
-description = "{description}"
-authors = ["{author}"]
+title = "{{title}}"
+description = "{{description}}"
+authors = ["{{author}}"]
 language = "en"
 
 [output.html]

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Args;
 use edit::edit;
+use handlebars::Handlebars;
 use serde::Serialize;
-use tinytemplate::TinyTemplate;
 
 use crate::adr::{
     append_status, find_adr, find_adr_dir, format_adr_path, get_title, next_adr_number, now,
@@ -90,9 +90,9 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         linked,
     };
 
-    let mut tt = TinyTemplate::new();
-    tt.add_template("new_adr", NEW_TEMPLATE)?;
-    let rendered = tt.render("new_adr", &new_context)?;
+    let mut registry = Handlebars::new();
+    registry.register_template_string("new_adr", NEW_TEMPLATE)?;
+    let rendered = registry.render("new_adr", &new_context)?;
     let edited = edit(rendered)?;
 
     std::fs::write(&path, edited)?;

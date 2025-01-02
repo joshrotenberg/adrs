@@ -1,6 +1,6 @@
-# {number}. Record architecture decisions
+# {{number}}. Record architecture decisions
 
-Date: {date}
+Date: {{date}}
 
 ## Status
 

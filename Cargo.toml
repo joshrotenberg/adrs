@@ -13,7 +13,7 @@ repository = "https://github.com/joshrotenberg/adrs.git"
 [dependencies]
 anyhow = "1.0.80"
 clap = { version = "4.5.1", features = ["derive"] }
-tinytemplate = "1.1"
+handlebars = "6.2.0"
 serde = { version = "1.0", features = ["derive"] }
 time = { version = "0.3.36", features = ["local-offset", "formatting", "macros"] }
 edit = "0.1.5"
