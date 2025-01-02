@@ -56,6 +56,20 @@ Options:
   -V, --version  Print version
 ```
 
+### Custom templates
+
+The `adrs new` command allows passing in custom templates using the
+[handlebars templating language](https://handlebarsjs.com/). Five template
+variables are respected:
+
+| Variable name | Value                                        |
+|---------------|----------------------------------------------|
+| number        | Index of ADR                                 |
+| date          | Current date                                 |
+| title         | Title of ADR                                 |
+| superceded    | Array of markdown links to superceded ADRs   |
+| linked        | Array of markdown links to linked ADRs       |
+
 ## Contributing
 
 Contributions absolutely welcome. See the current [issues](https://github.com/joshrotenberg/adrs/issues).

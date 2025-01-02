@@ -1,3 +1,6 @@
+use std::fs::read_to_string;
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::Args;
 use edit::edit;
@@ -23,6 +26,15 @@ pub(crate) struct NewArgs {
     /// Title of the new Architectural Decision Record
     #[arg(trailing_var_arg = true, required = true)]
     title: Vec<String>,
+    /// Use a custom template when generating the new Architectural Decision Record.
+    /// Relative paths are resolved with respect to the directory specified in `.adr-dir`.
+    #[arg(
+        default_value = "templates/template.md",
+        env = "ADRS_TEMPLATE_DIR",
+        short = 'T',
+        long
+    )]
+    template: PathBuf,
 }
 
 #[derive(Debug, Serialize)]
@@ -90,8 +102,14 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         linked,
     };
 
+    let template_file = adr_dir.join(&args.template);
+    let raw_template = if template_file.exists() {
+        read_to_string(template_file)?
+    } else {
+        NEW_TEMPLATE.to_string()
+    };
     let mut registry = Handlebars::new();
-    registry.register_template_string("new_adr", NEW_TEMPLATE)?;
+    registry.register_template_string("new_adr", raw_template)?;
     let rendered = registry.render("new_adr", &new_context)?;
     let edited = edit(rendered)?;
 
