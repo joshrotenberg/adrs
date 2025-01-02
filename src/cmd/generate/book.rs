@@ -5,8 +5,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Args;
+use handlebars::Handlebars;
 use serde::Serialize;
-use tinytemplate::TinyTemplate;
 
 use crate::adr::{find_adr_dir, get_title, list_adrs};
 
@@ -69,7 +69,7 @@ pub fn run_book(args: &BookArgs) -> Result<()> {
         )
     };
 
-    let mut tt = TinyTemplate::new();
+    let mut registry = Handlebars::new();
 
     let book_toml_context = BookTomlContext {
         title: args.title.clone(),
@@ -77,9 +77,9 @@ pub fn run_book(args: &BookArgs) -> Result<()> {
         author,
     };
 
-    let book_toml = tt
-        .add_template("book_toml", BOOK_TOML_TEMPLATE)
-        .and_then(|_| tt.render("book_toml", &book_toml_context))
+    let book_toml = registry
+        .register_template_string("book_toml", BOOK_TOML_TEMPLATE)
+        .map(|_| registry.render("book_toml", &book_toml_context))?
         .context("Unable to render book.toml template")?;
 
     std::fs::write(args.path.as_path().join("book.toml"), book_toml)?;
@@ -106,9 +106,9 @@ pub fn run_book(args: &BookArgs) -> Result<()> {
 
     let summary_context = SummaryContext { adrs: adr_titles };
 
-    let summary_mardkown = tt
-        .add_template("SUMMARY.md", BOOK_SUMMARY_TEMPLATE)
-        .and_then(|_| tt.render("SUMMARY.md", &summary_context))
+    let summary_mardkown = registry
+        .register_template_string("SUMMARY.md", BOOK_SUMMARY_TEMPLATE)
+        .map(|_| registry.render("SUMMARY.md", &summary_context))?
         .context("Unable to render SUMMARY.md template")?;
 
     std::fs::write(

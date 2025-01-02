@@ -5,8 +5,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Args;
+use handlebars::Handlebars;
 use serde::Serialize;
-use tinytemplate::TinyTemplate;
 
 use crate::adr::{format_adr_path, next_adr_number, now};
 
@@ -47,9 +47,9 @@ pub(crate) fn run(args: &InitArgs) -> Result<()> {
         args.directory.to_str().unwrap(),
     )?;
 
-    let mut tt = TinyTemplate::new();
-    tt.add_template("init_adr", INIT_TEMPLATE)?;
-    let rendered = tt
+    let mut registry = Handlebars::new();
+    registry.register_template_string("init_adr", INIT_TEMPLATE)?;
+    let rendered = registry
         .render("init_adr", &init_context)
         .context("Unable to render template")?;
     std::fs::write(&filename, rendered)

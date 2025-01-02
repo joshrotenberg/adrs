@@ -1,16 +1,16 @@
-# {number}. {title}
+# {{number}}. {{title}}
 
-Date: {date}
+Date: {{date}}
 
 ## Status
 
 Accepted
-{{ for supersedes in superseded }}
-{supersedes}
-{{- endfor }}
-{{ for link in linked }}
-{link}
-{{- endfor }}
+{{#each superseded}}
+{{this}}
+{{/each}}
+{{#each linked}}
+{{this}}
+{{/each}}
 
 ## Context
 

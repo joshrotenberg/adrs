@@ -1,8 +1,8 @@
 # Summary
 
 ------
-{{ for adr in adrs }}
+{{#each adrs}}
 
-* { adr }
+* {{this}}
 
-{{- endfor }}
+{{/each}}
