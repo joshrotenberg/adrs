@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::prelude::*;
 use std::path::Path;
 
 use assert_cmd::Command;
@@ -168,4 +170,64 @@ fn test_new_no_current_dir() {
 
     temp.child("doc/adr/0001-test-new-without-init.md")
         .assert(predicates::path::exists());
+}
+
+#[test]
+#[serial_test::serial]
+fn test_new_template() {
+    let temp = TempDir::new().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    std::env::set_var("EDITOR", "cat");
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("init")
+        .assert()
+        .success();
+
+    let default_location_template_path =
+        Path::new(temp.path()).join("doc/adr/templates/template.md");
+    std::fs::create_dir_all(default_location_template_path.parent().unwrap()).unwrap();
+    let mut default_location_template = File::create(default_location_template_path).unwrap();
+    default_location_template
+        .write_all(b"template default location")
+        .unwrap();
+
+    let custom_location_template_path = Path::new(temp.path()).join("doc/adr/templates/custom.md");
+    let mut custom_location_template = File::create(&custom_location_template_path).unwrap();
+    custom_location_template
+        .write_all(b"template custom location")
+        .unwrap();
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("Test template default location")
+        .assert()
+        .success();
+
+    Command::cargo_bin("adrs")
+        .unwrap()
+        .arg("new")
+        .arg("-T")
+        .arg(custom_location_template_path)
+        .arg("Test template custom location")
+        .assert()
+        .success();
+
+    assert_eq!(
+        std::fs::read_to_string(
+            Path::new(temp.path()).join("doc/adr/0002-test-template-default-location.md"),
+        )
+        .unwrap(),
+        "template default location"
+    );
+
+    assert_eq!(
+        std::fs::read_to_string(
+            Path::new(temp.path()).join("doc/adr/0003-test-template-custom-location.md"),
+        )
+        .unwrap(),
+        "template custom location"
+    );
 }
