@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::adr::{format_adr_path, next_adr_number, now};
 
-static INIT_TEMPLATE: &str = include_str!("../../templates/nygard/init.md");
+static INIT_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");
 
 #[derive(Debug, Args)]
 #[command(version, about, long_about = None)]
@@ -23,7 +23,9 @@ pub(crate) struct InitArgs {
 #[derive(Debug, Serialize)]
 struct InitAdrContext {
     number: i32,
+    title: String,
     date: String,
+    init: bool,
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<()> {
@@ -39,7 +41,9 @@ pub(crate) fn run(args: &InitArgs) -> Result<()> {
 
     let init_context = InitAdrContext {
         number,
+        title: "Record architecture decisions".to_string(),
         date: now()?,
+        init: true,
     };
 
     std::fs::write(
