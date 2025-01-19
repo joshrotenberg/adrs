@@ -209,7 +209,7 @@ fn test_new_template() {
     Command::cargo_bin("adrs")
         .unwrap()
         .arg("new")
-        .arg("-T")
+        .arg("-t")
         .arg(custom_location_template_path)
         .arg("Test template custom location")
         .assert()
