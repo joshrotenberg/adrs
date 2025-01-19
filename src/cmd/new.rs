@@ -12,7 +12,8 @@ use crate::adr::{
     remove_status,
 };
 
-static NEW_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");
+static DEFAULT_NEW_TEMPLATE: &str = include_str!("../../templates/nygard/new.md");
+static DEFAULT_CUSTOM_TEMPLATE_FILENAME: &str = "templates/template.md";
 
 #[derive(Debug, Args)]
 #[command(version, about, long_about = None)]
@@ -28,13 +29,8 @@ pub(crate) struct NewArgs {
     title: Vec<String>,
     /// Use a custom template when generating the new Architectural Decision Record.
     /// Relative paths are resolved with respect to the directory specified in `.adr-dir`.
-    #[arg(
-        default_value = "templates/template.md",
-        env = "ADRS_TEMPLATE_DIR",
-        short = 'T',
-        long
-    )]
-    template: PathBuf,
+    #[arg(env = "ADRS_TEMPLATE", short, long)]
+    template: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
@@ -48,9 +44,22 @@ struct NewAdrContext {
 
 pub(crate) fn run(args: &NewArgs) -> Result<()> {
     let adr_dir = find_adr_dir().context("No ADR directory found")?;
-    let number = next_adr_number(&adr_dir)?;
+    let raw_template = if let Some(template) = &args.template {
+        if !template.exists() {
+            return Err(anyhow::anyhow!(
+                "Template file not found: {}",
+                template.display()
+            ));
+        }
+        read_to_string(template)?
+    } else if let Ok(template) = read_to_string(adr_dir.join(DEFAULT_CUSTOM_TEMPLATE_FILENAME)) {
+        template
+    } else {
+        DEFAULT_NEW_TEMPLATE.to_string()
+    };
 
     let title = args.title.join(" ");
+    let number = next_adr_number(&adr_dir)?;
 
     let superseded = args
         .superseded
@@ -102,12 +111,6 @@ pub(crate) fn run(args: &NewArgs) -> Result<()> {
         linked,
     };
 
-    let template_file = adr_dir.join(&args.template);
-    let raw_template = if template_file.exists() {
-        read_to_string(template_file)?
-    } else {
-        NEW_TEMPLATE.to_string()
-    };
     let mut registry = Handlebars::new();
     registry.register_template_string("new_adr", raw_template)?;
     let rendered = registry.render("new_adr", &new_context)?;
