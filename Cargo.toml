@@ -1,5 +1,5 @@
 [package]
-version = "0.2.9"
+version = "0.3.0"
 authors = ["josh rotenberg <joshrotenberg@gmail.com>"]
 description = "Architectural Decision Record command line tool"
 documentation = "https://github.com/joshrotenberg/adrs"
