@@ -1,5 +1,5 @@
 <!DOCTYPE HTML>
-<html lang="en" class="light sidebar-visible" dir="ltr">
+<html lang="en" class="navy sidebar-visible" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
@@ -34,7 +34,7 @@
         <!-- Provide site root to javascript -->
         <script>
             var path_to_root = "";
-            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "navy";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc.js"></script>
@@ -63,7 +63,7 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             const html = document.documentElement;
-            html.classList.remove('light')
+            html.classList.remove('navy')
             html.classList.add(theme);
             html.classList.add("js");
         </script>
@@ -129,7 +129,7 @@
                         <a href="https://github.com/joshrotenberg/adrs/tree/main/book" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/joshrotenberg/adrs/edit/main/book/src/introduction.md" title="Suggest an edit" aria-label="Suggest an edit">
+                        <a href="https://github.com/joshrotenberg/adrs/edit/main/book/src/README.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -159,6 +159,10 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<p><code>adrs</code> is a command line tool for creating and managing <a href="https://adr.github.io">Architectural Decision Records</a>.
+It is a Rust rewrite of the original <a href="https://github.com/npryce/adr-tools">adr-tools</a>, attempting to balance backwards
+compatibilty with new features.</p>
+<p>See the <a href="./resources.html">Resources</a> section for more information about ADRs in general.</p>
 
                     </main>
 

@@ -1,5 +1,5 @@
 <!DOCTYPE HTML>
-<html lang="en" class="light sidebar-visible" dir="ltr">
+<html lang="en" class="navy sidebar-visible" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
@@ -34,7 +34,7 @@
         <!-- Provide site root to javascript -->
         <script>
             var path_to_root = "";
-            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "navy";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc.js"></script>
@@ -63,7 +63,7 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             const html = document.documentElement;
-            html.classList.remove('light')
+            html.classList.remove('navy')
             html.classList.add(theme);
             html.classList.add("js");
         </script>
@@ -159,12 +159,18 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="resources"><a class="header" href="#resources">Resources</a></h1>
+<ul>
+<li>Architectural Decision Records <a href="https://adr.github.io">https://adr.github.io</a></li>
+<li>adr-tools <a href="https://github.com/npryce/adr-tools">https://github.com/npryce/adr-tools</a></li>
+<li>When Should I Write an Architecture Decision Record <a href="https://engineering.atspotify.com/2020/04/when-should-i-write-an-architecture-decision-record">https://engineering.atspotify.com/2020/04/when-should-i-write-an-architecture-decision-record</a></li>
+<li>ADR Process <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/architectural-decision-records/adr-process.html#contents">https://docs.aws.amazon.com/prescriptive-guidance/latest/architectural-decision-records/adr-process.html#contents</a></li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="caveats.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="commands/generate.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -178,7 +184,7 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="caveats.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="commands/generate.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 

@@ -1,5 +1,5 @@
 <!DOCTYPE HTML>
-<html lang="en" class="light sidebar-visible" dir="ltr">
+<html lang="en" class="navy sidebar-visible" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
@@ -34,7 +34,7 @@
         <!-- Provide site root to javascript -->
         <script>
             var path_to_root = "../";
-            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "navy";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc.js"></script>
@@ -63,7 +63,7 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             const html = document.documentElement;
-            html.classList.remove('light')
+            html.classList.remove('navy')
             html.classList.add(theme);
             html.classList.add("js");
         </script>
@@ -159,6 +159,40 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="new"><a class="header" href="#new">new</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p><code>new</code> creates a new ADR, optionally linking it to or superceding a previous ADR. A single call can link
+and/or supercede multiple previous ADRs.</p>
+<h2 id="help"><a class="header" href="#help">Help</a></h2>
+<pre><code class="language-sh">Create a new, numbered Architectural Decision Record
+
+Usage: adrs new [OPTIONS] &lt;TITLE&gt;...
+
+Arguments:
+  &lt;TITLE&gt;...  Title of the new Architectural Decision Record
+
+Options:
+  -s, --superseded &lt;SUPERSEDED&gt;  A reference to a previous decision to supersede with this new one
+  -l, --link &lt;LINK&gt;              Link the new Architectural Decision to a previous Architectural Decision Record
+  -T, --template &lt;TEMPLATE&gt;      Use a custom template when generating the new Architectural Decision Record. Relative paths are resolved with respect to the directory specified in `.adr-dir` [env: ADRS_TEMPLATE_DIR=] [default: templates/template.md]
+  -h, --help                     Print help
+  -V, --version                  Print version
+</code></pre>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<pre><code class="language-sh"># create a new ADR
+adrs new My New Decision
+
+# create a new ADR that supercedes a previous ADR
+adrs new -s 2 This is a new idea
+
+# create a new ADR that links to a previous ADR
+adrs new -l "2:Amends:Amended by" This is a better idea
+
+# use an alternate template
+# the template is resolved relative to the directory specified in `.adr-dir`
+adrs new -T templates/alternate.md This is a different idea
+</code></pre>
+<h2 id="issues"><a class="header" href="#issues">Issues</a></h2>
+<p>See the <a href="https://github.com/joshrotenberg/adrs/labels/cmd-new">cmd-new</a> label for command specific issues.</p>
 
                     </main>
 

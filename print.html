@@ -1,5 +1,5 @@
 <!DOCTYPE HTML>
-<html lang="en" class="light sidebar-visible" dir="ltr">
+<html lang="en" class="navy sidebar-visible" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
@@ -35,7 +35,7 @@
         <!-- Provide site root to javascript -->
         <script>
             var path_to_root = "";
-            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "navy";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc.js"></script>
@@ -64,7 +64,7 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             const html = document.documentElement;
-            html.classList.remove('light')
+            html.classList.remove('navy')
             html.classList.add(theme);
             html.classList.add("js");
         </script>
@@ -157,19 +157,292 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<p><code>adrs</code> is a command line tool for creating and managing <a href="https://adr.github.io">Architectural Decision Records</a>.
+It is a Rust rewrite of the original <a href="https://github.com/npryce/adr-tools">adr-tools</a>, attempting to balance backwards
+compatibilty with new features.</p>
+<p>See the <a href="./resources.html">Resources</a> section for more information about ADRs in general.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="configuration"><a class="header" href="#configuration">Configuration</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="commands"><a class="header" href="#commands">Commands</a></h1>
+<p><code>adrs</code> is a command line tool for creating and managing Architectural Decision Records based on
+the original <a href="https://github.com/npryce/adr-tools">adr-tools</a>.</p>
+<p><code>adrs</code> supports the following list of commands:</p>
+<pre><code class="language-shell">  init      Initializes the directory of Architecture Decision Records
+  new       Create a new, numbered Architectural Decision Record
+  edit      Edit an existing Architectural Decision Record
+  link      Link Architectural Decision Records
+  list      List Architectural Decision Records
+  config    Show the current configuration
+  generate  Generates summary documentation about the Architectural Decision Records
+  help      Print this message or the help of the given subcommand(s)
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="init"><a class="header" href="#init">init</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>The <code>init</code> command initializes a new ADR directory, using <code>doc/adr</code> by default. An alternate directory can optionally be supplied to the command
+to store ADRs in a different location. <code>init</code> will also create the <code>.adr-dir</code> file to store the directory location so that other commands
+can find the top level directory.</p>
+<p><code>init</code> creates an initial ADR for you as well, noting the decision you've made to document your Architectural Decisions using ADRs.
+Good job by you.</p>
+<h2 id="help"><a class="header" href="#help">Help</a></h2>
+<pre><code class="language-sh">Initializes the directory of Architecture Decision Records
+
+Usage: adrs init [DIRECTORY]
+
+Arguments:
+  [DIRECTORY]  Directory to initialize [default: doc/adr]
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+</code></pre>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<pre><code class="language-sh"># use the default location
+# an initial ADR will be created in doc/adr/0001-record-architecture-decisions.md
+adrs init
+
+# put your ADRs somewhere else
+# creates some/other/place/0001-record-architecture-decisions.md
+adrs init some/other/place
+</code></pre>
+<h2 id="issues"><a class="header" href="#issues">Issues</a></h2>
+<p>See the <a href="https://github.com/joshrotenberg/adrs/labels/cmd-init">cmd-init</a> label for command specific issues.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="new"><a class="header" href="#new">new</a></h1>
+<h2 id="overview-1"><a class="header" href="#overview-1">Overview</a></h2>
+<p><code>new</code> creates a new ADR, optionally linking it to or superceding a previous ADR. A single call can link
+and/or supercede multiple previous ADRs.</p>
+<h2 id="help-1"><a class="header" href="#help-1">Help</a></h2>
+<pre><code class="language-sh">Create a new, numbered Architectural Decision Record
+
+Usage: adrs new [OPTIONS] &lt;TITLE&gt;...
+
+Arguments:
+  &lt;TITLE&gt;...  Title of the new Architectural Decision Record
+
+Options:
+  -s, --superseded &lt;SUPERSEDED&gt;  A reference to a previous decision to supersede with this new one
+  -l, --link &lt;LINK&gt;              Link the new Architectural Decision to a previous Architectural Decision Record
+  -T, --template &lt;TEMPLATE&gt;      Use a custom template when generating the new Architectural Decision Record. Relative paths are resolved with respect to the directory specified in `.adr-dir` [env: ADRS_TEMPLATE_DIR=] [default: templates/template.md]
+  -h, --help                     Print help
+  -V, --version                  Print version
+</code></pre>
+<h2 id="examples-1"><a class="header" href="#examples-1">Examples</a></h2>
+<pre><code class="language-sh"># create a new ADR
+adrs new My New Decision
+
+# create a new ADR that supercedes a previous ADR
+adrs new -s 2 This is a new idea
+
+# create a new ADR that links to a previous ADR
+adrs new -l "2:Amends:Amended by" This is a better idea
+
+# use an alternate template
+# the template is resolved relative to the directory specified in `.adr-dir`
+adrs new -T templates/alternate.md This is a different idea
+</code></pre>
+<h2 id="issues-1"><a class="header" href="#issues-1">Issues</a></h2>
+<p>See the <a href="https://github.com/joshrotenberg/adrs/labels/cmd-new">cmd-new</a> label for command specific issues.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="edit"><a class="header" href="#edit">edit</a></h1>
+<h2 id="overview-2"><a class="header" href="#overview-2">Overview</a></h2>
+<p><code>edit</code> opens an ADR in your <code>VISUAL</code> or <code>EDITOR</code> that matches the given NAME argument.</p>
+<h2 id="help-2"><a class="header" href="#help-2">Help</a></h2>
+<pre><code class="language-sh">Edit an existing Architectural Decision Record
+
+Usage: adrs edit &lt;NAME&gt;
+
+Arguments:
+  &lt;NAME&gt;  The number of the ADR to edit
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+</code></pre>
+<h2 id="examples-2"><a class="header" href="#examples-2">Examples</a></h2>
+<pre><code class="language-sh"># find and edit the first ADR
+adrs edit 1  # looks for 0001-...
+# find and edit the first ADR with the string "data" in the filename
+adrs edit data
+</code></pre>
+<h2 id="issues-2"><a class="header" href="#issues-2">Issues</a></h2>
+<p>See the <a href="https://github.com/joshrotenberg/adrs/labels/cmd-edit">cmd-edit</a> label for command specific issues.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="link"><a class="header" href="#link">link</a></h1>
+<h2 id="overview-3"><a class="header" href="#overview-3">Overview</a></h2>
+<p>The <code>link</code> command links together the SOURCE and TARGET ADRs.</p>
+<h2 id="help-3"><a class="header" href="#help-3">Help</a></h2>
+<pre><code class="language-sh">Link Architectural Decision Records
+
+Usage: adrs link &lt;SOURCE&gt; &lt;LINK&gt; &lt;TARGET&gt; &lt;REVERSE_LINK&gt;
+
+Arguments:
+  &lt;SOURCE&gt;        The source Architectural Decision Record number or file name match
+  &lt;LINK&gt;          Description of the link to create in the source Architectural Decision Record
+  &lt;TARGET&gt;        The target Architectural Decision Record number or file name match
+  &lt;REVERSE_LINK&gt;  Description of the link to create in the target Architectural Decision Record
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+</code></pre>
+<h2 id="examples-3"><a class="header" href="#examples-3">Examples</a></h2>
+<pre><code class="language-sh"># start a new ADR directory
+adr init
+# create a new ADR
+adrs new Do something new
+# create another new ADR
+adrs new Do something else
+# we have three ADRs
+ls doc/adr/
+0001-record-architecture-decisions.md
+0002-do-something-new.md
+0003-do-something-else.md
+# link the third to the second with an "Amends" link
+adrs link 3 Amends 2 "Amended by"
+</code></pre>
+<p>Now the status in <code>0003-do-something-else.md</code> will be:</p>
+<pre><code class="language-markdown">## Status
+
+Accepted
+
+Amends [2. Do something new](0002-do-something-new.md)
+</code></pre>
+<pre><code class="language-markdown">## Status
+
+Accepted
+
+Amended by [3. Do something else](0003-do-something-else.md)
+</code></pre>
+<h2 id="issues-3"><a class="header" href="#issues-3">Issues</a></h2>
+<p>See the <a href="https://github.com/joshrotenberg/adrs/labels/cmd-link">cmd-link</a> label for command specific issues.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="list"><a class="header" href="#list">list</a></h1>
+<h2 id="overview-4"><a class="header" href="#overview-4">Overview</a></h2>
+<p><code>list</code> lists the current ADRs found in the configured (or default) directory.</p>
+<h2 id="help-4"><a class="header" href="#help-4">Help</a></h2>
+<pre><code class="language-sh">List Architectural Decision Records
+
+Usage: adrs list
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+</code></pre>
+<h2 id="examples-4"><a class="header" href="#examples-4">Examples</a></h2>
+<pre><code class="language-sh">adrs list
+0001-record-architecture-decisions.md
+0002-do-something-new.md
+0003-do-something-else.md
+</code></pre>
+<h2 id="issues-4"><a class="header" href="#issues-4">Issues</a></h2>
+<p>See the <a href="https://github.com/joshrotenberg/adrs/labels/cmd-list">cmd-list</a> label for command specific issues.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="config"><a class="header" href="#config">config</a></h1>
+<h2 id="overview-5"><a class="header" href="#overview-5">Overview</a></h2>
+<p><code>config</code> shows the current configuration.</p>
+<h2 id="help-5"><a class="header" href="#help-5">Help</a></h2>
+<pre><code class="language-sh">Show the current configuration
+
+Usage: adrs config
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+</code></pre>
+<h2 id="examples-5"><a class="header" href="#examples-5">Examples</a></h2>
+<pre><code class="language-sh">adrs config
+</code></pre>
+<h2 id="issues-5"><a class="header" href="#issues-5">Issues</a></h2>
+<p>See the <a href="https://github.com/joshrotenberg/adrs/labels/cmd-config">cmd-config</a> label for command specific issues.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="generate"><a class="header" href="#generate">generate</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="caveats"><a class="header" href="#caveats">Caveats</a></h1>
+<h2 id="overview-6"><a class="header" href="#overview-6">Overview</a></h2>
+<p>The <code>generate</code> command fronts three options for generating output for use with other tools.</p>
+<ul>
+<li>toc - generate a Markdown table of contents</li>
+<li>graph - generate a <a href="https://graphviz.org">Graphviz</a> representation of your ADRs</li>
+<li>book - generate a basic <a href="https://github.com/rust-lang/mdBook">mdBook</a> representation of your ADRs</li>
+</ul>
+<h2 id="help-6"><a class="header" href="#help-6">Help</a></h2>
+<pre><code class="language-sh">Generates summary documentation about the Architectural Decision Records
+
+Usage: adrs generate &lt;COMMAND&gt;
+
+Commands:
+  toc    Generate a table of contents
+  graph  Generate a graph of the ADRs
+  book   Generate a book of the ADRs
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+</code></pre>
+<h2 id="examples-6"><a class="header" href="#examples-6">Examples</a></h2>
+<h3 id="toc"><a class="header" href="#toc">ToC</a></h3>
+<pre><code class="language-sh"># Generate a Markdown Table of Contents for the local ADRs
+adrs generate toc
+</code></pre>
+<p>Outputs the following on stdout:</p>
+<pre><code class="language-markdown"># Architecture Decision Records
+
+* [1. Record architecture decisions](0001-record-architecture-decisions.md)
+* [2. Rewrite it in Rust](0002-rewrite-it-in-rust.md)
+* [3. Use mdBook for documentation](0003-use-mdbook-for-documentation.md)
+</code></pre>
+<h3 id="graph"><a class="header" href="#graph">Graph</a></h3>
+<pre><code class="language-sh"># Generate a Graphviz file graphing the ADRs and their relationships.
+adrs generate graph
+</code></pre>
+<pre><code class="language-graphviz">digraph {
+  node [shape=plaintext]
+  subgraph {
+        _1 [label="1. Record architecture decisions"; URL="0001-record-architecture-decisions.html"];
+        _2 [label="2. Rewrite it in Rust"; URL="0002-rewrite-it-in-rust.html"];
+        _1 -&gt; _2 [style="dotted", weight=1];
+        _3 [label="3. Use mdBook for documentation"; URL="0003-use-mdbook-for-documentation.html"];
+        _2 -&gt; _3 [style="dotted", weight=1];
+  }
+}
+</code></pre>
+<h3 id="book"><a class="header" href="#book">Book</a></h3>
+<pre><code class="language-sh">Generate a book of the ADRs
+
+Usage: adrs generate book [OPTIONS]
+
+Options:
+  -p, --path &lt;PATH&gt;                Target path for the book directory [default: book]
+  -o, --overwrite                  Overwrite existing directory
+  -t, --title &lt;TITLE&gt;              Title of the book [default: "Architecture Decision Records"]
+  -d, --description &lt;DESCRIPTION&gt;  Description of the book [default: "A collection of architecture decision records"]
+  -a, --author &lt;AUTHOR&gt;            Author of the book
+  -h, --help                       Print help
+  -V, --version                    Print version
+</code></pre>
+<pre><code class="language-sh"># Generate a basic mdBook based project for the current ADRs
+adrs generate book
+</code></pre>
+<p>The <code>book</code> directory now contains a basic mdbook with:</p>
+<ul>
+<li>`book.toml' - the book's configuration</li>
+<li><code>src/SUMMARY.md</code> - a Markdown file describing the structure of the book</li>
+<li>your ADR files - copied into the book and referenced by the <code>SUMMARY.md</code></li>
+</ul>
+<p>Get started by running <code>mdbook serve</code> in your <code>book</code> directory. See <a href="https://github.com/rust-lang/mdBook">mdBook</a> for more information.</p>
+<p>Note that the command is currently pretty destructive, but requires the <code>-o/--overwrite</code> flag to work on an existing directory.</p>
+<h2 id="issues-6"><a class="header" href="#issues-6">Issues</a></h2>
+<p>See the <a href="https://github.com/joshrotenberg/adrs/labels/cmd-generate">cmd-generate</a> label for command specific issues.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="resources"><a class="header" href="#resources">Resources</a></h1>
+<ul>
+<li>Architectural Decision Records <a href="https://adr.github.io">https://adr.github.io</a></li>
+<li>adr-tools <a href="https://github.com/npryce/adr-tools">https://github.com/npryce/adr-tools</a></li>
+<li>When Should I Write an Architecture Decision Record <a href="https://engineering.atspotify.com/2020/04/when-should-i-write-an-architecture-decision-record">https://engineering.atspotify.com/2020/04/when-should-i-write-an-architecture-decision-record</a></li>
+<li>ADR Process <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/architectural-decision-records/adr-process.html#contents">https://docs.aws.amazon.com/prescriptive-guidance/latest/architectural-decision-records/adr-process.html#contents</a></li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="contributing"><a class="header" href="#contributing">Contributing</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="license"><a class="header" href="#license">License</a></h1>
+<p>Help out however you can. See <a href="https://github.com/joshrotenberg/adrs/issues">issues</a> for ideas.</p>
+<h2 id="guidelines"><a class="header" href="#guidelines">Guidelines</a></h2>
+<h3 id="compatibility"><a class="header" href="#compatibility">Compatibility</a></h3>
+<p>For now, keep additions compatible with the original <a href="https://github.com/npryce/adr-tools">adr-tools</a>. New features
+can be added, however, as long as they don't break existing functionality. In the future, the tool may
+add incompatible features, but that will be a major version bump.</p>
+<h3 id="testing"><a class="header" href="#testing">Testing</a></h3>
+<p>Please write new and/or update current tests as appropriate. See the current test suite for examples.</p>
+<h3 id="documentation"><a class="header" href="#documentation">Documentation</a></h3>
+<p>All new or augmented features should have documentation.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="project-adrs"><a class="header" href="#project-adrs">Project ADRs</a></h1>
 <ul>
 <li><a href="adrs.html#1-record-architecture-decisions">1. Record architecture decisions</a>
@@ -230,6 +503,8 @@ the doc site can contain a lot more information, as well as general information 
 <p><code>adrs</code> will have an <a href="https://github.com/rust-lang/mdBook">mdBook</a> based documentation site.</p>
 <h2 id="consequences-2"><a class="header" href="#consequences-2">Consequences</a></h2>
 <p>Docs will be easier to navigate, search, and keep up to date.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="license"><a class="header" href="#license">License</a></h1>
+<p>See <a href="https://github.com/joshrotenberg/adrs/blob/main/LICENSE-MIT">LICENSE-MIT</a> or <a href="https://github.com/joshrotenberg/adrs/blob/main/LICENSE-APACHE-2.0">LICENSE-APACHE</a>.</p>
 
                     </main>
 
