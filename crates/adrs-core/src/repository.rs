@@ -245,6 +245,37 @@ impl Repository {
         Ok((adr, path))
     }
 
+    /// Change the status of an ADR.
+    ///
+    /// If the new status is `Superseded` and `superseded_by` is provided,
+    /// a superseded-by link will be added automatically.
+    pub fn set_status(
+        &self,
+        number: u32,
+        status: AdrStatus,
+        superseded_by: Option<u32>,
+    ) -> Result<PathBuf> {
+        let mut adr = self.get(number)?;
+        adr.status = status.clone();
+
+        // If superseded by another ADR, add the link
+        if let (AdrStatus::Superseded, Some(by)) = (&status, superseded_by) {
+            // Check that the superseding ADR exists
+            let _ = self.get(by)?;
+
+            // Add superseded-by link if not already present
+            if !adr
+                .links
+                .iter()
+                .any(|l| matches!(l.kind, LinkKind::SupersededBy) && l.target == by)
+            {
+                adr.add_link(AdrLink::new(by, LinkKind::SupersededBy));
+            }
+        }
+
+        self.update(&adr)
+    }
+
     /// Link two ADRs together.
     pub fn link(
         &self,
@@ -570,6 +601,93 @@ mod tests {
         let repo = Repository::init(temp.path(), None, false).unwrap();
 
         let result = repo.supersede("New", 99);
+        assert!(result.is_err());
+    }
+
+    // ========== Set Status Tests ==========
+
+    #[test]
+    fn test_set_status_accepted() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Test Decision").unwrap();
+
+        repo.set_status(2, AdrStatus::Accepted, None).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(adr.status, AdrStatus::Accepted);
+    }
+
+    #[test]
+    fn test_set_status_deprecated() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Old Decision").unwrap();
+
+        repo.set_status(2, AdrStatus::Deprecated, None).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(adr.status, AdrStatus::Deprecated);
+    }
+
+    #[test]
+    fn test_set_status_superseded_with_link() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("First Decision").unwrap();
+        repo.new_adr("Second Decision").unwrap();
+
+        repo.set_status(2, AdrStatus::Superseded, Some(3)).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(adr.status, AdrStatus::Superseded);
+        assert_eq!(adr.links.len(), 1);
+        assert_eq!(adr.links[0].target, 3);
+        assert_eq!(adr.links[0].kind, LinkKind::SupersededBy);
+    }
+
+    #[test]
+    fn test_set_status_superseded_without_link() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Decision").unwrap();
+
+        repo.set_status(2, AdrStatus::Superseded, None).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(adr.status, AdrStatus::Superseded);
+        assert_eq!(adr.links.len(), 0);
+    }
+
+    #[test]
+    fn test_set_status_custom() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Test Decision").unwrap();
+
+        repo.set_status(2, AdrStatus::Custom("Draft".into()), None)
+            .unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(adr.status, AdrStatus::Custom("Draft".into()));
+    }
+
+    #[test]
+    fn test_set_status_adr_not_found() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let result = repo.set_status(99, AdrStatus::Accepted, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_status_superseded_by_not_found() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Decision").unwrap();
+
+        let result = repo.set_status(2, AdrStatus::Superseded, Some(99));
         assert!(result.is_err());
     }
 
