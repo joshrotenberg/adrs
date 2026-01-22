@@ -1,6 +1,7 @@
 [workspace]
 # Changelog configuration
 changelog_update = true
+changelog_config = "cliff.toml"
 git_tag_enable = true
 # Validate semantic versioning
 semver_check = true
