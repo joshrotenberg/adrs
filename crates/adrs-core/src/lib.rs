@@ -27,8 +27,9 @@ pub use config::{Config, ConfigMode, ConfigSource, DiscoveredConfig, discover};
 pub use doctor::{Check, Diagnostic, DoctorReport, Severity, check as doctor_check};
 pub use error::{Error, Result};
 pub use export::{
-    ConsideredOption, JSON_ADR_SCHEMA, JSON_ADR_VERSION, JsonAdr, JsonAdrBulkExport, JsonAdrLink,
-    RepositoryInfo, ToolInfo, export_adr, export_repository,
+    ConsideredOption, ImportOptions, ImportResult, JSON_ADR_SCHEMA, JSON_ADR_VERSION, JsonAdr,
+    JsonAdrBulkExport, JsonAdrLink, JsonAdrSingle, RepositoryInfo, ToolInfo, export_adr,
+    export_directory, export_repository, import_to_directory,
 };
 pub use parse::Parser;
 pub use repository::Repository;
