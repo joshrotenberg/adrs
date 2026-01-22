@@ -1,0 +1,22 @@
+[workspace]
+# Changelog configuration
+changelog_update = true
+git_tag_enable = true
+# Validate semantic versioning
+semver_check = true
+# PR configuration
+pr_labels = ["release"]
+
+# Core library
+[[package]]
+name = "adrs-core"
+publish = true
+git_release_enable = false
+git_tag_name = "adrs-core-v{{ version }}"
+
+# CLI binary - let cargo-dist handle GitHub releases
+[[package]]
+name = "adrs"
+publish = true
+git_release_enable = true
+git_tag_name = "v{{ version }}"
