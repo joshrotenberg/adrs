@@ -48,6 +48,10 @@ enum Commands {
         #[arg(short, long, value_name = "FORMAT")]
         format: Option<String>,
 
+        /// Template variant [default: full]
+        #[arg(short, long, value_name = "VARIANT")]
+        variant: Option<String>,
+
         /// Initial status [default: Proposed]
         #[arg(long)]
         status: Option<String>,
@@ -149,8 +153,11 @@ fn main() -> Result<()> {
             supersedes,
             link,
             format,
+            variant,
             status,
-        } => commands::new(&root, cli.ng, title, supersedes, link, format, status),
+        } => commands::new(
+            &root, cli.ng, title, supersedes, link, format, variant, status,
+        ),
         Commands::Edit { adr } => commands::edit(&root, &adr),
         Commands::List => commands::list(&root),
         Commands::Link {

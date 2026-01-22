@@ -11,7 +11,7 @@ pub enum TemplateFormat {
     #[default]
     Nygard,
 
-    /// Markdown Any Decision Records format.
+    /// Markdown Any Decision Records format (MADR 4.0.0).
     Madr,
 }
 
@@ -32,6 +32,43 @@ impl std::str::FromStr for TemplateFormat {
             "nygard" | "default" => Ok(Self::Nygard),
             "madr" => Ok(Self::Madr),
             _ => Err(Error::TemplateNotFound(s.to_string())),
+        }
+    }
+}
+
+/// Template variants for different levels of detail.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TemplateVariant {
+    /// Full template with all sections and guidance.
+    #[default]
+    Full,
+
+    /// Minimal template with essential sections only.
+    Minimal,
+
+    /// Bare template with just the structure.
+    Bare,
+}
+
+impl std::fmt::Display for TemplateVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Full => write!(f, "full"),
+            Self::Minimal => write!(f, "minimal"),
+            Self::Bare => write!(f, "bare"),
+        }
+    }
+}
+
+impl std::str::FromStr for TemplateVariant {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "full" | "default" => Ok(Self::Full),
+            "minimal" | "min" => Ok(Self::Minimal),
+            "bare" | "empty" => Ok(Self::Bare),
+            _ => Err(Error::TemplateNotFound(format!("Unknown variant: {s}"))),
         }
     }
 }
@@ -66,12 +103,31 @@ impl Template {
         Ok(Self { name, content })
     }
 
-    /// Get a built-in template by format.
+    /// Get a built-in template by format (uses Full variant).
     pub fn builtin(format: TemplateFormat) -> Self {
-        match format {
-            TemplateFormat::Nygard => Self::from_string("nygard", NYGARD_TEMPLATE),
-            TemplateFormat::Madr => Self::from_string("madr", MADR_TEMPLATE),
-        }
+        Self::builtin_with_variant(format, TemplateVariant::Full)
+    }
+
+    /// Get a built-in template by format and variant.
+    pub fn builtin_with_variant(format: TemplateFormat, variant: TemplateVariant) -> Self {
+        let (name, content) = match (format, variant) {
+            // Nygard templates
+            (TemplateFormat::Nygard, TemplateVariant::Full) => ("nygard", NYGARD_TEMPLATE),
+            (TemplateFormat::Nygard, TemplateVariant::Minimal) => {
+                ("nygard-minimal", NYGARD_MINIMAL_TEMPLATE)
+            }
+            (TemplateFormat::Nygard, TemplateVariant::Bare) => {
+                ("nygard-bare", NYGARD_BARE_TEMPLATE)
+            }
+
+            // MADR templates
+            (TemplateFormat::Madr, TemplateVariant::Full) => ("madr", MADR_TEMPLATE),
+            (TemplateFormat::Madr, TemplateVariant::Minimal) => {
+                ("madr-minimal", MADR_MINIMAL_TEMPLATE)
+            }
+            (TemplateFormat::Madr, TemplateVariant::Bare) => ("madr-bare", MADR_BARE_TEMPLATE),
+        };
+        Self::from_string(name, content)
     }
 
     /// Render the template with the given ADR data.
@@ -135,6 +191,9 @@ pub struct TemplateEngine {
     /// The default template format.
     default_format: TemplateFormat,
 
+    /// The default template variant.
+    default_variant: TemplateVariant,
+
     /// Custom template path (overrides built-in).
     custom_template: Option<Template>,
 }
@@ -150,6 +209,7 @@ impl TemplateEngine {
     pub fn new() -> Self {
         Self {
             default_format: TemplateFormat::default(),
+            default_variant: TemplateVariant::default(),
             custom_template: None,
         }
     }
@@ -157,6 +217,12 @@ impl TemplateEngine {
     /// Set the default template format.
     pub fn with_format(mut self, format: TemplateFormat) -> Self {
         self.default_format = format;
+        self
+    }
+
+    /// Set the default template variant.
+    pub fn with_variant(mut self, variant: TemplateVariant) -> Self {
+        self.default_variant = variant;
         self
     }
 
@@ -174,9 +240,9 @@ impl TemplateEngine {
 
     /// Get the template to use for rendering.
     pub fn template(&self) -> Template {
-        self.custom_template
-            .clone()
-            .unwrap_or_else(|| Template::builtin(self.default_format))
+        self.custom_template.clone().unwrap_or_else(|| {
+            Template::builtin_with_variant(self.default_format, self.default_variant)
+        })
     }
 
     /// Render an ADR using the configured template.
@@ -296,6 +362,108 @@ date: {{ date }}
 {You might want to provide additional evidence/confidence for the decision outcome here and/or document the team agreement on the decision and/or define when/how this decision should be realized and if/when it should be re-visited. Links to other decisions and resources might appear here as well.}
 "#;
 
+/// Nygard minimal template - essential sections only.
+const NYGARD_MINIMAL_TEMPLATE: &str = r#"{% if is_ng %}---
+number: {{ number }}
+title: {{ title }}
+date: {{ date }}
+status: {{ status | lower }}
+{% if links %}links:
+{% for link in links %}  - target: {{ link.target }}
+    kind: {{ link.kind | lower }}
+{% endfor %}{% endif %}---
+
+{% endif %}# {{ number }}. {{ title }}
+
+Date: {{ date }}
+
+## Status
+
+{{ status }}
+{% for link in links %}
+{{ link.kind }} [{{ link.target }}. ...]({{ "%04d" | format(link.target) }}-....md)
+{% endfor %}
+## Context
+
+{{ context if context else "" }}
+
+## Decision
+
+{{ decision if decision else "" }}
+
+## Consequences
+
+{{ consequences if consequences else "" }}
+"#;
+
+/// Nygard bare template - just the structure, no guidance.
+const NYGARD_BARE_TEMPLATE: &str = r#"# {{ number }}. {{ title }}
+
+Date: {{ date }}
+
+## Status
+
+{{ status }}
+
+## Context
+
+
+
+## Decision
+
+
+
+## Consequences
+
+"#;
+
+/// MADR minimal template - core sections only.
+const MADR_MINIMAL_TEMPLATE: &str = r#"---
+status: {{ status | lower }}
+date: {{ date }}
+{% if decision_makers %}decision-makers:
+{% for dm in decision_makers %}  - {{ dm }}
+{% endfor %}{% endif %}{% if consulted %}consulted:
+{% for c in consulted %}  - {{ c }}
+{% endfor %}{% endif %}{% if informed %}informed:
+{% for i in informed %}  - {{ i }}
+{% endfor %}{% endif %}---
+
+# {{ title }}
+
+## Context and Problem Statement
+
+{{ context if context else "" }}
+
+## Decision Outcome
+
+{{ decision if decision else "" }}
+
+### Consequences
+
+{{ consequences if consequences else "" }}
+"#;
+
+/// MADR bare template - just the structure.
+const MADR_BARE_TEMPLATE: &str = r#"---
+status: {{ status | lower }}
+date: {{ date }}
+---
+
+# {{ title }}
+
+## Context and Problem Statement
+
+
+
+## Decision Outcome
+
+
+
+### Consequences
+
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,6 +498,37 @@ mod tests {
     fn test_template_format_display() {
         assert_eq!(TemplateFormat::Nygard.to_string(), "nygard");
         assert_eq!(TemplateFormat::Madr.to_string(), "madr");
+    }
+
+    // ========== TemplateVariant Tests ==========
+
+    #[test]
+    fn test_template_variant_default() {
+        assert_eq!(TemplateVariant::default(), TemplateVariant::Full);
+    }
+
+    #[test_case("full" => TemplateVariant::Full; "full")]
+    #[test_case("Full" => TemplateVariant::Full; "full capitalized")]
+    #[test_case("default" => TemplateVariant::Full; "default alias")]
+    #[test_case("minimal" => TemplateVariant::Minimal; "minimal")]
+    #[test_case("min" => TemplateVariant::Minimal; "min alias")]
+    #[test_case("bare" => TemplateVariant::Bare; "bare")]
+    #[test_case("empty" => TemplateVariant::Bare; "empty alias")]
+    fn test_template_variant_parse(input: &str) -> TemplateVariant {
+        input.parse().unwrap()
+    }
+
+    #[test]
+    fn test_template_variant_parse_unknown() {
+        let result: Result<TemplateVariant> = "unknown".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_template_variant_display() {
+        assert_eq!(TemplateVariant::Full.to_string(), "full");
+        assert_eq!(TemplateVariant::Minimal.to_string(), "minimal");
+        assert_eq!(TemplateVariant::Bare.to_string(), "bare");
     }
 
     // ========== Template Creation Tests ==========
@@ -604,12 +803,92 @@ mod tests {
         assert!(!output.contains("informed:"));
     }
 
+    // ========== Template Variants Tests ==========
+
+    #[test]
+    fn test_nygard_minimal_template() {
+        let template =
+            Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::Minimal);
+        let adr = Adr::new(1, "Minimal Test");
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Should have basic structure but no guidance text
+        assert!(output.contains("# 1. Minimal Test"));
+        assert!(output.contains("## Status"));
+        assert!(output.contains("## Context"));
+        assert!(output.contains("## Decision"));
+        assert!(output.contains("## Consequences"));
+        // Should NOT have guidance text
+        assert!(!output.contains("What is the issue"));
+    }
+
+    #[test]
+    fn test_nygard_bare_template() {
+        let template =
+            Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::Bare);
+        let adr = Adr::new(1, "Bare Test");
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Should have basic structure
+        assert!(output.contains("# 1. Bare Test"));
+        assert!(output.contains("## Status"));
+        assert!(output.contains("## Context"));
+        // Bare template has no frontmatter
+        assert!(!output.contains("---"));
+    }
+
+    #[test]
+    fn test_madr_minimal_template() {
+        let template =
+            Template::builtin_with_variant(TemplateFormat::Madr, TemplateVariant::Minimal);
+        let adr = Adr::new(1, "MADR Minimal");
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Should have frontmatter
+        assert!(output.starts_with("---"));
+        assert!(output.contains("# MADR Minimal"));
+        assert!(output.contains("## Context and Problem Statement"));
+        assert!(output.contains("## Decision Outcome"));
+        // Should NOT have full MADR sections
+        assert!(!output.contains("## Decision Drivers"));
+        assert!(!output.contains("## Considered Options"));
+    }
+
+    #[test]
+    fn test_madr_bare_template() {
+        let template = Template::builtin_with_variant(TemplateFormat::Madr, TemplateVariant::Bare);
+        let adr = Adr::new(1, "MADR Bare");
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Should have minimal frontmatter
+        assert!(output.starts_with("---"));
+        assert!(output.contains("status:"));
+        assert!(output.contains("# MADR Bare"));
+        // Should NOT have decision-makers etc in frontmatter
+        assert!(!output.contains("decision-makers"));
+    }
+
+    #[test]
+    fn test_builtin_defaults_to_full() {
+        let full = Template::builtin(TemplateFormat::Nygard);
+        let explicit_full =
+            Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::Full);
+
+        assert_eq!(full.name, explicit_full.name);
+        assert_eq!(full.content, explicit_full.content);
+    }
+
     // ========== Template Engine Tests ==========
 
     #[test]
     fn test_template_engine_new() {
         let engine = TemplateEngine::new();
         assert_eq!(engine.default_format, TemplateFormat::Nygard);
+        assert_eq!(engine.default_variant, TemplateVariant::Full);
         assert!(engine.custom_template.is_none());
     }
 
@@ -617,6 +896,7 @@ mod tests {
     fn test_template_engine_default() {
         let engine = TemplateEngine::default();
         assert_eq!(engine.default_format, TemplateFormat::Nygard);
+        assert_eq!(engine.default_variant, TemplateVariant::Full);
     }
 
     #[test]
