@@ -13,7 +13,11 @@ name = "adrs"
 path = "src/main.rs"
 
 [dependencies]
+<<<<<<< Updated upstream
 adrs-core = { path = "../adrs-core" }
+=======
+adrs-core = { path = "../adrs-core", version = "0.5.0" }
+>>>>>>> Stashed changes
 anyhow.workspace = true
 clap.workspace = true
 edit.workspace = true
