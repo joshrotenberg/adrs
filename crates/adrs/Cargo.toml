@@ -1,0 +1,27 @@
+[package]
+name = "adrs"
+description = "Command line tool for managing Architecture Decision Records"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+
+[[bin]]
+name = "adrs"
+path = "src/main.rs"
+
+[dependencies]
+adrs-core = { path = "../adrs-core" }
+anyhow.workspace = true
+clap.workspace = true
+edit.workspace = true
+whoami.workspace = true
+
+[dev-dependencies]
+serial_test.workspace = true
+assert_cmd.workspace = true
+assert_fs.workspace = true
+predicates.workspace = true
+tempfile.workspace = true
