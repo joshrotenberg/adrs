@@ -4,10 +4,7 @@
   "title": "JSON-ADR",
   "description": "JSON schema for Architecture Decision Records",
   "type": "object",
-  "oneOf": [
-    { "$ref": "#/$defs/singleAdr" },
-    { "$ref": "#/$defs/bulkExport" }
-  ],
+  "oneOf": [{ "$ref": "#/$defs/singleAdr" }, { "$ref": "#/$defs/bulkExport" }],
   "$defs": {
     "singleAdr": {
       "type": "object",
@@ -100,6 +97,16 @@
           "type": "string",
           "description": "Background and problem statement"
         },
+        "decision_drivers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Forces and concerns influencing the decision"
+        },
+        "considered_options": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/consideredOption" },
+          "description": "Alternatives that were evaluated"
+        },
         "decision": {
           "type": "string",
           "description": "The decision that was made"
@@ -131,6 +138,10 @@
               "description": "Structured consequences with positive/negative/risks"
             }
           ]
+        },
+        "confirmation": {
+          "type": "string",
+          "description": "How to validate the decision was implemented correctly"
         },
         "links": {
           "type": "array",
@@ -168,6 +179,32 @@
         }
       },
       "required": ["type", "target"],
+      "additionalProperties": false
+    },
+    "consideredOption": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the option"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the option"
+        },
+        "pros": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Arguments in favor of this option"
+        },
+        "cons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Arguments against this option"
+        }
+      },
+      "required": ["name"],
       "additionalProperties": false
     }
   }
