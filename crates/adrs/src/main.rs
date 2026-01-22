@@ -106,6 +106,19 @@ enum Commands {
         reverse_link: String,
     },
 
+    /// Change an ADR's status
+    Status {
+        /// ADR number
+        adr: u32,
+
+        /// New status (proposed, accepted, deprecated, superseded, rejected, or custom)
+        status: String,
+
+        /// For 'superseded' status: the ADR number that supersedes this one
+        #[arg(long, value_name = "NUMBER")]
+        by: Option<u32>,
+    },
+
     /// Show configuration
     Config,
 
@@ -269,6 +282,10 @@ fn main() -> Result<()> {
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
             commands::link(&discovered.root, source, &link, target, &reverse_link)
+        }
+        Commands::Status { adr, status, by } => {
+            let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+            commands::status(&discovered.root, adr, &status, by)
         }
         Commands::Config => {
             let discovered = discover(&start_dir).ok();
