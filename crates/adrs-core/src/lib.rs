@@ -17,6 +17,7 @@
 mod config;
 pub mod doctor;
 mod error;
+pub mod export;
 mod parse;
 mod repository;
 mod template;
@@ -25,6 +26,10 @@ mod types;
 pub use config::{Config, ConfigMode, ConfigSource, DiscoveredConfig, discover};
 pub use doctor::{Check, Diagnostic, DoctorReport, Severity, check as doctor_check};
 pub use error::{Error, Result};
+pub use export::{
+    JSON_ADR_SCHEMA, JSON_ADR_VERSION, JsonAdr, JsonAdrBulkExport, JsonAdrLink, RepositoryInfo,
+    ToolInfo, export_adr, export_repository,
+};
 pub use parse::Parser;
 pub use repository::Repository;
 pub use template::{Template, TemplateEngine, TemplateFormat, TemplateVariant};
