@@ -2,7 +2,7 @@
 
 use crate::{
     Adr, AdrLink, AdrStatus, Config, ConfigMode, Error, LinkKind, Parser, Result, Template,
-    TemplateEngine, TemplateFormat,
+    TemplateEngine, TemplateFormat, TemplateVariant,
 };
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
@@ -115,6 +115,12 @@ impl Repository {
     /// Set the template format.
     pub fn with_template_format(mut self, format: TemplateFormat) -> Self {
         self.template_engine = self.template_engine.with_format(format);
+        self
+    }
+
+    /// Set the template variant.
+    pub fn with_template_variant(mut self, variant: TemplateVariant) -> Self {
+        self.template_engine = self.template_engine.with_variant(variant);
         self
     }
 

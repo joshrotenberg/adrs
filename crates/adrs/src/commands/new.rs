@@ -1,9 +1,10 @@
 //! New ADR command.
 
-use adrs_core::{AdrStatus, LinkKind, Repository, TemplateFormat};
+use adrs_core::{AdrStatus, LinkKind, Repository, TemplateFormat, TemplateVariant};
 use anyhow::{Context, Result};
 use std::path::Path;
 
+#[allow(clippy::too_many_arguments)]
 pub fn new(
     root: &Path,
     _ng: bool,
@@ -11,6 +12,7 @@ pub fn new(
     supersedes: Option<u32>,
     link: Option<String>,
     format: Option<String>,
+    variant: Option<String>,
     status: Option<String>,
 ) -> Result<()> {
     // Parse template format if specified
@@ -19,6 +21,14 @@ pub fn new(
             .context("Invalid template format. Use 'nygard' or 'madr'.")?
     } else {
         TemplateFormat::default()
+    };
+
+    // Parse template variant if specified
+    let template_variant = if let Some(ref var) = variant {
+        var.parse::<TemplateVariant>()
+            .context("Invalid template variant. Use 'full', 'minimal', or 'bare'.")?
+    } else {
+        TemplateVariant::default()
     };
 
     // Parse status if specified
@@ -30,7 +40,8 @@ pub fn new(
 
     let repo = Repository::open(root)
         .context("ADR repository not found. Run 'adrs init' first.")?
-        .with_template_format(template_format);
+        .with_template_format(template_format)
+        .with_template_variant(template_variant);
 
     let (mut adr, path) = if let Some(superseded) = supersedes {
         repo.supersede(&title, superseded)

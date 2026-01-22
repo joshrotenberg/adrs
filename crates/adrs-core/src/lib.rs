@@ -25,5 +25,5 @@ pub use config::{Config, ConfigMode};
 pub use error::{Error, Result};
 pub use parse::Parser;
 pub use repository::Repository;
-pub use template::{Template, TemplateEngine, TemplateFormat};
+pub use template::{Template, TemplateEngine, TemplateFormat, TemplateVariant};
 pub use types::{Adr, AdrLink, AdrStatus, LinkKind};
