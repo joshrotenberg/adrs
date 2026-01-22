@@ -1,102 +1,165 @@
 # generate
 
-## Overview
+Generate documentation from ADRs.
 
-The `generate` command fronts three options for generating output for use with other tools.
+## Usage
 
-* toc - generate a Markdown table of contents
-* graph - generate a [Graphviz](https://graphviz.org) representation of your ADRs
-* book - generate a basic [mdBook](https://github.com/rust-lang/mdBook) representation of your ADRs
-
-## Help
-
-```sh
-Generates summary documentation about the Architectural Decision Records
-
-Usage: adrs generate <COMMAND>
-
-Commands:
-  toc    Generate a table of contents
-  graph  Generate a graph of the ADRs
-  book   Generate a book of the ADRs
-  help   Print this message or the help of the given subcommand(s)
-
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
+```
+adrs generate <SUBCOMMAND>
 ```
 
-## Examples
+## Subcommands
 
-### ToC
+| Subcommand | Description |
+|------------|-------------|
+| `toc` | Generate a table of contents |
+| `graph` | Generate a Graphviz dependency graph |
+
+---
+
+## generate toc
+
+Generate a markdown table of contents.
+
+### Usage
+
+```
+adrs generate toc [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output <FILE>` | Output file (default: stdout) |
+| `-i, --intro <TEXT>` | Introduction text |
+| `-l, --link-prefix <PREFIX>` | Prefix for ADR links |
+| `-e, --epilogue <TEXT>` | Epilogue text |
+| `--ng` | Use NextGen mode |
+| `-C, --cwd <DIR>` | Working directory |
+| `-h, --help` | Print help |
+
+### Examples
+
+#### Basic Table of Contents
 
 ```sh
-# Generate a Markdown Table of Contents for the local ADRs
 adrs generate toc
 ```
 
-Outputs the following on stdout:
+Output:
 
 ```markdown
 # Architecture Decision Records
 
-* [1. Record architecture decisions](0001-record-architecture-decisions.md)
-* [2. Rewrite it in Rust](0002-rewrite-it-in-rust.md)
-* [3. Use mdBook for documentation](0003-use-mdbook-for-documentation.md)
+* [1. Record architecture decisions](doc/adr/0001-record-architecture-decisions.md)
+* [2. Use PostgreSQL for persistence](doc/adr/0002-use-postgresql-for-persistence.md)
+* [3. API versioning strategy](doc/adr/0003-api-versioning-strategy.md)
 ```
 
-### Graph
+#### Save to File
 
 ```sh
-# Generate a Graphviz file graphing the ADRs and their relationships.
+adrs generate toc -o doc/adr/README.md
+```
+
+#### Custom Introduction
+
+```sh
+adrs generate toc -i "# Project Decisions\n\nKey architectural choices:"
+```
+
+#### Link Prefix for Wikis
+
+```sh
+adrs generate toc -l "wiki/adr/"
+```
+
+---
+
+## generate graph
+
+Generate a Graphviz DOT graph showing ADR relationships.
+
+### Usage
+
+```
+adrs generate graph [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output <FILE>` | Output file (default: stdout) |
+| `--ng` | Use NextGen mode |
+| `-C, --cwd <DIR>` | Working directory |
+| `-h, --help` | Print help |
+
+### Examples
+
+#### Basic Graph
+
+```sh
 adrs generate graph
 ```
 
-```graphviz
+Output:
+
+```dot
 digraph {
-  node [shape=plaintext]
-  subgraph {
-        _1 [label="1. Record architecture decisions"; URL="0001-record-architecture-decisions.html"];
-        _2 [label="2. Rewrite it in Rust"; URL="0002-rewrite-it-in-rust.html"];
-        _1 -> _2 [style="dotted", weight=1];
-        _3 [label="3. Use mdBook for documentation"; URL="0003-use-mdbook-for-documentation.html"];
-        _2 -> _3 [style="dotted", weight=1];
-  }
+  node [shape=box];
+  _1 [label="1. Record architecture decisions"; URL="0001-record-architecture-decisions.md"];
+  _2 [label="2. Use PostgreSQL"; URL="0002-use-postgresql.md"];
+  _3 [label="3. Use MySQL instead"; URL="0003-use-mysql-instead.md"];
+  _3 -> _2 [style="dashed"; label="Supersedes"];
 }
 ```
 
-### Book
+#### Save to File
 
 ```sh
-Generate a book of the ADRs
-
-Usage: adrs generate book [OPTIONS]
-
-Options:
-  -p, --path <PATH>                Target path for the book directory [default: book]
-  -o, --overwrite                  Overwrite existing directory
-  -t, --title <TITLE>              Title of the book [default: "Architecture Decision Records"]
-  -d, --description <DESCRIPTION>  Description of the book [default: "A collection of architecture decision records"]
-  -a, --author <AUTHOR>            Author of the book
-  -h, --help                       Print help
-  -V, --version                    Print version
+adrs generate graph -o doc/adr/graph.dot
 ```
+
+#### Render as PNG
+
+Using Graphviz:
 
 ```sh
-# Generate a basic mdBook based project for the current ADRs
-adrs generate book
+adrs generate graph | dot -Tpng -o doc/adr/graph.png
 ```
 
-The `book` directory now contains a basic mdbook with:
+#### Render as SVG
 
-* `book.toml' - the book's configuration
-* `src/SUMMARY.md` - a Markdown file describing the structure of the book
-* your ADR files - copied into the book and referenced by the `SUMMARY.md`
+```sh
+adrs generate graph | dot -Tsvg -o doc/adr/graph.svg
+```
 
-Get started by running `mdbook serve` in your `book` directory. See [mdBook](https://github.com/rust-lang/mdBook) for more information.
+### Graph Features
 
-Note that the command is currently pretty destructive, but requires the `-o/--overwrite` flag to work on an existing directory.
+- Each ADR is a node with its number and title
+- Links between ADRs are shown as edges
+- Supersedes relationships use dashed lines
+- Nodes link to their ADR files (clickable in SVG)
 
-## Issues
+### Integration with CI
 
-See the [cmd-generate](https://github.com/joshrotenberg/adrs/labels/cmd-generate) label for command specific issues.
+Generate and commit the graph automatically:
+
+```yaml
+- name: Generate ADR graph
+  run: |
+    adrs generate graph -o doc/adr/graph.dot
+    dot -Tsvg doc/adr/graph.dot -o doc/adr/graph.svg
+
+- name: Commit graph
+  run: |
+    git add doc/adr/graph.*
+    git commit -m "docs: update ADR graph" || true
+```
+
+## Related
+
+- [list](./list.md) - List ADRs
+- [doctor](./doctor.md) - Check repository health

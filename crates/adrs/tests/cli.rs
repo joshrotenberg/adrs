@@ -20,9 +20,7 @@ fn test_help() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains(
-            "Manage Architecture Decision Records",
-        ));
+        .stdout(predicate::str::contains("Architecture Decision Records"));
 }
 
 #[test]
@@ -352,7 +350,7 @@ fn test_ng_flag() {
         .args(["--ng", "--help"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("next-gen mode"));
+        .stdout(predicate::str::contains("NextGen mode"));
 }
 
 #[test]

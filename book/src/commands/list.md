@@ -1,30 +1,67 @@
 # list
 
-## Overview
+List all Architecture Decision Records.
 
-`list` lists the current ADRs found in the configured (or default) directory.
+## Usage
 
-## Help
-
-```sh
-List Architectural Decision Records
-
-Usage: adrs list
-
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
 ```
+adrs list [OPTIONS]
+```
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--ng` | Use NextGen mode |
+| `-C, --cwd <DIR>` | Working directory |
+| `-h, --help` | Print help |
+
+## Description
+
+Lists all ADRs in the repository, showing their number, title, and status.
 
 ## Examples
 
+### Basic Usage
+
 ```sh
 adrs list
-0001-record-architecture-decisions.md
-0002-do-something-new.md
-0003-do-something-else.md
 ```
 
-## Issues
+Output:
 
-See the [cmd-list](https://github.com/joshrotenberg/adrs/labels/cmd-list) label for command specific issues.
+```
+1. Record architecture decisions [Accepted]
+2. Use PostgreSQL for persistence [Proposed]
+3. API versioning strategy [Accepted]
+4. Use Redis for caching [Superseded]
+```
+
+### From a Subdirectory
+
+```sh
+cd src/
+adrs list
+```
+
+`adrs` automatically finds the project root.
+
+### Specify Working Directory
+
+```sh
+adrs list -C /path/to/project
+```
+
+## Output Format
+
+Each line shows:
+- ADR number
+- Title
+- Status in brackets
+
+ADRs are sorted by number.
+
+## Related
+
+- [new](./new.md) - Create a new ADR
+- [edit](./edit.md) - Edit an ADR from the list

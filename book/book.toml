@@ -1,7 +1,6 @@
 [book]
 authors = ["josh rotenberg"]
 language = "en"
-multilingual = false
 src = "src"
 title = "adrs documentation"
 
@@ -17,3 +16,8 @@ enable = true
 [preprocessor.toc]
 command = "mdbook-toc"
 renderer = ["html"]
+
+# Lint is run manually: mdbook-lint book/src
+# [preprocessor.lint]
+# command = "mdbook-lint"
+# renderer = ["html"]

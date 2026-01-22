@@ -1,0 +1,21 @@
+# mdbook-lint configuration
+
+[rules]
+# Disable line length check (markdown often has long lines for URLs, etc.)
+MD013 = false
+
+# Allow duplicate headings (common in command docs with repeated sections)
+MD024 = false
+MDBOOK004 = false
+
+# Allow tables without blank lines (common in markdown)
+MD058 = false
+
+# Disable proper names check (too aggressive)
+MD044 = false
+
+# Allow lists without preceding blank lines
+MD032 = false
+
+# Disable hidden code prefix suggestions (info level, not errors)
+MDBOOK017 = false

@@ -9,14 +9,38 @@ mod commands;
 
 #[derive(Parser)]
 #[command(name = "adrs")]
-#[command(author, version, about = "Manage Architecture Decision Records", long_about = None)]
+#[command(author, version)]
+#[command(about = "Manage Architecture Decision Records")]
+#[command(long_about = "\
+A command-line tool for creating and managing Architecture Decision Records (ADRs).
+
+Compatible with adr-tools repositories. Supports both Nygard and MADR 4.0.0 formats.
+
+GETTING STARTED:
+  adrs init                    Create a new ADR repository
+  adrs new \"My Decision\"       Create your first ADR
+  adrs list                    View all ADRs
+  adrs doctor                  Check repository health
+
+FORMATS:
+  nygard    Classic adr-tools format (default)
+  madr      MADR 4.0.0 with structured metadata
+
+EXAMPLES:
+  adrs init                                      Initialize repository
+  adrs new --format madr \"Use PostgreSQL\"       Create MADR-format ADR
+  adrs new --supersedes 2 \"Use MySQL instead\"   Supersede an ADR
+  adrs link 3 \"Amends\" 1 \"Amended by\"           Link two ADRs
+  adrs generate toc > doc/adr/README.md         Generate table of contents
+
+DOCUMENTATION: https://joshrotenberg.github.io/adrs-book/")]
 struct Cli {
-    /// Use next-gen mode (YAML frontmatter, enhanced features)
+    /// Enable NextGen mode with YAML frontmatter
     #[arg(long, global = true)]
     ng: bool,
 
-    /// Working directory (defaults to current directory)
-    #[arg(short = 'C', long = "cwd", global = true)]
+    /// Run from a different directory
+    #[arg(short = 'C', long = "cwd", global = true, value_name = "DIR")]
     working_dir: Option<PathBuf>,
 
     #[command(subcommand)]
@@ -27,7 +51,7 @@ struct Cli {
 enum Commands {
     /// Initialize a new ADR repository
     Init {
-        /// Directory to store ADRs
+        /// Directory to store ADRs [default: doc/adr]
         #[arg(default_value = "doc/adr")]
         directory: PathBuf,
     },
@@ -37,30 +61,30 @@ enum Commands {
         /// Title of the ADR
         title: String,
 
-        /// ADR number(s) this supersedes
-        #[arg(short, long)]
+        /// Supersede an existing ADR by number
+        #[arg(short, long, value_name = "NUMBER")]
         supersedes: Option<u32>,
 
         /// Link to another ADR (format: "TARGET:KIND:REVERSE_KIND")
-        #[arg(short, long)]
+        #[arg(short, long, value_name = "LINK")]
         link: Option<String>,
 
-        /// Template format to use [default: nygard]
+        /// Template format: nygard, madr [default: nygard]
         #[arg(short, long, value_name = "FORMAT")]
         format: Option<String>,
 
-        /// Template variant [default: full]
+        /// Template variant: full, minimal, bare [default: full]
         #[arg(short, long, value_name = "VARIANT")]
         variant: Option<String>,
 
         /// Initial status [default: Proposed]
-        #[arg(long)]
+        #[arg(long, value_name = "STATUS")]
         status: Option<String>,
     },
 
     /// Edit an existing ADR
     Edit {
-        /// ADR number or title to edit
+        /// ADR number or title (supports fuzzy matching)
         adr: String,
     },
 
@@ -99,37 +123,37 @@ enum Commands {
 enum GenerateCommands {
     /// Generate a table of contents
     Toc {
-        /// Use ordered list
+        /// Use ordered list (1. 2. 3.)
         #[arg(short, long)]
         ordered: bool,
 
-        /// Intro file to prepend
-        #[arg(short, long)]
+        /// Prepend content from file
+        #[arg(short, long, value_name = "FILE")]
         intro: Option<PathBuf>,
 
-        /// Outro file to append
-        #[arg(short = 'O', long)]
+        /// Append content from file
+        #[arg(short = 'O', long, value_name = "FILE")]
         outro: Option<PathBuf>,
 
-        /// Link prefix
-        #[arg(short, long)]
+        /// Prefix for ADR links
+        #[arg(short, long, value_name = "PREFIX")]
         prefix: Option<String>,
     },
 
     /// Generate a Graphviz graph
     Graph {
-        /// Link prefix for URLs
-        #[arg(short, long)]
+        /// Prefix for node URLs
+        #[arg(short, long, value_name = "PREFIX")]
         prefix: Option<String>,
 
-        /// File extension (default: md)
+        /// File extension for links [default: md]
         #[arg(short, long, default_value = "md")]
         extension: String,
     },
 
     /// Generate an mdbook
     Book {
-        /// Output directory
+        /// Output directory [default: book]
         #[arg(short, long, default_value = "book")]
         output: PathBuf,
 
@@ -146,18 +170,13 @@ enum GenerateCommands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // For init command, use working_dir or current directory directly
-    // For all other commands, discover the project root
     let start_dir = cli
         .working_dir
         .clone()
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
     match cli.command {
-        Commands::Init { directory } => {
-            // Init uses the specified directory directly, no discovery
-            commands::init(&start_dir, directory, cli.ng)
-        }
+        Commands::Init { directory } => commands::init(&start_dir, directory, cli.ng),
         Commands::New {
             title,
             supersedes,
@@ -236,7 +255,6 @@ fn discover_or_error(
         "No ADR repository found. Run 'adrs init' to create one, or use '-C' to specify a directory."
     })?;
 
-    // If using defaults and no project found, that's an error for most commands
     if matches!(discovered.source, ConfigSource::Default)
         && !start_dir.join("doc/adr").exists()
         && !explicit_dir
