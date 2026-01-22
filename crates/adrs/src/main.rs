@@ -84,6 +84,9 @@ enum Commands {
     /// Show configuration
     Config,
 
+    /// Check repository health
+    Doctor,
+
     /// Generate documentation
     Generate {
         #[command(subcommand)]
@@ -167,6 +170,7 @@ fn main() -> Result<()> {
             reverse_link,
         } => commands::link(&root, source, &link, target, &reverse_link),
         Commands::Config => commands::config(&root),
+        Commands::Doctor => commands::doctor(&root),
         Commands::Generate { command } => match command {
             GenerateCommands::Toc {
                 ordered,
