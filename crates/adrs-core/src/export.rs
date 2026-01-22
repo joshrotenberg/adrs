@@ -50,6 +50,14 @@ pub struct JsonAdr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
 
+    /// Forces and concerns influencing the decision.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub decision_drivers: Vec<String>,
+
+    /// Alternatives that were evaluated.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub considered_options: Vec<ConsideredOption>,
+
     /// The decision that was made.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision: Option<String>,
@@ -57,6 +65,10 @@ pub struct JsonAdr {
     /// Outcomes and implications.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consequences: Option<String>,
+
+    /// How to validate the decision was implemented correctly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmation: Option<String>,
 
     /// Relationships to other ADRs.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -69,6 +81,25 @@ pub struct JsonAdr {
     /// Relative path to the source file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+}
+
+/// A considered option with pros and cons.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsideredOption {
+    /// Name of the option.
+    pub name: String,
+
+    /// Description of the option.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Arguments in favor of this option.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub pros: Vec<String>,
+
+    /// Arguments against this option.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub cons: Vec<String>,
 }
 
 /// A link between ADRs in JSON-ADR format.
@@ -182,6 +213,8 @@ impl From<&Adr> for JsonAdr {
             } else {
                 Some(adr.context.clone())
             },
+            decision_drivers: Vec::new(),   // Not yet in Adr type
+            considered_options: Vec::new(), // Not yet in Adr type
             decision: if adr.decision.is_empty() {
                 None
             } else {
@@ -192,6 +225,7 @@ impl From<&Adr> for JsonAdr {
             } else {
                 Some(adr.consequences.clone())
             },
+            confirmation: None, // Not yet in Adr type
             links: adr.links.iter().map(JsonAdrLink::from).collect(),
             custom_sections: std::collections::HashMap::new(),
             path: adr.path.as_ref().map(|p| p.display().to_string()),
@@ -331,8 +365,11 @@ mod tests {
             informed: vec![],
             tags: vec![],
             context: None,
+            decision_drivers: vec![],
+            considered_options: vec![],
             decision: None,
             consequences: None,
+            confirmation: None,
             links: vec![],
             custom_sections: std::collections::HashMap::new(),
             path: None,
@@ -343,6 +380,8 @@ mod tests {
         assert!(json.contains("\"title\":\"Test\""));
         // Empty vecs should be skipped
         assert!(!json.contains("\"deciders\""));
+        assert!(!json.contains("\"decision_drivers\""));
+        assert!(!json.contains("\"considered_options\""));
         // Empty custom_sections should be skipped
         assert!(!json.contains("\"custom_sections\""));
     }
@@ -359,8 +398,11 @@ mod tests {
             informed: vec![],
             tags: vec![],
             context: None,
+            decision_drivers: vec![],
+            considered_options: vec![],
             decision: None,
             consequences: None,
+            confirmation: None,
             links: vec![],
             custom_sections: std::collections::HashMap::new(),
             path: None,
@@ -379,5 +421,82 @@ mod tests {
         assert!(json.contains("\"custom_sections\""));
         assert!(json.contains("Alternatives Considered"));
         assert!(json.contains("Security Review"));
+    }
+
+    #[test]
+    fn test_decision_drivers_and_options() {
+        let adr = JsonAdr {
+            number: 1,
+            title: "Choose Database".to_string(),
+            status: "Accepted".to_string(),
+            date: "2024-01-15".to_string(),
+            deciders: vec!["Alice".to_string()],
+            consulted: vec![],
+            informed: vec![],
+            tags: vec![],
+            context: Some("We need a database for user data".to_string()),
+            decision_drivers: vec![
+                "Performance requirements".to_string(),
+                "Team expertise".to_string(),
+                "Cost constraints".to_string(),
+            ],
+            considered_options: vec![
+                ConsideredOption {
+                    name: "PostgreSQL".to_string(),
+                    description: Some("Open source relational database".to_string()),
+                    pros: vec!["Mature".to_string(), "Feature-rich".to_string()],
+                    cons: vec!["Complex setup".to_string()],
+                },
+                ConsideredOption {
+                    name: "SQLite".to_string(),
+                    description: None,
+                    pros: vec!["Simple".to_string()],
+                    cons: vec!["Not suitable for high concurrency".to_string()],
+                },
+            ],
+            decision: Some("Use PostgreSQL".to_string()),
+            consequences: Some("Need to set up replication".to_string()),
+            confirmation: Some("Run integration tests with production-like data".to_string()),
+            links: vec![],
+            custom_sections: std::collections::HashMap::new(),
+            path: None,
+        };
+
+        let json = serde_json::to_string_pretty(&adr).unwrap();
+
+        // Check decision drivers
+        assert!(json.contains("\"decision_drivers\""));
+        assert!(json.contains("Performance requirements"));
+        assert!(json.contains("Team expertise"));
+
+        // Check considered options
+        assert!(json.contains("\"considered_options\""));
+        assert!(json.contains("PostgreSQL"));
+        assert!(json.contains("SQLite"));
+        assert!(json.contains("\"pros\""));
+        assert!(json.contains("\"cons\""));
+        assert!(json.contains("Mature"));
+        assert!(json.contains("Complex setup"));
+
+        // Check confirmation
+        assert!(json.contains("\"confirmation\""));
+        assert!(json.contains("integration tests"));
+    }
+
+    #[test]
+    fn test_considered_option_minimal() {
+        let option = ConsideredOption {
+            name: "Option A".to_string(),
+            description: None,
+            pros: vec![],
+            cons: vec![],
+        };
+
+        let json = serde_json::to_string(&option).unwrap();
+        assert!(json.contains("\"name\":\"Option A\""));
+        // Empty fields should be skipped
+        assert!(!json.contains("\"description\""));
+        assert!(!json.contains("\"pros\""));
+        assert!(!json.contains("\"cons\""));
     }
 }
