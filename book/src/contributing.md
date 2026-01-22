@@ -68,7 +68,7 @@ New features that extend beyond adr-tools compatibility should:
 
 Use [conventional commits](https://www.conventionalcommits.org/):
 
-```
+```text
 feat: add new feature
 fix: resolve bug
 docs: update documentation
@@ -88,7 +88,7 @@ chore: maintenance tasks
 
 ## Project Structure
 
-```
+```text
 adrs/
 ├── crates/
 │   ├── adrs-core/     # Library crate
