@@ -41,6 +41,9 @@ clap = { version = "4", features = ["derive", "env", "string"] }
 edit = "0.1"
 whoami = "1"
 
+# Internal
+adrs-core = { path = "crates/adrs-core", version = "0.4.0" }
+
 # Testing
 serial_test = "3"
 assert_cmd = "2"
