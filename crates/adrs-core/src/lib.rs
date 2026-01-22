@@ -15,6 +15,7 @@
 //!   features like typed links and better validation.
 
 mod config;
+pub mod doctor;
 mod error;
 mod parse;
 mod repository;
@@ -22,6 +23,7 @@ mod template;
 mod types;
 
 pub use config::{Config, ConfigMode};
+pub use doctor::{Check, Diagnostic, DoctorReport, Severity, check as doctor_check};
 pub use error::{Error, Result};
 pub use parse::Parser;
 pub use repository::Repository;
