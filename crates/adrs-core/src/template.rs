@@ -37,17 +37,26 @@ impl std::str::FromStr for TemplateFormat {
 }
 
 /// Template variants for different levels of detail.
+///
+/// The variant names follow the MADR naming convention:
+/// - **Full**: All sections with guidance text
+/// - **Minimal**: Core sections only, with guidance text
+/// - **Bare**: All sections, but empty (no guidance)
+/// - **BareMinimal**: Core sections only, empty (no guidance)
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum TemplateVariant {
     /// Full template with all sections and guidance.
     #[default]
     Full,
 
-    /// Minimal template with essential sections only.
+    /// Minimal template with essential sections only (with guidance).
     Minimal,
 
-    /// Bare template with just the structure.
+    /// Bare template - all sections but empty/placeholder content.
     Bare,
+
+    /// Bare-minimal template - fewest sections, empty content.
+    BareMinimal,
 }
 
 impl std::fmt::Display for TemplateVariant {
@@ -56,6 +65,7 @@ impl std::fmt::Display for TemplateVariant {
             Self::Full => write!(f, "full"),
             Self::Minimal => write!(f, "minimal"),
             Self::Bare => write!(f, "bare"),
+            Self::BareMinimal => write!(f, "bare-minimal"),
         }
     }
 }
@@ -64,10 +74,11 @@ impl std::str::FromStr for TemplateVariant {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.to_lowercase().as_str() {
+        match s.to_lowercase().replace('_', "-").as_str() {
             "full" | "default" => Ok(Self::Full),
             "minimal" | "min" => Ok(Self::Minimal),
-            "bare" | "empty" => Ok(Self::Bare),
+            "bare" => Ok(Self::Bare),
+            "bare-minimal" | "bareminimal" | "empty" => Ok(Self::BareMinimal),
             _ => Err(Error::TemplateNotFound(format!("Unknown variant: {s}"))),
         }
     }
@@ -119,6 +130,9 @@ impl Template {
             (TemplateFormat::Nygard, TemplateVariant::Bare) => {
                 ("nygard-bare", NYGARD_BARE_TEMPLATE)
             }
+            (TemplateFormat::Nygard, TemplateVariant::BareMinimal) => {
+                ("nygard-bare-minimal", NYGARD_BARE_MINIMAL_TEMPLATE)
+            }
 
             // MADR templates
             (TemplateFormat::Madr, TemplateVariant::Full) => ("madr", MADR_TEMPLATE),
@@ -126,6 +140,9 @@ impl Template {
                 ("madr-minimal", MADR_MINIMAL_TEMPLATE)
             }
             (TemplateFormat::Madr, TemplateVariant::Bare) => ("madr-bare", MADR_BARE_TEMPLATE),
+            (TemplateFormat::Madr, TemplateVariant::BareMinimal) => {
+                ("madr-bare-minimal", MADR_BARE_MINIMAL_TEMPLATE)
+            }
         };
         Self::from_string(name, content)
     }
@@ -417,42 +434,108 @@ Date: {{ date }}
 
 "#;
 
-/// MADR minimal template - core sections only.
-const MADR_MINIMAL_TEMPLATE: &str = r#"---
-status: {{ status | lower }}
-date: {{ date }}
-{% if decision_makers %}decision-makers:
-{% for dm in decision_makers %}  - {{ dm }}
-{% endfor %}{% endif %}{% if consulted %}consulted:
-{% for c in consulted %}  - {{ c }}
-{% endfor %}{% endif %}{% if informed %}informed:
-{% for i in informed %}  - {{ i }}
-{% endfor %}{% endif %}---
+/// Nygard bare-minimal template - fewest sections, empty content.
+const NYGARD_BARE_MINIMAL_TEMPLATE: &str = r#"# {{ number }}. {{ title }}
 
-# {{ title }}
+## Status
+
+{{ status }}
+
+## Context
+
+
+
+## Decision
+
+
+
+## Consequences
+
+"#;
+
+/// MADR minimal template - core sections only, no frontmatter.
+/// Matches official MADR adr-template-minimal.md
+const MADR_MINIMAL_TEMPLATE: &str = r#"# {{ title }}
 
 ## Context and Problem Statement
 
-{{ context if context else "" }}
+{{ context if context else "{Describe the context and problem statement, e.g., in free form using two to three sentences or in the form of an illustrative story. You may want to articulate the problem in form of a question and add links to collaboration boards or issue management systems.}" }}
+
+## Considered Options
+
+* {title of option 1}
+* {title of option 2}
+* {title of option 3}
+* ... <!-- numbers of options can vary -->
 
 ## Decision Outcome
 
-{{ decision if decision else "" }}
+{{ decision if decision else "Chosen option: \"{title of option 1}\", because {justification. e.g., only option, which meets k.o. criterion decision driver | which resolves force {force} | ... | comes out best (see below)}." }}
 
+<!-- This is an optional element. Feel free to remove. -->
 ### Consequences
 
-{{ consequences if consequences else "" }}
+{{ consequences if consequences else "* Good, because {positive consequence, e.g., improvement of one or more desired qualities, ...}\n* Bad, because {negative consequence, e.g., compromising one or more desired qualities, ...}\n* ... <!-- numbers of consequences can vary -->" }}
 "#;
 
-/// MADR bare template - just the structure.
+/// MADR bare template - all sections with empty placeholders.
+/// Matches official MADR adr-template-bare.md
 const MADR_BARE_TEMPLATE: &str = r#"---
 status: {{ status | lower }}
 date: {{ date }}
+decision-makers:
+consulted:
+informed:
 ---
 
 # {{ title }}
 
 ## Context and Problem Statement
+
+
+
+## Decision Drivers
+
+* <!-- decision driver -->
+
+## Considered Options
+
+* <!-- option -->
+
+## Decision Outcome
+
+Chosen option: "", because
+
+### Consequences
+
+* Good, because
+* Bad, because
+
+### Confirmation
+
+
+
+## Pros and Cons of the Options
+
+### <!-- title of option -->
+
+* Good, because
+* Neutral, because
+* Bad, because
+
+## More Information
+
+"#;
+
+/// MADR bare-minimal template - fewest sections, empty content.
+/// Matches official MADR adr-template-bare-minimal.md
+const MADR_BARE_MINIMAL_TEMPLATE: &str = r#"# {{ title }}
+
+## Context and Problem Statement
+
+
+
+## Considered Options
 
 
 
@@ -513,7 +596,9 @@ mod tests {
     #[test_case("minimal" => TemplateVariant::Minimal; "minimal")]
     #[test_case("min" => TemplateVariant::Minimal; "min alias")]
     #[test_case("bare" => TemplateVariant::Bare; "bare")]
-    #[test_case("empty" => TemplateVariant::Bare; "empty alias")]
+    #[test_case("bare-minimal" => TemplateVariant::BareMinimal; "bare-minimal")]
+    #[test_case("bareminimal" => TemplateVariant::BareMinimal; "bareminimal")]
+    #[test_case("empty" => TemplateVariant::BareMinimal; "empty alias")]
     fn test_template_variant_parse(input: &str) -> TemplateVariant {
         input.parse().unwrap()
     }
@@ -529,6 +614,7 @@ mod tests {
         assert_eq!(TemplateVariant::Full.to_string(), "full");
         assert_eq!(TemplateVariant::Minimal.to_string(), "minimal");
         assert_eq!(TemplateVariant::Bare.to_string(), "bare");
+        assert_eq!(TemplateVariant::BareMinimal.to_string(), "bare-minimal");
     }
 
     // ========== Template Creation Tests ==========
@@ -847,14 +933,15 @@ mod tests {
         let config = Config::default();
         let output = template.render(&adr, &config).unwrap();
 
-        // Should have frontmatter
-        assert!(output.starts_with("---"));
+        // MADR minimal has NO frontmatter (matches official adr-template-minimal.md)
+        assert!(!output.starts_with("---"));
         assert!(output.contains("# MADR Minimal"));
         assert!(output.contains("## Context and Problem Statement"));
+        assert!(output.contains("## Considered Options"));
         assert!(output.contains("## Decision Outcome"));
         // Should NOT have full MADR sections
         assert!(!output.contains("## Decision Drivers"));
-        assert!(!output.contains("## Considered Options"));
+        assert!(!output.contains("## Pros and Cons"));
     }
 
     #[test]
@@ -864,12 +951,57 @@ mod tests {
         let config = Config::default();
         let output = template.render(&adr, &config).unwrap();
 
-        // Should have minimal frontmatter
+        // MADR bare has frontmatter with empty fields (matches official adr-template-bare.md)
         assert!(output.starts_with("---"));
         assert!(output.contains("status:"));
+        assert!(output.contains("decision-makers:"));
+        assert!(output.contains("consulted:"));
+        assert!(output.contains("informed:"));
         assert!(output.contains("# MADR Bare"));
-        // Should NOT have decision-makers etc in frontmatter
-        assert!(!output.contains("decision-makers"));
+        // Should have ALL sections (empty)
+        assert!(output.contains("## Decision Drivers"));
+        assert!(output.contains("## Considered Options"));
+        assert!(output.contains("## Pros and Cons of the Options"));
+        assert!(output.contains("## More Information"));
+    }
+
+    #[test]
+    fn test_madr_bare_minimal_template() {
+        let template =
+            Template::builtin_with_variant(TemplateFormat::Madr, TemplateVariant::BareMinimal);
+        let adr = Adr::new(1, "MADR Bare Minimal");
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // MADR bare-minimal has NO frontmatter, minimal sections
+        assert!(!output.starts_with("---"));
+        assert!(output.contains("# MADR Bare Minimal"));
+        assert!(output.contains("## Context and Problem Statement"));
+        assert!(output.contains("## Considered Options"));
+        assert!(output.contains("## Decision Outcome"));
+        assert!(output.contains("### Consequences"));
+        // Should NOT have extended sections
+        assert!(!output.contains("## Decision Drivers"));
+        assert!(!output.contains("## Pros and Cons"));
+    }
+
+    #[test]
+    fn test_nygard_bare_minimal_template() {
+        let template =
+            Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::BareMinimal);
+        let adr = Adr::new(1, "Nygard Bare Minimal");
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Should have basic structure without Date line
+        assert!(output.contains("# 1. Nygard Bare Minimal"));
+        assert!(output.contains("## Status"));
+        assert!(output.contains("## Context"));
+        assert!(output.contains("## Decision"));
+        assert!(output.contains("## Consequences"));
+        // No frontmatter, no date
+        assert!(!output.contains("---"));
+        assert!(!output.contains("Date:"));
     }
 
     #[test]
