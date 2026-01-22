@@ -174,6 +174,13 @@ impl Parser {
 
                 if target > 0 {
                     let kind: LinkKind = kind_str.trim().parse().unwrap_or(LinkKind::RelatesTo);
+
+                    // If this is a "Superseded by" link, set status to Superseded
+                    // (adr-tools doesn't always have a separate status line)
+                    if matches!(kind, LinkKind::SupersededBy) {
+                        adr.status = AdrStatus::Superseded;
+                    }
+
                     adr.links.push(AdrLink::new(target, kind));
                 }
             } else if !line.contains('[') && !line.contains(']') {
@@ -182,7 +189,14 @@ impl Parser {
                 let word = line.split_whitespace().next().unwrap_or("");
                 if matches!(
                     word.to_lowercase().as_str(),
-                    "proposed" | "accepted" | "deprecated" | "superseded" | "draft" | "rejected"
+                    // Include "superceded" for adr-tools compatibility (common typo)
+                    "proposed"
+                        | "accepted"
+                        | "deprecated"
+                        | "superseded"
+                        | "superceded"
+                        | "draft"
+                        | "rejected"
                 ) {
                     adr.status = word.parse().unwrap_or(AdrStatus::Proposed);
                 }
@@ -291,6 +305,23 @@ pub fn format_date(date: Date) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+    use test_case::test_case;
+
+    // ========== Parser Creation ==========
+
+    #[test]
+    fn test_parser_new() {
+        let _parser = Parser::new();
+        // Parser creation succeeds - just confirms it compiles
+    }
+
+    #[test]
+    fn test_parser_default() {
+        let _parser = Parser::default();
+    }
+
+    // ========== Legacy Format Parsing ==========
 
     #[test]
     fn test_parse_legacy_format() {
@@ -323,6 +354,270 @@ We get memory safety without garbage collection.
         assert!(adr.decision.contains("use Rust"));
         assert!(adr.consequences.contains("memory safety"));
     }
+
+    #[test]
+    fn test_parse_legacy_minimal() {
+        let content = r#"# 1. Minimal ADR
+
+## Status
+
+Proposed
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.title, "Minimal ADR");
+        assert_eq!(adr.status, AdrStatus::Proposed);
+        assert_eq!(adr.context, "Context.");
+        assert_eq!(adr.decision, "Decision.");
+        assert_eq!(adr.consequences, "Consequences.");
+    }
+
+    #[test]
+    fn test_parse_legacy_multiline_sections() {
+        let content = r#"# 1. Multiline Test
+
+## Status
+
+Accepted
+
+## Context
+
+This is a context section
+that spans multiple lines.
+
+With paragraphs too.
+
+## Decision
+
+This is the decision.
+Also multiple lines.
+
+## Consequences
+
+- Point 1
+- Point 2
+- Point 3
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(adr.context.contains("multiple lines"));
+        assert!(adr.context.contains("paragraphs"));
+        assert!(adr.decision.contains("Also multiple lines"));
+        assert!(adr.consequences.contains("Point 1"));
+        assert!(adr.consequences.contains("Point 2"));
+    }
+
+    #[test_case("Proposed" => AdrStatus::Proposed; "proposed")]
+    #[test_case("Accepted" => AdrStatus::Accepted; "accepted")]
+    #[test_case("Deprecated" => AdrStatus::Deprecated; "deprecated")]
+    #[test_case("Superseded" => AdrStatus::Superseded; "superseded")]
+    #[test_case("Draft" => AdrStatus::Custom("Draft".into()); "draft")]
+    #[test_case("Rejected" => AdrStatus::Custom("Rejected".into()); "rejected")]
+    fn test_parse_legacy_status_types(status: &str) -> AdrStatus {
+        let content = format!(
+            r#"# 1. Test
+
+## Status
+
+{status}
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#
+        );
+
+        let parser = Parser::new();
+        let adr = parser.parse(&content).unwrap();
+        adr.status
+    }
+
+    #[test]
+    fn test_parse_legacy_with_date_line() {
+        let content = r#"# 1. Record architecture decisions
+
+Date: 2024-01-15
+
+## Status
+
+Accepted
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.title, "Record architecture decisions");
+        assert_eq!(adr.status, AdrStatus::Accepted);
+    }
+
+    #[test]
+    fn test_parse_legacy_title_without_number() {
+        let content = r#"# Use Rust
+
+## Status
+
+Proposed
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 0);
+        assert_eq!(adr.title, "Use Rust");
+    }
+
+    #[test]
+    fn test_parse_legacy_status_with_links() {
+        let content = r#"# 2. Use PostgreSQL
+
+## Status
+
+Accepted
+
+Supersedes [1. Use MySQL](0001-use-mysql.md)
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.status, AdrStatus::Accepted);
+        assert_eq!(adr.links.len(), 1);
+        assert_eq!(adr.links[0].target, 1);
+        assert_eq!(adr.links[0].kind, LinkKind::Supersedes);
+    }
+
+    #[test]
+    fn test_parse_legacy_multiple_links() {
+        let content = r#"# 5. Combined Decision
+
+## Status
+
+Accepted
+
+Supersedes [1. First](0001-first.md)
+Supersedes [2. Second](0002-second.md)
+Amends [3. Third](0003-third.md)
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.links.len(), 3);
+        assert_eq!(adr.links[0].target, 1);
+        assert_eq!(adr.links[0].kind, LinkKind::Supersedes);
+        assert_eq!(adr.links[1].target, 2);
+        assert_eq!(adr.links[1].kind, LinkKind::Supersedes);
+        assert_eq!(adr.links[2].target, 3);
+        assert_eq!(adr.links[2].kind, LinkKind::Amends);
+    }
+
+    #[test]
+    fn test_parse_superseded_status() {
+        let content = r#"# 1. Record architecture decisions
+
+Date: 2026-01-22
+
+## Status
+
+Superseded
+
+Superseded by [2. ...](0002-....md)
+
+## Context
+
+Some context.
+
+## Decision
+
+Some decision.
+
+## Consequences
+
+Some consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.status, AdrStatus::Superseded);
+    }
+
+    // ========== Frontmatter Format Parsing ==========
 
     #[test]
     fn test_parse_frontmatter_format() {
@@ -361,6 +656,240 @@ We get ACID compliance.
     }
 
     #[test]
+    fn test_parse_frontmatter_minimal() {
+        let content = r#"---
+number: 1
+title: Simple ADR
+date: 2024-01-01
+status: proposed
+---
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.title, "Simple ADR");
+        assert_eq!(adr.status, AdrStatus::Proposed);
+    }
+
+    #[test]
+    fn test_parse_frontmatter_no_links() {
+        let content = r#"---
+number: 1
+title: Test ADR
+date: 2024-01-01
+status: accepted
+---
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(adr.links.is_empty());
+    }
+
+    #[test]
+    fn test_parse_frontmatter_multiple_links() {
+        let content = r#"---
+number: 5
+title: Multi Link ADR
+date: 2024-01-01
+status: accepted
+links:
+  - target: 1
+    kind: supersedes
+  - target: 2
+    kind: amends
+  - target: 3
+    kind: relatesto
+---
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.links.len(), 3);
+        assert_eq!(adr.links[0].kind, LinkKind::Supersedes);
+        assert_eq!(adr.links[1].kind, LinkKind::Amends);
+        assert_eq!(adr.links[2].kind, LinkKind::RelatesTo);
+    }
+
+    #[test]
+    fn test_parse_frontmatter_all_statuses() {
+        for (status_str, expected) in [
+            ("proposed", AdrStatus::Proposed),
+            ("accepted", AdrStatus::Accepted),
+            ("deprecated", AdrStatus::Deprecated),
+            ("superseded", AdrStatus::Superseded),
+        ] {
+            let content = format!(
+                r#"---
+number: 1
+title: Test
+date: 2024-01-01
+status: {status_str}
+---
+
+## Context
+
+Context.
+"#
+            );
+
+            let parser = Parser::new();
+            let adr = parser.parse(&content).unwrap();
+            assert_eq!(adr.status, expected, "Failed for status: {status_str}");
+        }
+    }
+
+    #[test]
+    fn test_parse_frontmatter_invalid_format() {
+        let content = r#"---
+not valid yaml {{{{
+---
+
+## Context
+
+Context.
+"#;
+
+        let parser = Parser::new();
+        let result = parser.parse(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_frontmatter_incomplete() {
+        let content = r#"---
+number: 1
+title: Test
+"#;
+
+        let parser = Parser::new();
+        let result = parser.parse(content);
+        assert!(result.is_err());
+    }
+
+    // ========== File Parsing ==========
+
+    #[test]
+    fn test_parse_file_legacy() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("0001-use-rust.md");
+
+        std::fs::write(
+            &file_path,
+            r#"# 1. Use Rust
+
+## Status
+
+Accepted
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#,
+        )
+        .unwrap();
+
+        let parser = Parser::new();
+        let adr = parser.parse_file(&file_path).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.title, "Use Rust");
+        assert_eq!(adr.path, Some(file_path));
+    }
+
+    #[test]
+    fn test_parse_file_extracts_number_from_filename() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("0042-some-decision.md");
+
+        // ADR without number in title
+        std::fs::write(
+            &file_path,
+            r#"# Some Decision
+
+## Status
+
+Proposed
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#,
+        )
+        .unwrap();
+
+        let parser = Parser::new();
+        let adr = parser.parse_file(&file_path).unwrap();
+
+        assert_eq!(adr.number, 42);
+    }
+
+    #[test]
+    fn test_parse_file_nonexistent() {
+        let parser = Parser::new();
+        let result = parser.parse_file(Path::new("/nonexistent/path/0001-test.md"));
+        assert!(result.is_err());
+    }
+
+    // ========== Helper Function Tests ==========
+
+    #[test]
     fn test_parse_numbered_title() {
         assert_eq!(
             parse_numbered_title("1. Use Rust"),
@@ -373,10 +902,43 @@ We get ACID compliance.
         assert_eq!(parse_numbered_title("Use Rust"), None);
     }
 
+    #[test_case("1. Simple" => Some((1, "Simple".into())); "simple")]
+    #[test_case("123. Large Number" => Some((123, "Large Number".into())); "large number")]
+    #[test_case("1. With. Dots. In. Title" => Some((1, "With. Dots. In. Title".into())); "dots in title")]
+    #[test_case("No Number" => None; "no number")]
+    #[test_case("1 Missing Period" => None; "missing period")]
+    #[test_case(". Missing Number" => None; "missing number")]
+    fn test_parse_numbered_title_cases(input: &str) -> Option<(u32, String)> {
+        parse_numbered_title(input)
+    }
+
+    #[test]
+    fn test_extract_number_from_path() {
+        let path = Path::new("doc/adr/0001-use-rust.md");
+        assert_eq!(extract_number_from_path(path).unwrap(), 1);
+
+        let path = Path::new("0042-complex-decision.md");
+        assert_eq!(extract_number_from_path(path).unwrap(), 42);
+
+        let path = Path::new("9999-max-four-digit.md");
+        assert_eq!(extract_number_from_path(path).unwrap(), 9999);
+    }
+
+    #[test]
+    fn test_extract_number_from_path_invalid() {
+        let result = extract_number_from_path(Path::new("not-an-adr.md"));
+        assert!(result.is_err());
+
+        let result = extract_number_from_path(Path::new("1-too-few-digits.md"));
+        assert!(result.is_err());
+    }
+
     #[test]
     fn test_today() {
         let date = today();
         assert!(date.year() >= 2024);
+        assert!(date.month() as u8 >= 1 && date.month() as u8 <= 12);
+        assert!(date.day() >= 1 && date.day() <= 31);
     }
 
     #[test]
@@ -385,35 +947,174 @@ We get ACID compliance.
         assert_eq!(format_date(date), "2024-03-05");
     }
 
+    #[test_case(2024, Month::January, 1 => "2024-01-01"; "new year")]
+    #[test_case(2024, Month::December, 31 => "2024-12-31"; "end of year")]
+    #[test_case(2000, Month::February, 29 => "2000-02-29"; "leap day")]
+    #[test_case(2024, Month::July, 15 => "2024-07-15"; "mid year")]
+    fn test_format_date_cases(year: i32, month: Month, day: u8) -> String {
+        let date = Date::from_calendar_date(year, month, day).unwrap();
+        format_date(date)
+    }
+
+    // ========== Edge Cases ==========
+
     #[test]
-    fn test_parse_superseded_status() {
-        let content = r#"# 1. Record architecture decisions
+    fn test_parse_empty_content() {
+        let parser = Parser::new();
+        let adr = parser.parse("").unwrap();
 
-Date: 2026-01-22
+        assert_eq!(adr.number, 0);
+        assert!(adr.title.is_empty());
+    }
 
-## Status
-
-Superseded
-
-Superseded by [2. ...](0002-....md)
-
-## Context
-
-Some context.
-
-## Decision
-
-Some decision.
-
-## Consequences
-
-Some consequences.
-"#;
+    #[test]
+    fn test_parse_only_title() {
+        let content = "# 1. Just a Title";
 
         let parser = Parser::new();
         let adr = parser.parse(content).unwrap();
 
         assert_eq!(adr.number, 1);
-        assert_eq!(adr.status, AdrStatus::Superseded);
+        assert_eq!(adr.title, "Just a Title");
+    }
+
+    #[test]
+    fn test_parse_extra_sections_ignored() {
+        let content = r#"# 1. Test
+
+## Status
+
+Proposed
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+
+## Notes
+
+These should be ignored.
+
+## References
+
+- ref1
+- ref2
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        // Extra sections are ignored, main content is still parsed
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.status, AdrStatus::Proposed);
+    }
+
+    #[test]
+    fn test_parse_case_insensitive_sections() {
+        let content = r#"# 1. Case Test
+
+## STATUS
+
+Accepted
+
+## CONTEXT
+
+Context.
+
+## DECISION
+
+Decision.
+
+## CONSEQUENCES
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        // Sections should be matched case-insensitively
+        assert_eq!(adr.status, AdrStatus::Accepted);
+        assert_eq!(adr.context, "Context.");
+    }
+
+    #[test]
+    fn test_parse_content_with_markdown_formatting() {
+        let content = r#"# 1. Formatted ADR
+
+## Status
+
+Accepted
+
+## Context
+
+We have **bold** and *italic* text.
+
+Also `code` and [links](https://example.com).
+
+## Decision
+
+```rust
+fn main() {
+    println!("Hello");
+}
+```
+
+## Consequences
+
+| Column 1 | Column 2 |
+|----------|----------|
+| Value 1  | Value 2  |
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(adr.context.contains("bold"));
+        assert!(adr.decision.contains("fn main"));
+        assert!(adr.consequences.contains("Column 1"));
+    }
+
+    // ========== Regex Tests ==========
+
+    #[test]
+    fn test_link_regex_pattern() {
+        let content = "Supersedes [1. Use MySQL](0001-use-mysql.md)";
+        let caps = LINK_REGEX.captures(content).unwrap();
+
+        assert_eq!(caps.get(1).unwrap().as_str(), "Supersedes");
+        assert_eq!(caps.get(2).unwrap().as_str(), "1");
+        assert_eq!(caps.get(3).unwrap().as_str(), "0001");
+    }
+
+    #[test]
+    fn test_link_regex_amended_by() {
+        let content = "Amended by [3. Update API](0003-update-api.md)";
+        let caps = LINK_REGEX.captures(content).unwrap();
+
+        assert_eq!(caps.get(1).unwrap().as_str(), "Amended by");
+        assert_eq!(caps.get(2).unwrap().as_str(), "3");
+    }
+
+    #[test]
+    fn test_number_regex_pattern() {
+        let filename = "0042-some-decision.md";
+        let caps = NUMBER_REGEX.captures(filename).unwrap();
+
+        assert_eq!(caps.get(1).unwrap().as_str(), "0042");
+    }
+
+    #[test]
+    fn test_number_regex_no_match() {
+        assert!(NUMBER_REGEX.captures("not-an-adr.md").is_none());
+        assert!(NUMBER_REGEX.captures("01-short.md").is_none());
+        assert!(NUMBER_REGEX.captures("00001-too-long.md").is_none());
     }
 }
