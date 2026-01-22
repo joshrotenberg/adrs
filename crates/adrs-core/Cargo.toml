@@ -1,0 +1,24 @@
+[package]
+name = "adrs-core"
+description = "Core library for managing Architecture Decision Records"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_yaml.workspace = true
+toml.workspace = true
+pulldown-cmark.workspace = true
+pulldown-cmark-to-cmark.workspace = true
+minijinja.workspace = true
+walkdir.workspace = true
+time.workspace = true
+fuzzy-matcher.workspace = true
+regex.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

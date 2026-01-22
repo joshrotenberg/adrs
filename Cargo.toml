@@ -1,34 +1,54 @@
-[package]
-version = "0.3.0"
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.4.0"
 authors = ["josh rotenberg <joshrotenberg@gmail.com>"]
-description = "Architectural Decision Record command line tool"
-documentation = "https://github.com/joshrotenberg/adrs"
-edition = "2021"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/joshrotenberg/adrs"
 homepage = "https://github.com/joshrotenberg/adrs"
-license = "MIT/Apache-2.0"
-name = "adrs"
-readme = "README.md"
-repository = "https://github.com/joshrotenberg/adrs.git"
+documentation = "https://github.com/joshrotenberg/adrs"
 
-[dependencies]
-anyhow = "1.0"
-clap = { version = "4.5.1", features = ["derive", "env", "string"] }
-handlebars = "6.3"
+[workspace.dependencies]
+# Core
+thiserror = "2"
 serde = { version = "1.0", features = ["derive"] }
-time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
-edit = "0.1.5"
-pulldown-cmark = "0.9"
-pulldown-cmark-to-cmark = "11.2.0"
-walkdir = "2.5"
-fuzzy-matcher = "0.3.7"
-whoami = "1.5.1"
-regex = "1.11"
+serde_yaml = "0.9"
+toml = "0.8"
 
-[dev-dependencies]
-serial_test = "3.2"
-assert_cmd = "2.0"
-assert_fs = "1.1"
-predicates = "3.1"
+# Markdown
+pulldown-cmark = "0.12"
+pulldown-cmark-to-cmark = "17"
+
+# Templates
+minijinja = { version = "2", features = ["loader"] }
+
+# File system
+walkdir = "2.5"
+
+# Date/time
+time = { version = "0.3", features = ["local-offset", "formatting", "macros", "serde", "parsing"] }
+
+# Utilities
+fuzzy-matcher = "0.3"
+regex = "1"
+
+# CLI only
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env", "string"] }
+edit = "0.1"
+whoami = "1"
+
+# Testing
+serial_test = "3"
+assert_cmd = "2"
+assert_fs = "1"
+predicates = "3"
+tempfile = "3"
+proptest = "1"
+test-case = "3"
 
 # The profile that 'dist' will build with
 [profile.dist]
