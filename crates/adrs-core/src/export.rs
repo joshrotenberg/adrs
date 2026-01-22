@@ -62,6 +62,10 @@ pub struct JsonAdr {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub links: Vec<JsonAdrLink>,
 
+    /// Custom sections not covered by standard fields.
+    #[serde(skip_serializing_if = "std::collections::HashMap::is_empty", default)]
+    pub custom_sections: std::collections::HashMap<String, String>,
+
     /// Relative path to the source file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
@@ -189,6 +193,7 @@ impl From<&Adr> for JsonAdr {
                 Some(adr.consequences.clone())
             },
             links: adr.links.iter().map(JsonAdrLink::from).collect(),
+            custom_sections: std::collections::HashMap::new(),
             path: adr.path.as_ref().map(|p| p.display().to_string()),
         }
     }
@@ -329,6 +334,7 @@ mod tests {
             decision: None,
             consequences: None,
             links: vec![],
+            custom_sections: std::collections::HashMap::new(),
             path: None,
         };
 
@@ -337,5 +343,41 @@ mod tests {
         assert!(json.contains("\"title\":\"Test\""));
         // Empty vecs should be skipped
         assert!(!json.contains("\"deciders\""));
+        // Empty custom_sections should be skipped
+        assert!(!json.contains("\"custom_sections\""));
+    }
+
+    #[test]
+    fn test_custom_sections() {
+        let mut adr = JsonAdr {
+            number: 1,
+            title: "Test".to_string(),
+            status: "Accepted".to_string(),
+            date: "2024-01-15".to_string(),
+            deciders: vec![],
+            consulted: vec![],
+            informed: vec![],
+            tags: vec![],
+            context: None,
+            decision: None,
+            consequences: None,
+            links: vec![],
+            custom_sections: std::collections::HashMap::new(),
+            path: None,
+        };
+
+        adr.custom_sections.insert(
+            "Alternatives Considered".to_string(),
+            "We also looked at MySQL and SQLite.".to_string(),
+        );
+        adr.custom_sections.insert(
+            "Security Review".to_string(),
+            "Approved by security team on 2024-01-10.".to_string(),
+        );
+
+        let json = serde_json::to_string_pretty(&adr).unwrap();
+        assert!(json.contains("\"custom_sections\""));
+        assert!(json.contains("Alternatives Considered"));
+        assert!(json.contains("Security Review"));
     }
 }
