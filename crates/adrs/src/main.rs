@@ -43,6 +43,14 @@ enum Commands {
         /// Link to another ADR (format: "TARGET:KIND:REVERSE_KIND")
         #[arg(short, long)]
         link: Option<String>,
+
+        /// Template format to use [default: nygard]
+        #[arg(short, long, value_name = "FORMAT")]
+        format: Option<String>,
+
+        /// Initial status [default: Proposed]
+        #[arg(long)]
+        status: Option<String>,
     },
 
     /// Edit an existing ADR
@@ -140,7 +148,9 @@ fn main() -> Result<()> {
             title,
             supersedes,
             link,
-        } => commands::new(&root, cli.ng, title, supersedes, link),
+            format,
+            status,
+        } => commands::new(&root, cli.ng, title, supersedes, link, format, status),
         Commands::Edit { adr } => commands::edit(&root, &adr),
         Commands::List => commands::list(&root),
         Commands::Link {

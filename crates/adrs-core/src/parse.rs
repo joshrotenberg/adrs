@@ -1117,4 +1117,119 @@ fn main() {
         assert!(NUMBER_REGEX.captures("01-short.md").is_none());
         assert!(NUMBER_REGEX.captures("00001-too-long.md").is_none());
     }
+
+    // ========== MADR 4.0.0 Frontmatter Tests ==========
+
+    #[test]
+    fn test_parse_madr_frontmatter() {
+        let content = r#"---
+number: 1
+title: Use MADR Format
+date: 2024-09-15
+status: accepted
+decision-makers:
+  - Alice
+  - Bob
+consulted:
+  - Carol
+informed:
+  - Dave
+  - Eve
+---
+
+## Context and Problem Statement
+
+We need a standard format for ADRs.
+
+## Decision Outcome
+
+Chosen option: "MADR 4.0.0", because it provides rich metadata.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.title, "Use MADR Format");
+        assert_eq!(adr.status, AdrStatus::Accepted);
+        assert_eq!(adr.decision_makers, vec!["Alice", "Bob"]);
+        assert_eq!(adr.consulted, vec!["Carol"]);
+        assert_eq!(adr.informed, vec!["Dave", "Eve"]);
+    }
+
+    #[test]
+    fn test_parse_madr_frontmatter_partial_fields() {
+        let content = r#"---
+number: 2
+title: Partial MADR
+date: 2024-09-15
+status: proposed
+decision-makers:
+  - Alice
+---
+
+## Context
+
+Context.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.decision_makers, vec!["Alice"]);
+        assert!(adr.consulted.is_empty());
+        assert!(adr.informed.is_empty());
+    }
+
+    #[test]
+    fn test_parse_madr_frontmatter_empty_fields() {
+        let content = r#"---
+number: 3
+title: No MADR Fields
+date: 2024-09-15
+status: accepted
+---
+
+## Context
+
+Context.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(adr.decision_makers.is_empty());
+        assert!(adr.consulted.is_empty());
+        assert!(adr.informed.is_empty());
+    }
+
+    #[test]
+    fn test_parse_madr_with_links() {
+        let content = r#"---
+number: 4
+title: MADR With Links
+date: 2024-09-15
+status: accepted
+decision-makers:
+  - Alice
+links:
+  - target: 1
+    kind: supersedes
+  - target: 2
+    kind: amends
+---
+
+## Context
+
+Context.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.decision_makers, vec!["Alice"]);
+        assert_eq!(adr.links.len(), 2);
+        assert_eq!(adr.links[0].kind, LinkKind::Supersedes);
+        assert_eq!(adr.links[1].kind, LinkKind::Amends);
+    }
 }

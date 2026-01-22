@@ -118,6 +118,10 @@ impl Template {
                 consequences => &adr.consequences,
                 links => links,
                 is_ng => config.is_next_gen(),
+                // MADR 4.0.0 fields
+                decision_makers => &adr.decision_makers,
+                consulted => &adr.consulted,
+                informed => &adr.informed,
             })
             .map_err(|e| Error::TemplateError(e.to_string()))?;
 
@@ -215,47 +219,78 @@ Date: {{ date }}
 {{ consequences if consequences else "What becomes easier or more difficult to do because of this change?" }}
 "#;
 
-/// MADR (Markdown Any Decision Records) template.
-const MADR_TEMPLATE: &str = r#"{% if is_ng %}---
-number: {{ number }}
-title: {{ title }}
-date: {{ date }}
+/// MADR (Markdown Any Decision Records) 4.0.0 template.
+const MADR_TEMPLATE: &str = r#"---
 status: {{ status | lower }}
-{% if links %}links:
-{% for link in links %}  - target: {{ link.target }}
-    kind: {{ link.kind | lower }}
+date: {{ date }}
+{% if decision_makers %}decision-makers:
+{% for dm in decision_makers %}  - {{ dm }}
+{% endfor %}{% endif %}{% if consulted %}consulted:
+{% for c in consulted %}  - {{ c }}
+{% endfor %}{% endif %}{% if informed %}informed:
+{% for i in informed %}  - {{ i }}
 {% endfor %}{% endif %}---
 
-{% endif %}# {{ title }}
-
-* Status: {{ status }}
-* Date: {{ date }}
+# {{ title }}
 
 ## Context and Problem Statement
 
-{{ context if context else "Describe the context and problem statement, e.g., in free form using two to three sentences or in the form of an illustrative story. You may want to articulate the problem in form of a question and add links to collaboration boards or issue management systems." }}
+{{ context if context else "{Describe the context and problem statement, e.g., in free form using two to three sentences or in the form of an illustrative story. You may want to articulate the problem in form of a question and add links to collaboration boards or issue management systems.}" }}
 
+<!-- This is an optional element. Feel free to remove. -->
 ## Decision Drivers
 
 * {decision driver 1, e.g., a force, facing concern, ...}
 * {decision driver 2, e.g., a force, facing concern, ...}
-* ...
+* ... <!-- numbers of drivers can vary -->
 
 ## Considered Options
 
 * {title of option 1}
 * {title of option 2}
 * {title of option 3}
-* ...
+* ... <!-- numbers of options can vary -->
 
 ## Decision Outcome
 
 {{ decision if decision else "Chosen option: \"{title of option 1}\", because {justification. e.g., only option, which meets k.o. criterion decision driver | which resolves force {force} | ... | comes out best (see below)}." }}
 
+<!-- This is an optional element. Feel free to remove. -->
 ### Consequences
 
-{{ consequences if consequences else "* Good, because {positive consequence, e.g., improvement of one or more desired qualities, ...}\n* Bad, because {negative consequence, e.g., compromising one or more desired qualities, ...}" }}
+{{ consequences if consequences else "* Good, because {positive consequence, e.g., improvement of one or more desired qualities, ...}\n* Bad, because {negative consequence, e.g., compromising one or more desired qualities, ...}\n* ... <!-- numbers of consequences can vary -->" }}
 
+<!-- This is an optional element. Feel free to remove. -->
+### Confirmation
+
+{Describe how the implementation/compliance of the ADR can/will be confirmed. Is there any automated or manual fitness function? If so, list it and explain how it is applied. Is the chosen design and its implementation in line with the decision? E.g., a design/code review or a test with a library such as ArchUnit can help validate this. Note that although we classify this element as optional, it is included in many ADRs.}
+
+<!-- This is an optional element. Feel free to remove. -->
+## Pros and Cons of the Options
+
+### {title of option 1}
+
+<!-- This is an optional element. Feel free to remove. -->
+{example | description | pointer to more information | ...}
+
+* Good, because {argument a}
+* Good, because {argument b}
+<!-- use "neutral" if the given argument weights neither for good nor bad -->
+* Neutral, because {argument c}
+* Bad, because {argument d}
+* ... <!-- numbers of pros and cons can vary -->
+
+### {title of other option}
+
+{example | description | pointer to more information | ...}
+
+* Good, because {argument a}
+* Good, because {argument b}
+* Neutral, because {argument c}
+* Bad, because {argument d}
+* ...
+
+<!-- This is an optional element. Feel free to remove. -->
 ## More Information
 
 {You might want to provide additional evidence/confidence for the decision outcome here and/or document the team agreement on the decision and/or define when/how this decision should be realized and if/when it should be re-visited. Links to other decisions and resources might appear here as well.}
@@ -469,7 +504,7 @@ mod tests {
         assert!(output.contains("target: 1"));
     }
 
-    // ========== Template Rendering - MADR ==========
+    // ========== Template Rendering - MADR 4.0.0 ==========
 
     #[test]
     fn test_render_madr_basic() {
@@ -480,28 +515,93 @@ mod tests {
         let config = Config::default();
         let output = template.render(&adr, &config).unwrap();
 
+        assert!(output.starts_with("---")); // MADR always has frontmatter
+        assert!(output.contains("status: accepted"));
         assert!(output.contains("# Use Rust"));
-        assert!(output.contains("* Status: Accepted"));
         assert!(output.contains("## Context and Problem Statement"));
         assert!(output.contains("## Decision Drivers"));
         assert!(output.contains("## Considered Options"));
         assert!(output.contains("## Decision Outcome"));
+        assert!(output.contains("## Pros and Cons of the Options"));
     }
 
     #[test]
-    fn test_render_madr_ng() {
+    fn test_render_madr_with_decision_makers() {
         let template = Template::builtin(TemplateFormat::Madr);
         let mut adr = Adr::new(1, "Use Rust");
         adr.status = AdrStatus::Accepted;
+        adr.decision_makers = vec!["Alice".into(), "Bob".into()];
 
-        let config = Config {
-            mode: ConfigMode::NextGen,
-            ..Default::default()
-        };
+        let config = Config::default();
         let output = template.render(&adr, &config).unwrap();
 
-        assert!(output.starts_with("---"));
-        assert!(output.contains("number: 1"));
+        assert!(output.contains("decision-makers:"));
+        assert!(output.contains("  - Alice"));
+        assert!(output.contains("  - Bob"));
+    }
+
+    #[test]
+    fn test_render_madr_with_consulted() {
+        let template = Template::builtin(TemplateFormat::Madr);
+        let mut adr = Adr::new(1, "Use Rust");
+        adr.status = AdrStatus::Accepted;
+        adr.consulted = vec!["Carol".into()];
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        assert!(output.contains("consulted:"));
+        assert!(output.contains("  - Carol"));
+    }
+
+    #[test]
+    fn test_render_madr_with_informed() {
+        let template = Template::builtin(TemplateFormat::Madr);
+        let mut adr = Adr::new(1, "Use Rust");
+        adr.status = AdrStatus::Accepted;
+        adr.informed = vec!["Dave".into(), "Eve".into()];
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        assert!(output.contains("informed:"));
+        assert!(output.contains("  - Dave"));
+        assert!(output.contains("  - Eve"));
+    }
+
+    #[test]
+    fn test_render_madr_full_frontmatter() {
+        let template = Template::builtin(TemplateFormat::Madr);
+        let mut adr = Adr::new(1, "Use MADR Format");
+        adr.status = AdrStatus::Accepted;
+        adr.decision_makers = vec!["Alice".into(), "Bob".into()];
+        adr.consulted = vec!["Carol".into()];
+        adr.informed = vec!["Dave".into()];
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Check frontmatter structure
+        assert!(output.starts_with("---\nstatus: accepted\ndate:"));
+        assert!(output.contains("decision-makers:\n  - Alice\n  - Bob"));
+        assert!(output.contains("consulted:\n  - Carol"));
+        assert!(output.contains("informed:\n  - Dave"));
+        assert!(output.contains("---\n\n# Use MADR Format"));
+    }
+
+    #[test]
+    fn test_render_madr_empty_optional_fields() {
+        let template = Template::builtin(TemplateFormat::Madr);
+        let mut adr = Adr::new(1, "Simple ADR");
+        adr.status = AdrStatus::Proposed;
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Empty optional fields should not appear
+        assert!(!output.contains("decision-makers:"));
+        assert!(!output.contains("consulted:"));
+        assert!(!output.contains("informed:"));
     }
 
     // ========== Template Engine Tests ==========
