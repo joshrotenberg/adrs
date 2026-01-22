@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 authors = ["josh rotenberg <joshrotenberg@gmail.com>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -41,6 +41,12 @@ clap = { version = "4", features = ["derive", "env", "string"] }
 edit = "0.1"
 whoami = "1"
 
+<<<<<<< Updated upstream
+=======
+# Internal
+adrs-core = { path = "crates/adrs-core", version = "0.5.0" }
+
+>>>>>>> Stashed changes
 # Testing
 serial_test = "3"
 assert_cmd = "2"
