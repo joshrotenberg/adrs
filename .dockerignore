@@ -1,0 +1,26 @@
+# Build artifacts
+target/
+*.rs.bk
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation
+docs/
+book/
+*.md
+!crates/*/src/**/*.md
+
+# CI/CD
+.github/
+
+# Misc
+.DS_Store
+*.log
