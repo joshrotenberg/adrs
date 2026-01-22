@@ -1,29 +1,41 @@
 //! Config command.
 
-use adrs_core::{Config, Repository};
+use adrs_core::{ConfigSource, DiscoveredConfig};
 use anyhow::Result;
 use std::path::Path;
 
-pub fn config(root: &Path) -> Result<()> {
-    match Repository::open(root) {
-        Ok(repo) => {
-            let config = repo.config();
-            println!("ADR directory: {}", repo.adr_path().display());
-            println!("Mode: {:?}", config.mode);
-            if let Some(ref format) = config.templates.format {
+/// Show configuration with discovery information.
+pub fn config_with_discovery(start_dir: &Path, discovered: Option<DiscoveredConfig>) -> Result<()> {
+    match discovered {
+        Some(disc) => {
+            println!("Project root: {}", disc.root.display());
+            println!(
+                "Config source: {}",
+                match &disc.source {
+                    ConfigSource::Project(path) => format!("{}", path.display()),
+                    ConfigSource::Global(path) => format!("{} (global)", path.display()),
+                    ConfigSource::Environment => "environment variable".to_string(),
+                    ConfigSource::Default => "defaults".to_string(),
+                }
+            );
+            println!("ADR directory: {}", disc.config.adr_dir.display());
+            println!(
+                "Full path: {}",
+                disc.root.join(&disc.config.adr_dir).display()
+            );
+            println!("Mode: {:?}", disc.config.mode);
+            if let Some(ref format) = disc.config.templates.format {
                 println!("Template format: {}", format);
             }
-            if let Some(ref custom) = config.templates.custom {
+            if let Some(ref custom) = disc.config.templates.custom {
                 println!("Custom template: {}", custom.display());
             }
         }
-        Err(_) => {
-            let config = Config::default();
-            println!(
-                "ADR directory: {} (not initialized)",
-                config.adr_dir.display()
-            );
-            println!("Mode: {:?}", config.mode);
+        None => {
+            println!("No ADR repository found.");
+            println!("Search started from: {}", start_dir.display());
+            println!();
+            println!("Run 'adrs init' to create a new repository.");
         }
     }
 

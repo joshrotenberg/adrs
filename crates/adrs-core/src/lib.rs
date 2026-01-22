@@ -22,7 +22,7 @@ mod repository;
 mod template;
 mod types;
 
-pub use config::{Config, ConfigMode};
+pub use config::{Config, ConfigMode, ConfigSource, DiscoveredConfig, discover};
 pub use doctor::{Check, Diagnostic, DoctorReport, Severity, check as doctor_check};
 pub use error::{Error, Result};
 pub use parse::Parser;

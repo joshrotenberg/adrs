@@ -181,7 +181,7 @@ fn test_new_without_init() {
         .env("EDITOR", "true") // Use 'true' as a no-op editor
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not found"));
+        .stderr(predicate::str::contains("No ADR repository found"));
 
     temp.close().unwrap();
 }
@@ -194,13 +194,13 @@ fn test_new_without_init() {
 fn test_config_without_init() {
     let temp = assert_fs::TempDir::new().unwrap();
 
-    // Config shows default even without init (graceful behavior)
+    // Config shows defaults even without init (graceful behavior)
     adrs()
         .current_dir(temp.path())
         .arg("config")
         .assert()
         .success()
-        .stdout(predicate::str::contains("not initialized"));
+        .stdout(predicate::str::contains("Config source: defaults"));
 
     temp.close().unwrap();
 }

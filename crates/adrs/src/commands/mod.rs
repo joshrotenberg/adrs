@@ -9,7 +9,7 @@ mod link;
 mod list;
 mod new;
 
-pub use config::config;
+pub use config::config_with_discovery;
 pub use doctor::doctor;
 pub use edit::edit;
 pub use generate::{generate_book, generate_graph, generate_toc};
