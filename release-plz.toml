@@ -21,3 +21,5 @@ name = "adrs"
 publish = true
 git_release_enable = true
 git_tag_name = "v{{ version }}"
+# Skip verification during dry-run since adrs-core must be published first
+publish_no_verify = true
