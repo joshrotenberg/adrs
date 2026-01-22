@@ -13,10 +13,6 @@ edit-url-template = "https://github.com/joshrotenberg/adrs/edit/main/book/{path}
 [output.html.fold]
 enable = true
 
-[preprocessor.toc]
-command = "mdbook-toc"
-renderer = ["html"]
-
 # Lint is run manually: mdbook-lint book/src
 # [preprocessor.lint]
 # command = "mdbook-lint"
