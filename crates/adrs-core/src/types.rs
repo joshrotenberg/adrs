@@ -24,6 +24,24 @@ pub struct Adr {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<AdrLink>,
 
+    /// People who made the decision (MADR 4.0.0).
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        rename = "decision-makers"
+    )]
+    pub decision_makers: Vec<String>,
+
+    /// People consulted for input (MADR 4.0.0).
+    /// Two-way communication - their opinions are sought.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub consulted: Vec<String>,
+
+    /// People kept informed (MADR 4.0.0).
+    /// One-way communication - they are kept up-to-date.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub informed: Vec<String>,
+
     /// The context section (why this decision was needed).
     #[serde(skip)]
     pub context: String,
@@ -50,6 +68,9 @@ impl Adr {
             date: crate::parse::today(),
             status: AdrStatus::Proposed,
             links: Vec::new(),
+            decision_makers: Vec::new(),
+            consulted: Vec::new(),
+            informed: Vec::new(),
             context: String::new(),
             decision: String::new(),
             consequences: String::new(),
@@ -75,6 +96,36 @@ impl Adr {
     /// Set the status and optionally record what this supersedes.
     pub fn set_status(&mut self, status: AdrStatus) {
         self.status = status;
+    }
+
+    /// Set the decision makers (MADR 4.0.0).
+    pub fn set_decision_makers(&mut self, makers: Vec<String>) {
+        self.decision_makers = makers;
+    }
+
+    /// Add a decision maker (MADR 4.0.0).
+    pub fn add_decision_maker(&mut self, maker: impl Into<String>) {
+        self.decision_makers.push(maker.into());
+    }
+
+    /// Set the consulted people (MADR 4.0.0).
+    pub fn set_consulted(&mut self, consulted: Vec<String>) {
+        self.consulted = consulted;
+    }
+
+    /// Add a consulted person (MADR 4.0.0).
+    pub fn add_consulted(&mut self, person: impl Into<String>) {
+        self.consulted.push(person.into());
+    }
+
+    /// Set the informed people (MADR 4.0.0).
+    pub fn set_informed(&mut self, informed: Vec<String>) {
+        self.informed = informed;
+    }
+
+    /// Add an informed person (MADR 4.0.0).
+    pub fn add_informed(&mut self, person: impl Into<String>) {
+        self.informed.push(person.into());
     }
 }
 
@@ -520,5 +571,123 @@ mod tests {
                 .trim(),
             "supersededby"
         );
+    }
+
+    // ========== MADR 4.0.0 Tests ==========
+
+    #[test]
+    fn test_adr_new_has_empty_madr_fields() {
+        let adr = Adr::new(1, "Test");
+        assert!(adr.decision_makers.is_empty());
+        assert!(adr.consulted.is_empty());
+        assert!(adr.informed.is_empty());
+    }
+
+    #[test]
+    fn test_adr_add_decision_maker() {
+        let mut adr = Adr::new(1, "Test");
+        adr.add_decision_maker("Alice");
+        adr.add_decision_maker("Bob");
+
+        assert_eq!(adr.decision_makers, vec!["Alice", "Bob"]);
+    }
+
+    #[test]
+    fn test_adr_set_decision_makers() {
+        let mut adr = Adr::new(1, "Test");
+        adr.set_decision_makers(vec!["Alice".into(), "Bob".into()]);
+
+        assert_eq!(adr.decision_makers, vec!["Alice", "Bob"]);
+    }
+
+    #[test]
+    fn test_adr_add_consulted() {
+        let mut adr = Adr::new(1, "Test");
+        adr.add_consulted("Carol");
+
+        assert_eq!(adr.consulted, vec!["Carol"]);
+    }
+
+    #[test]
+    fn test_adr_add_informed() {
+        let mut adr = Adr::new(1, "Test");
+        adr.add_informed("Dave");
+        adr.add_informed("Eve");
+
+        assert_eq!(adr.informed, vec!["Dave", "Eve"]);
+    }
+
+    #[test]
+    fn test_madr_yaml_roundtrip() {
+        let mut adr = Adr::new(1, "Use MADR Format");
+        adr.status = AdrStatus::Accepted;
+        adr.date = time::Date::from_calendar_date(2024, Month::September, 15).unwrap();
+        adr.set_decision_makers(vec!["Alice".into(), "Bob".into()]);
+        adr.set_consulted(vec!["Carol".into()]);
+        adr.set_informed(vec!["Dave".into(), "Eve".into()]);
+
+        let yaml = serde_yaml::to_string(&adr).unwrap();
+        let parsed: Adr = serde_yaml::from_str(&yaml).unwrap();
+
+        assert_eq!(parsed.decision_makers, vec!["Alice", "Bob"]);
+        assert_eq!(parsed.consulted, vec!["Carol"]);
+        assert_eq!(parsed.informed, vec!["Dave", "Eve"]);
+    }
+
+    #[test]
+    fn test_madr_yaml_field_names() {
+        let mut adr = Adr::new(1, "Test");
+        adr.set_decision_makers(vec!["Alice".into()]);
+
+        let yaml = serde_yaml::to_string(&adr).unwrap();
+        // Verify hyphenated field name in YAML
+        assert!(
+            yaml.contains("decision-makers:"),
+            "YAML should use hyphenated field name"
+        );
+    }
+
+    #[test]
+    fn test_madr_empty_fields_not_serialized() {
+        let adr = Adr::new(1, "Test");
+        let yaml = serde_yaml::to_string(&adr).unwrap();
+
+        // Empty MADR fields should not appear in YAML
+        assert!(
+            !yaml.contains("decision-makers"),
+            "Empty decision-makers should not be serialized"
+        );
+        assert!(
+            !yaml.contains("consulted"),
+            "Empty consulted should not be serialized"
+        );
+        assert!(
+            !yaml.contains("informed"),
+            "Empty informed should not be serialized"
+        );
+    }
+
+    #[test]
+    fn test_madr_parse_from_yaml() {
+        let yaml = r#"
+number: 1
+title: Use MADR Format
+date: 2024-09-15
+status: accepted
+decision-makers:
+  - Alice
+  - Bob
+consulted:
+  - Carol
+informed:
+  - Dave
+"#;
+        let adr: Adr = serde_yaml::from_str(yaml).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.title, "Use MADR Format");
+        assert_eq!(adr.decision_makers, vec!["Alice", "Bob"]);
+        assert_eq!(adr.consulted, vec!["Carol"]);
+        assert_eq!(adr.informed, vec!["Dave"]);
     }
 }

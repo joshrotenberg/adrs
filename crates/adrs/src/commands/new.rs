@@ -1,6 +1,6 @@
 //! New ADR command.
 
-use adrs_core::{LinkKind, Repository};
+use adrs_core::{AdrStatus, LinkKind, Repository, TemplateFormat};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -10,16 +10,40 @@ pub fn new(
     title: String,
     supersedes: Option<u32>,
     link: Option<String>,
+    format: Option<String>,
+    status: Option<String>,
 ) -> Result<()> {
-    let repo =
-        Repository::open(root).context("ADR repository not found. Run 'adrs init' first.")?;
+    // Parse template format if specified
+    let template_format = if let Some(ref fmt) = format {
+        fmt.parse::<TemplateFormat>()
+            .context("Invalid template format. Use 'nygard' or 'madr'.")?
+    } else {
+        TemplateFormat::default()
+    };
 
-    let (adr, path) = if let Some(superseded) = supersedes {
+    // Parse status if specified
+    let initial_status = if let Some(ref s) = status {
+        s.parse::<AdrStatus>().unwrap_or(AdrStatus::Proposed)
+    } else {
+        AdrStatus::Proposed
+    };
+
+    let repo = Repository::open(root)
+        .context("ADR repository not found. Run 'adrs init' first.")?
+        .with_template_format(template_format);
+
+    let (mut adr, path) = if let Some(superseded) = supersedes {
         repo.supersede(&title, superseded)
             .context("Failed to create superseding ADR")?
     } else {
         repo.new_adr(&title).context("Failed to create new ADR")?
     };
+
+    // Set custom status if specified (and not superseding, which sets its own status)
+    if supersedes.is_none() && status.is_some() {
+        adr.status = initial_status;
+        repo.update(&adr).context("Failed to update ADR status")?;
+    }
 
     // Handle linking if specified
     if let Some(link_spec) = link {
