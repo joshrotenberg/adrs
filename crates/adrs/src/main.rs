@@ -123,6 +123,12 @@ enum Commands {
         #[command(subcommand)]
         command: ExportCommands,
     },
+
+    /// Import ADRs from different formats
+    Import {
+        #[command(subcommand)]
+        command: ImportCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -181,9 +187,39 @@ enum ExportCommands {
         #[arg(value_name = "NUMBER")]
         adr: Option<u32>,
 
+        /// Export from a directory (no repository required)
+        #[arg(short, long, value_name = "PATH")]
+        dir: Option<PathBuf>,
+
         /// Pretty-print the JSON output
         #[arg(short, long)]
         pretty: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ImportCommands {
+    /// Import ADRs from JSON-ADR format
+    Json {
+        /// JSON-ADR file to import (use "-" for stdin)
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Import to a directory (no repository required)
+        #[arg(short, long, value_name = "PATH")]
+        dir: Option<PathBuf>,
+
+        /// Overwrite existing files
+        #[arg(short, long)]
+        overwrite: bool,
+
+        /// Renumber ADRs starting from next available number
+        #[arg(short, long)]
+        renumber: bool,
+
+        /// Use next-gen mode with YAML frontmatter
+        #[arg(long)]
+        ng: bool,
     },
 }
 
@@ -261,14 +297,43 @@ fn main() -> Result<()> {
                 } => commands::generate_book(&discovered.root, &output, title, description),
             }
         }
-        Commands::Export { command } => {
-            let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            match command {
-                ExportCommands::Json { adr, pretty } => {
-                    commands::export_json(&discovered.root, adr, pretty)
+        Commands::Export { command } => match command {
+            ExportCommands::Json { adr, dir, pretty } => {
+                if let Some(ref dir_path) = dir {
+                    // Export from arbitrary directory - no repo needed
+                    commands::export_json(&start_dir, adr, Some(dir_path), pretty)
+                } else {
+                    // Export from repository
+                    let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+                    commands::export_json(&discovered.root, adr, None, pretty)
                 }
             }
-        }
+        },
+        Commands::Import { command } => match command {
+            ImportCommands::Json {
+                file,
+                dir,
+                overwrite,
+                renumber,
+                ng,
+            } => {
+                if let Some(ref dir_path) = dir {
+                    // Import to arbitrary directory - no repo needed
+                    commands::import_json(
+                        &start_dir,
+                        &file,
+                        Some(dir_path),
+                        overwrite,
+                        renumber,
+                        ng,
+                    )
+                } else {
+                    // Import to repository
+                    let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+                    commands::import_json(&discovered.root, &file, None, overwrite, renumber, ng)
+                }
+            }
+        },
     }
 }
 

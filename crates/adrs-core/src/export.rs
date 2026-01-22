@@ -4,9 +4,12 @@
 //! a machine-readable interchange format for Architecture Decision Records.
 
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 
-use crate::{Adr, AdrLink, LinkKind, Repository, Result};
+use crate::{
+    Adr, AdrLink, AdrStatus, Config, LinkKind, Parser, Repository, Result, TemplateEngine,
+};
 
 /// JSON-ADR schema version.
 pub const JSON_ADR_VERSION: &str = "1.0.0";
@@ -267,6 +270,248 @@ pub fn export_repository(repo: &Repository) -> Result<JsonAdrBulkExport> {
 /// Export a single ADR to JSON-ADR format.
 pub fn export_adr(adr: &Adr) -> JsonAdr {
     JsonAdr::from(adr)
+}
+
+/// Single ADR wrapper for JSON-ADR format (used for single ADR import/export).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonAdrSingle {
+    /// JSON Schema reference.
+    #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+
+    /// JSON-ADR version.
+    pub version: String,
+
+    /// The ADR.
+    pub adr: JsonAdr,
+}
+
+/// Options for importing ADRs.
+#[derive(Debug, Clone, Default)]
+pub struct ImportOptions {
+    /// Overwrite existing files.
+    pub overwrite: bool,
+
+    /// Renumber ADRs starting from the next available number.
+    pub renumber: bool,
+
+    /// Use next-gen mode (YAML frontmatter).
+    pub ng_mode: bool,
+}
+
+/// Result of an import operation.
+#[derive(Debug, Clone)]
+pub struct ImportResult {
+    /// Number of ADRs successfully imported.
+    pub imported: usize,
+
+    /// Number of ADRs skipped (already exist).
+    pub skipped: usize,
+
+    /// Paths of imported files.
+    pub files: Vec<std::path::PathBuf>,
+
+    /// Warnings encountered during import.
+    pub warnings: Vec<String>,
+}
+
+/// Export all ADRs from a directory to JSON-ADR format.
+///
+/// This function scans a directory for markdown files that look like ADRs
+/// (files matching `NNNN-*.md` pattern) and parses them. Unlike `export_repository`,
+/// this does not require an initialized adrs repository.
+pub fn export_directory(dir: &Path) -> Result<JsonAdrBulkExport> {
+    let parser = Parser::new();
+    let mut adrs = Vec::new();
+
+    // Scan for markdown files
+    if dir.is_dir() {
+        let mut entries: Vec<_> = std::fs::read_dir(dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let path = e.path();
+                path.is_file()
+                    && path.extension().is_some_and(|ext| ext == "md")
+                    && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                        // Match NNNN-*.md pattern (adr-tools style)
+                        n.len() > 5 && n[..4].chars().all(|c| c.is_ascii_digit())
+                    })
+            })
+            .collect();
+
+        // Sort by filename for consistent ordering
+        entries.sort_by_key(|e| e.path());
+
+        for entry in entries {
+            let path = entry.path();
+            match parser.parse_file(&path) {
+                Ok(adr) => adrs.push(JsonAdr::from(&adr)),
+                Err(e) => {
+                    // Log warning but continue with other files
+                    eprintln!("Warning: Failed to parse {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+
+    let adr_dir = dir.display().to_string();
+    Ok(JsonAdrBulkExport::new(adrs).with_repository(None, adr_dir))
+}
+
+/// Convert a JsonAdr back to an Adr for rendering.
+fn json_adr_to_adr(json_adr: &JsonAdr) -> Result<Adr> {
+    let date = time::Date::parse(
+        &json_adr.date,
+        &time::format_description::well_known::Iso8601::DATE,
+    )
+    .unwrap_or_else(|_| crate::parse::today());
+
+    let status = json_adr.status.parse::<AdrStatus>().unwrap_or_default();
+
+    let links: Vec<AdrLink> = json_adr
+        .links
+        .iter()
+        .map(|l| AdrLink {
+            target: l.target,
+            kind: string_to_link_kind(&l.link_type),
+            description: l.description.clone(),
+        })
+        .collect();
+
+    Ok(Adr {
+        number: json_adr.number,
+        title: json_adr.title.clone(),
+        date,
+        status,
+        links,
+        decision_makers: json_adr.deciders.clone(),
+        consulted: json_adr.consulted.clone(),
+        informed: json_adr.informed.clone(),
+        context: json_adr.context.clone().unwrap_or_default(),
+        decision: json_adr.decision.clone().unwrap_or_default(),
+        consequences: json_adr.consequences.clone().unwrap_or_default(),
+        path: None,
+    })
+}
+
+fn string_to_link_kind(s: &str) -> LinkKind {
+    match s.to_lowercase().as_str() {
+        "supersedes" => LinkKind::Supersedes,
+        "superseded-by" => LinkKind::SupersededBy,
+        "amends" => LinkKind::Amends,
+        "amended-by" => LinkKind::AmendedBy,
+        "relates-to" => LinkKind::RelatesTo,
+        other => LinkKind::Custom(other.to_string()),
+    }
+}
+
+/// Import ADRs from a JSON-ADR bulk export into a directory.
+///
+/// This creates markdown files from the JSON-ADR data. It can be used
+/// to populate a new ADR directory or migrate ADRs between projects.
+pub fn import_to_directory(
+    json_data: &str,
+    dir: &Path,
+    options: &ImportOptions,
+) -> Result<ImportResult> {
+    // Parse the JSON - try bulk format first, then single
+    let json_adrs: Vec<JsonAdr> =
+        if let Ok(bulk) = serde_json::from_str::<JsonAdrBulkExport>(json_data) {
+            bulk.adrs
+        } else if let Ok(single) = serde_json::from_str::<JsonAdrSingle>(json_data) {
+            vec![single.adr]
+        } else if let Ok(adr) = serde_json::from_str::<JsonAdr>(json_data) {
+            vec![adr]
+        } else {
+            return Err(crate::Error::InvalidFormat {
+                path: PathBuf::new(),
+                reason: "Invalid JSON-ADR format".to_string(),
+            });
+        };
+
+    // Ensure directory exists
+    std::fs::create_dir_all(dir)?;
+
+    // If renumbering, find the next available number
+    let mut next_number = if options.renumber {
+        find_next_number(dir)?
+    } else {
+        0
+    };
+
+    let mut result = ImportResult {
+        imported: 0,
+        skipped: 0,
+        files: Vec::new(),
+        warnings: Vec::new(),
+    };
+
+    // Create config for template rendering
+    let config = Config {
+        adr_dir: dir.to_path_buf(),
+        mode: if options.ng_mode {
+            crate::ConfigMode::NextGen
+        } else {
+            crate::ConfigMode::default()
+        },
+        ..Default::default()
+    };
+
+    let engine = TemplateEngine::new();
+
+    for json_adr in json_adrs {
+        let mut adr = json_adr_to_adr(&json_adr)?;
+
+        // Renumber if requested
+        if options.renumber {
+            adr.number = next_number;
+            next_number += 1;
+        }
+
+        let filename = adr.filename();
+        let filepath = dir.join(&filename);
+
+        // Check if file exists
+        if filepath.exists() && !options.overwrite {
+            result.skipped += 1;
+            result.warnings.push(format!(
+                "Skipped {}: file already exists (use --overwrite to replace)",
+                filename
+            ));
+            continue;
+        }
+
+        // Render the ADR to markdown
+        let content = engine.render(&adr, &config)?;
+
+        // Write the file
+        std::fs::write(&filepath, content)?;
+
+        result.imported += 1;
+        result.files.push(filepath);
+    }
+
+    Ok(result)
+}
+
+/// Find the next available ADR number in a directory.
+fn find_next_number(dir: &Path) -> Result<u32> {
+    let mut max_number = 0u32;
+
+    if dir.is_dir() {
+        for entry in std::fs::read_dir(dir)?.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && name.len() > 4
+                && name.ends_with(".md")
+                && let Ok(num) = name[..4].parse::<u32>()
+            {
+                max_number = max_number.max(num);
+            }
+        }
+    }
+
+    Ok(max_number + 1)
 }
 
 #[cfg(test)]
