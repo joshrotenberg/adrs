@@ -1,79 +1,149 @@
 # adrs
 
-![Crates.io Version](https://img.shields.io/crates/v/adrs)
+[![Crates.io Version](https://img.shields.io/crates/v/adrs)](https://crates.io/crates/adrs)
 [![crates.io](https://img.shields.io/crates/d/adrs.svg)](https://crates.io/crates/adrs)
-[![Rust](https://github.com/joshrotenberg/adrs/workflows/CI/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ACI)
+[![CI](https://github.com/joshrotenberg/adrs/workflows/CI/badge.svg)](https://github.com/joshrotenberg/adrs/actions?query=workflow%3ACI)
 [![dependency status](https://deps.rs/repo/github/joshrotenberg/adrs/status.svg)](https://deps.rs/repo/github/joshrotenberg/adrs)
 
-`adrs` is a command-line tool for managing [Architectural Decision Records](https://adr.github.io).
+A command-line tool for creating and managing [Architecture Decision Records](https://adr.github.io) (ADRs).
+
+## Features
+
+- **adr-tools compatible** - works with existing ADR repositories
+- **Multiple formats** - supports Nygard (classic) and [MADR 4.0.0](https://adr.github.io/madr/) formats
+- **Template variants** - full, minimal, and bare templates
+- **Repository health checks** - `doctor` command finds issues
+- **Config discovery** - automatically finds ADR directory from subdirectories
+- **Cross-platform** - macOS, Linux, and Windows binaries
 
 ## Installation
 
-Homebrew:
+### Homebrew (macOS/Linux)
 
 ```sh
-brew tap joshrotenberg/brew
-brew install adrs
+brew install joshrotenberg/brew/adrs
 ```
 
-From source (requires the Rust [toolchain](https://rustup.rs)):
-
-```sh
-git clone https://github.com/joshrotenberg/adrs
-cd adrs
-cargo install
-```
-
-Via `cargo` (aslo requires the Rust toolchain):
+### Cargo
 
 ```sh
 cargo install adrs
 ```
 
-Via a released binary:
+### Docker
 
-See [Releases](https://github.com/joshrotenberg/adrs/releases).
-
-## Command Line
-
-```zsh
-Architectural Decision Record command line tool
-
-Usage: adrs <COMMAND>
-
-Commands:
-  init      Initializes the directory of Architecture Decision Records
-  new       Create a new, numbered Architectural Decision Record
-  edit      Edit an existing Architectural Decision Record
-  link      Link Architectural Decision Records
-  list      List Architectural Decision Records
-  config    Show the current configuration
-  generate  Generates summary documentation about the Architectural Decision Records
-  help      Print this message or the help of the given subcommand(s)
-
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
+```sh
+docker run --rm -v $(pwd):/work ghcr.io/joshrotenberg/adrs init
 ```
 
-### Custom templates
+### Binary releases
 
-The `adrs new` command allows passing in custom templates using the
-[handlebars templating language](https://handlebarsjs.com/). Five template
-variables are respected:
+Download from [GitHub Releases](https://github.com/joshrotenberg/adrs/releases).
 
-| Variable name | Value                                        |
-|---------------|----------------------------------------------|
-| number        | Index of ADR                                 |
-| date          | Current date                                 |
-| title         | Title of ADR                                 |
-| superceded    | Array of markdown links to superceded ADRs   |
-| linked        | Array of markdown links to linked ADRs       |
+## Quick Start
+
+```sh
+# Initialize a new ADR repository
+adrs init
+
+# Create your first decision
+adrs new "Use PostgreSQL for persistence"
+
+# List all ADRs
+adrs list
+
+# Check repository health
+adrs doctor
+```
+
+## Usage
+
+```
+adrs [OPTIONS] <COMMAND>
+
+Commands:
+  init      Initialize a new ADR repository
+  new       Create a new ADR
+  edit      Edit an existing ADR
+  list      List all ADRs
+  link      Link two ADRs together
+  config    Show configuration
+  doctor    Check repository health
+  generate  Generate documentation (toc, graph, book)
+
+Options:
+      --ng         Enable NextGen mode with YAML frontmatter
+  -C, --cwd <DIR>  Run from a different directory
+  -h, --help       Print help
+  -V, --version    Print version
+```
+
+## Examples
+
+### Create ADRs with different formats
+
+```sh
+# Classic Nygard format (default)
+adrs new "Use REST API"
+
+# MADR 4.0.0 format
+adrs new --format madr "Use GraphQL"
+
+# Minimal template
+adrs new --variant minimal "Quick decision"
+```
+
+### Supersede and link decisions
+
+```sh
+# Supersede an existing ADR
+adrs new --supersedes 2 "Use MySQL instead"
+
+# Link related ADRs
+adrs link 3 "Amends" 1 "Amended by"
+```
+
+### Generate documentation
+
+```sh
+# Table of contents
+adrs generate toc > doc/adr/README.md
+
+# Graphviz dependency graph
+adrs generate graph | dot -Tsvg > doc/adr/graph.svg
+
+# mdbook
+adrs generate book && cd book && mdbook serve
+```
+
+## Library
+
+`adrs` is built on the `adrs-core` library, which can be used independently:
+
+```toml
+[dependencies]
+adrs-core = "0.5"
+```
+
+```rust
+use adrs_core::Repository;
+
+let repo = Repository::open(".")?;
+for adr in repo.list()? {
+    println!("{}: {}", adr.number, adr.title);
+}
+```
+
+See [library documentation](https://docs.rs/adrs-core) for more details.
+
+## Documentation
+
+Full documentation: [joshrotenberg.github.io/adrs-book](https://joshrotenberg.github.io/adrs-book/)
 
 ## Contributing
 
-Contributions absolutely welcome. See the current [issues](https://github.com/joshrotenberg/adrs/issues).
+Contributions welcome! See [issues](https://github.com/joshrotenberg/adrs/issues) or open a new one.
 
 ## License
 
-See [LICENSE-MIT](LICENSE-MIT) or [LICENSE-APACHE-2.0](LICENSE-APACHE-.20).
+MIT or Apache-2.0
