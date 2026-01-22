@@ -496,3 +496,104 @@ fn scenario_edit_workflow() {
 
     temp.close().unwrap();
 }
+
+// ============================================================================
+// Scenario: Status Change Workflow
+// ============================================================================
+
+/// User creates ADRs and changes their status through the decision lifecycle.
+#[test]
+fn scenario_status_workflow() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Setup: Initialize repository
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Step 1: Create a new ADR (starts as Proposed)
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Use Redis for caching"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    let redis_adr = temp.child("doc/adr/0002-use-redis-for-caching.md");
+    redis_adr.assert(predicate::path::exists());
+    let content = fs::read_to_string(redis_adr.path()).unwrap();
+    assert!(
+        content.contains("Proposed"),
+        "New ADR should start with Proposed status"
+    );
+
+    // Step 2: After team review, mark as accepted
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "accepted"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status changed to Accepted"));
+
+    let content = fs::read_to_string(redis_adr.path()).unwrap();
+    assert!(
+        content.contains("Accepted"),
+        "ADR status should be updated to Accepted"
+    );
+
+    // Step 3: Create a better alternative
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Use Memcached for caching"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // Step 4: Mark old decision as superseded with automatic link
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "superseded", "--by", "3"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("superseded by 3"));
+
+    // Verify old ADR has superseded status and link
+    let content = fs::read_to_string(redis_adr.path()).unwrap();
+    assert!(
+        content.contains("Superseded"),
+        "Old ADR should be marked as Superseded"
+    );
+    assert!(
+        content.contains("Superseded by [3."),
+        "Old ADR should have superseded-by link"
+    );
+
+    // Step 5: Mark new decision as accepted
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "3", "accepted"])
+        .assert()
+        .success();
+
+    let memcached_adr = temp.child("doc/adr/0003-use-memcached-for-caching.md");
+    let content = fs::read_to_string(memcached_adr.path()).unwrap();
+    assert!(content.contains("Accepted"), "New ADR should be Accepted");
+
+    // Step 6: Later decide to deprecate caching altogether
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "3", "deprecated"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status changed to Deprecated"));
+
+    let content = fs::read_to_string(memcached_adr.path()).unwrap();
+    assert!(
+        content.contains("Deprecated"),
+        "ADR should be marked as Deprecated"
+    );
+
+    temp.close().unwrap();
+}

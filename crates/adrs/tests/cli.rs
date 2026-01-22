@@ -327,6 +327,201 @@ fn test_link_help() {
 }
 
 // ============================================================================
+// Status Command
+// ============================================================================
+
+#[test]
+fn test_status_help() {
+    adrs()
+        .args(["status", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Change an ADR's status"));
+}
+
+#[test]
+fn test_status_change_to_accepted() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Initialize and create an ADR
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Test decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // Change status to accepted
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "accepted"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status changed to Accepted"));
+
+    // Verify the file was updated
+    let adr_path = temp.child("doc/adr/0002-test-decision.md");
+    let content = fs::read_to_string(adr_path.path()).unwrap();
+    assert!(content.contains("Accepted"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_status_change_to_deprecated() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Old decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "deprecated"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status changed to Deprecated"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_status_superseded_with_by_flag() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create two ADRs
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Old decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "New decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // Mark ADR 2 as superseded by ADR 3
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "superseded", "--by", "3"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("superseded by 3"));
+
+    // Verify the superseded-by link was added
+    let adr_path = temp.child("doc/adr/0002-old-decision.md");
+    let content = fs::read_to_string(adr_path.path()).unwrap();
+    assert!(content.contains("Superseded"));
+    assert!(content.contains("Superseded by"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_status_custom_value() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Draft decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // Set custom status
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "draft"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status changed to draft"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_status_adr_not_found() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Try to change status of non-existent ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "99", "accepted"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found").or(predicate::str::contains("Failed")));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_status_by_flag_requires_superseded() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Test"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // Try to use --by with accepted status (should fail)
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "accepted", "--by", "1"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--by can only be used with 'superseded'",
+        ));
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // Format Flag Tests
 // ============================================================================
 
