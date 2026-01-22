@@ -13,7 +13,7 @@ name = "adrs"
 path = "src/main.rs"
 
 [dependencies]
-adrs-core = { path = "../adrs-core", version = "0.4.0" }
+adrs-core.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 edit.workspace = true
