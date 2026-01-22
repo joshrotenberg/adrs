@@ -301,6 +301,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    // ========== Initialization Tests ==========
+
     #[test]
     fn test_init_repository() {
         let temp = TempDir::new().unwrap();
@@ -325,6 +327,82 @@ mod tests {
     }
 
     #[test]
+    fn test_init_repository_custom_dir() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), Some("decisions".into()), false).unwrap();
+
+        assert!(temp.path().join("decisions").exists());
+        assert_eq!(repo.config().adr_dir, PathBuf::from("decisions"));
+    }
+
+    #[test]
+    fn test_init_repository_nested_dir() {
+        let temp = TempDir::new().unwrap();
+        let _repo =
+            Repository::init(temp.path(), Some("docs/architecture/adr".into()), false).unwrap();
+
+        assert!(temp.path().join("docs/architecture/adr").exists());
+    }
+
+    #[test]
+    fn test_init_repository_already_exists() {
+        let temp = TempDir::new().unwrap();
+        Repository::init(temp.path(), None, false).unwrap();
+
+        let result = Repository::init(temp.path(), None, false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_init_creates_first_adr() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let adr = repo.get(1).unwrap();
+        assert_eq!(adr.title, "Record architecture decisions");
+        assert_eq!(adr.status, AdrStatus::Accepted);
+        assert!(!adr.context.is_empty());
+        assert!(!adr.decision.is_empty());
+        assert!(!adr.consequences.is_empty());
+    }
+
+    // ========== Open Tests ==========
+
+    #[test]
+    fn test_open_repository() {
+        let temp = TempDir::new().unwrap();
+        Repository::init(temp.path(), None, false).unwrap();
+
+        let repo = Repository::open(temp.path()).unwrap();
+        assert_eq!(repo.list().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_open_repository_not_found() {
+        let temp = TempDir::new().unwrap();
+        let result = Repository::open(temp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_open_or_default() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::open_or_default(temp.path());
+        assert_eq!(repo.config().adr_dir, PathBuf::from("doc/adr"));
+    }
+
+    #[test]
+    fn test_open_or_default_existing() {
+        let temp = TempDir::new().unwrap();
+        Repository::init(temp.path(), Some("custom".into()), false).unwrap();
+
+        let repo = Repository::open_or_default(temp.path());
+        assert_eq!(repo.config().adr_dir, PathBuf::from("custom"));
+    }
+
+    // ========== Create and List Tests ==========
+
+    #[test]
     fn test_create_and_list() {
         let temp = TempDir::new().unwrap();
         let repo = Repository::init(temp.path(), None, false).unwrap();
@@ -334,6 +412,78 @@ mod tests {
 
         let adrs = repo.list().unwrap();
         assert_eq!(adrs.len(), 2);
+    }
+
+    #[test]
+    fn test_create_multiple() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        repo.new_adr("Second").unwrap();
+        repo.new_adr("Third").unwrap();
+        repo.new_adr("Fourth").unwrap();
+
+        let adrs = repo.list().unwrap();
+        assert_eq!(adrs.len(), 4);
+        assert_eq!(adrs[0].number, 1);
+        assert_eq!(adrs[1].number, 2);
+        assert_eq!(adrs[2].number, 3);
+        assert_eq!(adrs[3].number, 4);
+    }
+
+    #[test]
+    fn test_list_sorted_by_number() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        repo.new_adr("B").unwrap();
+        repo.new_adr("A").unwrap();
+        repo.new_adr("C").unwrap();
+
+        let adrs = repo.list().unwrap();
+        assert!(adrs.windows(2).all(|w| w[0].number < w[1].number));
+    }
+
+    #[test]
+    fn test_next_number() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        assert_eq!(repo.next_number().unwrap(), 2);
+
+        repo.new_adr("Second").unwrap();
+        assert_eq!(repo.next_number().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_create_file_exists() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let (_, path) = repo.new_adr("Test ADR").unwrap();
+        assert!(path.exists());
+        assert!(path.to_string_lossy().contains("0002-test-adr.md"));
+    }
+
+    // ========== Get and Find Tests ==========
+
+    #[test]
+    fn test_get_by_number() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Second").unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(adr.title, "Second");
+    }
+
+    #[test]
+    fn test_get_not_found() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let result = repo.get(99);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -355,6 +505,28 @@ mod tests {
     }
 
     #[test]
+    fn test_find_fuzzy_match() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Use PostgreSQL for database").unwrap();
+        repo.new_adr("Use Redis for caching").unwrap();
+
+        let adr = repo.find("postgres").unwrap();
+        assert!(adr.title.contains("PostgreSQL"));
+    }
+
+    #[test]
+    fn test_find_not_found() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let result = repo.find("nonexistent");
+        assert!(result.is_err());
+    }
+
+    // ========== Supersede Tests ==========
+
+    #[test]
     fn test_supersede() {
         let temp = TempDir::new().unwrap();
         let repo = Repository::init(temp.path(), None, false).unwrap();
@@ -366,5 +538,253 @@ mod tests {
 
         let old_adr = repo.get(1).unwrap();
         assert_eq!(old_adr.status, AdrStatus::Superseded);
+    }
+
+    #[test]
+    fn test_supersede_creates_bidirectional_links() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        repo.supersede("New approach", 1).unwrap();
+
+        let old_adr = repo.get(1).unwrap();
+        assert_eq!(old_adr.links.len(), 1);
+        assert_eq!(old_adr.links[0].target, 2);
+        assert_eq!(old_adr.links[0].kind, LinkKind::SupersededBy);
+
+        let new_adr = repo.get(2).unwrap();
+        assert_eq!(new_adr.links.len(), 1);
+        assert_eq!(new_adr.links[0].target, 1);
+        assert_eq!(new_adr.links[0].kind, LinkKind::Supersedes);
+    }
+
+    #[test]
+    fn test_supersede_not_found() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let result = repo.supersede("New", 99);
+        assert!(result.is_err());
+    }
+
+    // ========== Link Tests ==========
+
+    #[test]
+    fn test_link_adrs() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Second").unwrap();
+
+        repo.link(1, 2, LinkKind::Amends, LinkKind::AmendedBy)
+            .unwrap();
+
+        let adr1 = repo.get(1).unwrap();
+        assert_eq!(adr1.links.len(), 1);
+        assert_eq!(adr1.links[0].target, 2);
+        assert_eq!(adr1.links[0].kind, LinkKind::Amends);
+
+        let adr2 = repo.get(2).unwrap();
+        assert_eq!(adr2.links.len(), 1);
+        assert_eq!(adr2.links[0].target, 1);
+        assert_eq!(adr2.links[0].kind, LinkKind::AmendedBy);
+    }
+
+    #[test]
+    fn test_link_relates_to() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        repo.new_adr("Second").unwrap();
+
+        repo.link(1, 2, LinkKind::RelatesTo, LinkKind::RelatesTo)
+            .unwrap();
+
+        let adr1 = repo.get(1).unwrap();
+        assert_eq!(adr1.links[0].kind, LinkKind::RelatesTo);
+
+        let adr2 = repo.get(2).unwrap();
+        assert_eq!(adr2.links[0].kind, LinkKind::RelatesTo);
+    }
+
+    // ========== Update Tests ==========
+
+    #[test]
+    fn test_update_adr() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let mut adr = repo.get(1).unwrap();
+        adr.status = AdrStatus::Deprecated;
+
+        repo.update(&adr).unwrap();
+
+        let updated = repo.get(1).unwrap();
+        assert_eq!(updated.status, AdrStatus::Deprecated);
+    }
+
+    #[test]
+    fn test_update_preserves_content() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let mut adr = repo.get(1).unwrap();
+        let original_title = adr.title.clone();
+        adr.status = AdrStatus::Deprecated;
+
+        repo.update(&adr).unwrap();
+
+        let updated = repo.get(1).unwrap();
+        assert_eq!(updated.title, original_title);
+    }
+
+    // ========== Read/Write Content Tests ==========
+
+    #[test]
+    fn test_read_content() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let adr = repo.get(1).unwrap();
+        let content = repo.read_content(&adr).unwrap();
+
+        assert!(content.contains("Record architecture decisions"));
+        assert!(content.contains("## Status"));
+    }
+
+    #[test]
+    fn test_write_content() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let adr = repo.get(1).unwrap();
+        let new_content = "# 1. Modified\n\n## Status\n\nAccepted\n";
+
+        repo.write_content(&adr, new_content).unwrap();
+
+        let content = repo.read_content(&adr).unwrap();
+        assert!(content.contains("Modified"));
+    }
+
+    // ========== Template Configuration Tests ==========
+
+    #[test]
+    fn test_with_template_format() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false)
+            .unwrap()
+            .with_template_format(TemplateFormat::Madr);
+
+        let (_, path) = repo.new_adr("MADR Test").unwrap();
+        let content = fs::read_to_string(path).unwrap();
+
+        assert!(content.contains("Context and Problem Statement"));
+    }
+
+    #[test]
+    fn test_with_custom_template() {
+        let temp = TempDir::new().unwrap();
+        let custom = Template::from_string("custom", "# ADR {{ number }}: {{ title }}");
+        let repo = Repository::init(temp.path(), None, false)
+            .unwrap()
+            .with_custom_template(custom);
+
+        let (_, path) = repo.new_adr("Custom Test").unwrap();
+        let content = fs::read_to_string(path).unwrap();
+
+        assert_eq!(content, "# ADR 2: Custom Test");
+    }
+
+    // ========== Accessor Tests ==========
+
+    #[test]
+    fn test_root() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        assert_eq!(repo.root(), temp.path());
+    }
+
+    #[test]
+    fn test_config() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), Some("custom".into()), true).unwrap();
+
+        assert_eq!(repo.config().adr_dir, PathBuf::from("custom"));
+        assert!(repo.config().is_next_gen());
+    }
+
+    #[test]
+    fn test_adr_path() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), Some("my/adrs".into()), false).unwrap();
+
+        assert_eq!(repo.adr_path(), temp.path().join("my/adrs"));
+    }
+
+    // ========== NextGen Mode Tests ==========
+
+    #[test]
+    fn test_ng_mode_creates_frontmatter() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let (_, path) = repo.new_adr("NG Test").unwrap();
+        let content = fs::read_to_string(path).unwrap();
+
+        assert!(content.starts_with("---"));
+        assert!(content.contains("number: 2"));
+        assert!(content.contains("title: NG Test"));
+    }
+
+    #[test]
+    fn test_ng_mode_parses_frontmatter() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        repo.new_adr("NG ADR").unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(adr.title, "NG ADR");
+        assert_eq!(adr.number, 2);
+    }
+
+    // ========== Edge Cases ==========
+
+    #[test]
+    fn test_list_empty_after_init_removal() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        // Remove the initial ADR
+        fs::remove_file(
+            repo.adr_path()
+                .join("0001-record-architecture-decisions.md"),
+        )
+        .unwrap();
+
+        let adrs = repo.list().unwrap();
+        assert!(adrs.is_empty());
+    }
+
+    #[test]
+    fn test_list_ignores_non_adr_files() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        // Create non-ADR files
+        fs::write(repo.adr_path().join("README.md"), "# README").unwrap();
+        fs::write(repo.adr_path().join("notes.txt"), "Notes").unwrap();
+
+        let adrs = repo.list().unwrap();
+        assert_eq!(adrs.len(), 1); // Only the initial ADR
+    }
+
+    #[test]
+    fn test_special_characters_in_title() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let (adr, path) = repo.new_adr("Use C++ & Rust!").unwrap();
+        assert!(path.exists());
+        assert_eq!(adr.title, "Use C++ & Rust!");
     }
 }

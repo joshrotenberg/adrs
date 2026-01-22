@@ -264,7 +264,86 @@ status: {{ status | lower }}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AdrStatus, ConfigMode};
+    use crate::{AdrLink, AdrStatus, ConfigMode, LinkKind};
+    use tempfile::TempDir;
+    use test_case::test_case;
+
+    // ========== TemplateFormat Tests ==========
+
+    #[test]
+    fn test_template_format_default() {
+        assert_eq!(TemplateFormat::default(), TemplateFormat::Nygard);
+    }
+
+    #[test_case("nygard" => TemplateFormat::Nygard; "nygard")]
+    #[test_case("Nygard" => TemplateFormat::Nygard; "nygard capitalized")]
+    #[test_case("NYGARD" => TemplateFormat::Nygard; "nygard uppercase")]
+    #[test_case("default" => TemplateFormat::Nygard; "default alias")]
+    #[test_case("madr" => TemplateFormat::Madr; "madr")]
+    #[test_case("MADR" => TemplateFormat::Madr; "madr uppercase")]
+    fn test_template_format_parse(input: &str) -> TemplateFormat {
+        input.parse().unwrap()
+    }
+
+    #[test]
+    fn test_template_format_parse_unknown() {
+        let result: Result<TemplateFormat> = "unknown".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_template_format_display() {
+        assert_eq!(TemplateFormat::Nygard.to_string(), "nygard");
+        assert_eq!(TemplateFormat::Madr.to_string(), "madr");
+    }
+
+    // ========== Template Creation Tests ==========
+
+    #[test]
+    fn test_template_from_string() {
+        let template = Template::from_string("test", "# {{ title }}");
+        assert_eq!(template.name, "test");
+        assert_eq!(template.content, "# {{ title }}");
+    }
+
+    #[test]
+    fn test_template_from_file() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("custom.md");
+        std::fs::write(&path, "# {{ number }}. {{ title }}").unwrap();
+
+        let template = Template::from_file(&path).unwrap();
+        assert_eq!(template.name, "custom.md");
+        assert!(template.content.contains("{{ number }}"));
+    }
+
+    #[test]
+    fn test_template_from_file_not_found() {
+        let result = Template::from_file(Path::new("/nonexistent/template.md"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_template_builtin_nygard() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        assert_eq!(template.name, "nygard");
+        assert!(template.content.contains("## Status"));
+        assert!(template.content.contains("## Context"));
+        assert!(template.content.contains("## Decision"));
+        assert!(template.content.contains("## Consequences"));
+    }
+
+    #[test]
+    fn test_template_builtin_madr() {
+        let template = Template::builtin(TemplateFormat::Madr);
+        assert_eq!(template.name, "madr");
+        assert!(template.content.contains("Context and Problem Statement"));
+        assert!(template.content.contains("Decision Drivers"));
+        assert!(template.content.contains("Considered Options"));
+        assert!(template.content.contains("Decision Outcome"));
+    }
+
+    // ========== Template Rendering - Nygard Compatible Mode ==========
 
     #[test]
     fn test_render_nygard_compatible() {
@@ -282,6 +361,80 @@ mod tests {
     }
 
     #[test]
+    fn test_render_nygard_all_statuses() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let config = Config::default();
+
+        for (status, expected_text) in [
+            (AdrStatus::Proposed, "Proposed"),
+            (AdrStatus::Accepted, "Accepted"),
+            (AdrStatus::Deprecated, "Deprecated"),
+            (AdrStatus::Superseded, "Superseded"),
+            (AdrStatus::Custom("Draft".into()), "Draft"),
+        ] {
+            let mut adr = Adr::new(1, "Test");
+            adr.status = status;
+
+            let output = template.render(&adr, &config).unwrap();
+            assert!(
+                output.contains(expected_text),
+                "Output should contain '{expected_text}': {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_render_nygard_with_content() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(1, "Use Rust");
+        adr.status = AdrStatus::Accepted;
+        adr.context = "We need a safe language.".to_string();
+        adr.decision = "We will use Rust.".to_string();
+        adr.consequences = "Better memory safety.".to_string();
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        assert!(output.contains("We need a safe language."));
+        assert!(output.contains("We will use Rust."));
+        assert!(output.contains("Better memory safety."));
+    }
+
+    #[test]
+    fn test_render_nygard_with_links() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(2, "Use PostgreSQL");
+        adr.status = AdrStatus::Accepted;
+        adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        assert!(output.contains("Supersedes"));
+        assert!(output.contains("[1. ...]"));
+        assert!(output.contains("0001-....md"));
+    }
+
+    #[test]
+    fn test_render_nygard_with_multiple_links() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(5, "Combined Decision");
+        adr.status = AdrStatus::Accepted;
+        adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
+        adr.links.push(AdrLink::new(2, LinkKind::Amends));
+        adr.links.push(AdrLink::new(3, LinkKind::SupersededBy));
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        assert!(output.contains("Supersedes"));
+        assert!(output.contains("Amends"));
+        assert!(output.contains("Superseded by"));
+    }
+
+    // ========== Template Rendering - Nygard NextGen Mode ==========
+
+    #[test]
     fn test_render_nygard_ng() {
         let template = Template::builtin(TemplateFormat::Nygard);
         let mut adr = Adr::new(1, "Use Rust");
@@ -295,19 +448,270 @@ mod tests {
 
         assert!(output.starts_with("---")); // Has frontmatter in ng mode
         assert!(output.contains("number: 1"));
+        assert!(output.contains("title: Use Rust"));
         assert!(output.contains("status: accepted"));
     }
 
     #[test]
-    fn test_template_format_parse() {
-        assert_eq!(
-            "nygard".parse::<TemplateFormat>().unwrap(),
-            TemplateFormat::Nygard
+    fn test_render_nygard_ng_with_links() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(2, "Test");
+        adr.status = AdrStatus::Accepted;
+        adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
+
+        let config = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+        let output = template.render(&adr, &config).unwrap();
+
+        assert!(output.contains("links:"));
+        assert!(output.contains("target: 1"));
+    }
+
+    // ========== Template Rendering - MADR ==========
+
+    #[test]
+    fn test_render_madr_basic() {
+        let template = Template::builtin(TemplateFormat::Madr);
+        let mut adr = Adr::new(1, "Use Rust");
+        adr.status = AdrStatus::Accepted;
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        assert!(output.contains("# Use Rust"));
+        assert!(output.contains("* Status: Accepted"));
+        assert!(output.contains("## Context and Problem Statement"));
+        assert!(output.contains("## Decision Drivers"));
+        assert!(output.contains("## Considered Options"));
+        assert!(output.contains("## Decision Outcome"));
+    }
+
+    #[test]
+    fn test_render_madr_ng() {
+        let template = Template::builtin(TemplateFormat::Madr);
+        let mut adr = Adr::new(1, "Use Rust");
+        adr.status = AdrStatus::Accepted;
+
+        let config = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+        let output = template.render(&adr, &config).unwrap();
+
+        assert!(output.starts_with("---"));
+        assert!(output.contains("number: 1"));
+    }
+
+    // ========== Template Engine Tests ==========
+
+    #[test]
+    fn test_template_engine_new() {
+        let engine = TemplateEngine::new();
+        assert_eq!(engine.default_format, TemplateFormat::Nygard);
+        assert!(engine.custom_template.is_none());
+    }
+
+    #[test]
+    fn test_template_engine_default() {
+        let engine = TemplateEngine::default();
+        assert_eq!(engine.default_format, TemplateFormat::Nygard);
+    }
+
+    #[test]
+    fn test_template_engine_with_format() {
+        let engine = TemplateEngine::new().with_format(TemplateFormat::Madr);
+        assert_eq!(engine.default_format, TemplateFormat::Madr);
+    }
+
+    #[test]
+    fn test_template_engine_with_custom_template() {
+        let custom = Template::from_string("custom", "# {{ title }}");
+        let engine = TemplateEngine::new().with_custom_template(custom);
+        assert!(engine.custom_template.is_some());
+    }
+
+    #[test]
+    fn test_template_engine_with_custom_template_file() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("template.md");
+        std::fs::write(&path, "# {{ title }}").unwrap();
+
+        let engine = TemplateEngine::new()
+            .with_custom_template_file(&path)
+            .unwrap();
+        assert!(engine.custom_template.is_some());
+    }
+
+    #[test]
+    fn test_template_engine_with_custom_template_file_not_found() {
+        let result = TemplateEngine::new().with_custom_template_file(Path::new("/nonexistent.md"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_template_engine_template_builtin() {
+        let engine = TemplateEngine::new();
+        let template = engine.template();
+        assert_eq!(template.name, "nygard");
+    }
+
+    #[test]
+    fn test_template_engine_template_custom() {
+        let custom = Template::from_string("my-template", "# Custom");
+        let engine = TemplateEngine::new().with_custom_template(custom);
+        let template = engine.template();
+        assert_eq!(template.name, "my-template");
+    }
+
+    #[test]
+    fn test_template_engine_render() {
+        let engine = TemplateEngine::new();
+        let adr = Adr::new(1, "Test");
+        let config = Config::default();
+
+        let output = engine.render(&adr, &config).unwrap();
+        assert!(output.contains("# 1. Test"));
+    }
+
+    #[test]
+    fn test_template_engine_render_custom() {
+        let custom = Template::from_string("custom", "ADR {{ number }}: {{ title }}");
+        let engine = TemplateEngine::new().with_custom_template(custom);
+        let adr = Adr::new(42, "Custom ADR");
+        let config = Config::default();
+
+        let output = engine.render(&adr, &config).unwrap();
+        assert_eq!(output, "ADR 42: Custom ADR");
+    }
+
+    // ========== Custom Template Tests ==========
+
+    #[test]
+    fn test_custom_template_all_fields() {
+        let custom = Template::from_string(
+            "full",
+            r#"# {{ number }}. {{ title }}
+Date: {{ date }}
+Status: {{ status }}
+Context: {{ context }}
+Decision: {{ decision }}
+Consequences: {{ consequences }}
+Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         );
-        assert_eq!(
-            "madr".parse::<TemplateFormat>().unwrap(),
-            TemplateFormat::Madr
+
+        let mut adr = Adr::new(1, "Test");
+        adr.status = AdrStatus::Accepted;
+        adr.context = "Context text".into();
+        adr.decision = "Decision text".into();
+        adr.consequences = "Consequences text".into();
+        adr.links.push(AdrLink::new(2, LinkKind::Amends));
+
+        let config = Config::default();
+        let output = custom.render(&adr, &config).unwrap();
+
+        assert!(output.contains("# 1. Test"));
+        assert!(output.contains("Status: Accepted"));
+        assert!(output.contains("Context: Context text"));
+        assert!(output.contains("Decision: Decision text"));
+        assert!(output.contains("Consequences: Consequences text"));
+        assert!(output.contains("Amends 2"));
+    }
+
+    #[test]
+    fn test_custom_template_is_ng_flag() {
+        let custom = Template::from_string(
+            "ng-check",
+            r#"{% if is_ng %}NextGen Mode{% else %}Compatible Mode{% endif %}"#,
         );
-        assert!("unknown".parse::<TemplateFormat>().is_err());
+
+        let adr = Adr::new(1, "Test");
+
+        let compat_config = Config::default();
+        let output = custom.render(&adr, &compat_config).unwrap();
+        assert_eq!(output, "Compatible Mode");
+
+        let ng_config = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+        let output = custom.render(&adr, &ng_config).unwrap();
+        assert_eq!(output, "NextGen Mode");
+    }
+
+    #[test]
+    fn test_custom_template_link_kinds() {
+        let custom = Template::from_string(
+            "links",
+            r#"{% for link in links %}{{ link.kind }}|{% endfor %}"#,
+        );
+
+        let mut adr = Adr::new(1, "Test");
+        adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
+        adr.links.push(AdrLink::new(2, LinkKind::SupersededBy));
+        adr.links.push(AdrLink::new(3, LinkKind::Amends));
+        adr.links.push(AdrLink::new(4, LinkKind::AmendedBy));
+        adr.links.push(AdrLink::new(5, LinkKind::RelatesTo));
+        adr.links
+            .push(AdrLink::new(6, LinkKind::Custom("Depends on".into())));
+
+        let config = Config::default();
+        let output = custom.render(&adr, &config).unwrap();
+
+        assert!(output.contains("Supersedes|"));
+        assert!(output.contains("Superseded by|"));
+        assert!(output.contains("Amends|"));
+        assert!(output.contains("Amended by|"));
+        assert!(output.contains("Relates to|"));
+        assert!(output.contains("Depends on|"));
+    }
+
+    // ========== Error Cases ==========
+
+    #[test]
+    fn test_template_invalid_syntax() {
+        let custom = Template::from_string("invalid", "{{ unclosed");
+        let adr = Adr::new(1, "Test");
+        let config = Config::default();
+
+        let result = custom.render(&adr, &config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_template_undefined_variable() {
+        let custom = Template::from_string("undefined", "{{ nonexistent }}");
+        let adr = Adr::new(1, "Test");
+        let config = Config::default();
+
+        // minijinja treats undefined as empty string by default
+        let result = custom.render(&adr, &config);
+        assert!(result.is_ok());
+    }
+
+    // ========== Large Number Formatting ==========
+
+    #[test]
+    fn test_render_four_digit_number() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let adr = Adr::new(9999, "Large Number");
+        let config = Config::default();
+
+        let output = template.render(&adr, &config).unwrap();
+        assert!(output.contains("# 9999. Large Number"));
+    }
+
+    #[test]
+    fn test_render_link_number_formatting() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(2, "Test");
+        adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Link should use 4-digit padding
+        assert!(output.contains("0001-"));
     }
 }
