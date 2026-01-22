@@ -117,6 +117,12 @@ enum Commands {
         #[command(subcommand)]
         command: GenerateCommands,
     },
+
+    /// Export ADRs to different formats
+    Export {
+        #[command(subcommand)]
+        command: ExportCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -164,6 +170,20 @@ enum GenerateCommands {
         /// Book description
         #[arg(short, long)]
         description: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ExportCommands {
+    /// Export ADRs to JSON-ADR format
+    Json {
+        /// Export a single ADR by number
+        #[arg(value_name = "NUMBER")]
+        adr: Option<u32>,
+
+        /// Pretty-print the JSON output
+        #[arg(short, long)]
+        pretty: bool,
     },
 }
 
@@ -239,6 +259,14 @@ fn main() -> Result<()> {
                     title,
                     description,
                 } => commands::generate_book(&discovered.root, &output, title, description),
+            }
+        }
+        Commands::Export { command } => {
+            let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+            match command {
+                ExportCommands::Json { adr, pretty } => {
+                    commands::export_json(&discovered.root, adr, pretty)
+                }
             }
         }
     }

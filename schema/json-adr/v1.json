@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/joshrotenberg/adrs/main/schema/json-adr/v1.json",
+  "title": "JSON-ADR",
+  "description": "JSON schema for Architecture Decision Records",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/singleAdr" },
+    { "$ref": "#/$defs/bulkExport" }
+  ],
+  "$defs": {
+    "singleAdr": {
+      "type": "object",
+      "properties": {
+        "$schema": { "type": "string" },
+        "version": { "type": "string", "const": "1.0.0" },
+        "adr": { "$ref": "#/$defs/adr" }
+      },
+      "required": ["version", "adr"],
+      "additionalProperties": false
+    },
+    "bulkExport": {
+      "type": "object",
+      "properties": {
+        "$schema": { "type": "string" },
+        "version": { "type": "string", "const": "1.0.0" },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when this export was generated"
+        },
+        "tool": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" }
+          },
+          "required": ["name", "version"],
+          "additionalProperties": false
+        },
+        "repository": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "adr_directory": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "adrs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/adr" }
+        }
+      },
+      "required": ["version", "adrs"],
+      "additionalProperties": false
+    },
+    "adr": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier for the ADR"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Title of the decision"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current status (proposed, accepted, deprecated, superseded, rejected, or custom)"
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date when the decision was made"
+        },
+        "deciders": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "People who made the decision"
+        },
+        "consulted": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "People whose opinions were sought"
+        },
+        "informed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "People informed after the decision"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Categorization labels"
+        },
+        "context": {
+          "type": "string",
+          "description": "Background and problem statement"
+        },
+        "decision": {
+          "type": "string",
+          "description": "The decision that was made"
+        },
+        "consequences": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Simple list of consequences"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "positive": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "negative": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "risks": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              },
+              "additionalProperties": false,
+              "description": "Structured consequences with positive/negative/risks"
+            }
+          ]
+        },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/link" },
+          "description": "Relationships to other ADRs"
+        },
+        "custom_sections": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Custom sections not covered by standard fields"
+        },
+        "path": {
+          "type": "string",
+          "description": "Relative path to the source file"
+        }
+      },
+      "required": ["number", "title", "status", "date"],
+      "additionalProperties": false
+    },
+    "link": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Link type (supersedes, superseded-by, amends, amended-by, relates-to, or custom)"
+        },
+        "target": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "ADR number being linked to"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of the relationship"
+        }
+      },
+      "required": ["type", "target"],
+      "additionalProperties": false
+    }
+  }
+}
