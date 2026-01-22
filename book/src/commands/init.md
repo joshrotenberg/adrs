@@ -1,41 +1,102 @@
 # init
 
-## Overview
+Initialize a new ADR repository.
 
-The `init` command initializes a new ADR directory, using `doc/adr` by default. An alternate directory can optionally be supplied to the command
-to store ADRs in a different location. `init` will also create the `.adr-dir` file to store the directory location so that other commands
-can find the top level directory.
+## Usage
 
-`init` creates an initial ADR for you as well, noting the decision you've made to document your Architectural Decisions using ADRs.
-Good job by you.
-
-## Help
-
-```sh
-Initializes the directory of Architecture Decision Records
-
-Usage: adrs init [DIRECTORY]
-
-Arguments:
-  [DIRECTORY]  Directory to initialize [default: doc/adr]
-
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
 ```
+adrs init [OPTIONS] [DIRECTORY]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `[DIRECTORY]` | ADR directory path (default: `doc/adr`) |
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--ng` | Use NextGen mode (YAML frontmatter) |
+| `-C, --cwd <DIR>` | Working directory |
+| `-h, --help` | Print help |
+
+## Description
+
+The `init` command creates:
+
+1. A `.adr-dir` file in the current directory containing the ADR directory path
+2. The ADR directory (creates parent directories if needed)
+3. An initial ADR: `0001-record-architecture-decisions.md`
 
 ## Examples
 
-```sh
-# use the default location
-# an initial ADR will be created in doc/adr/0001-record-architecture-decisions.md
-adrs init
+### Basic Initialization
 
-# put your ADRs somewhere else
-# creates some/other/place/0001-record-architecture-decisions.md
-adrs init some/other/place
+```sh
+adrs init
 ```
 
-## Issues
+Creates:
+```
+.adr-dir          # Contains "doc/adr"
+doc/
+  adr/
+    0001-record-architecture-decisions.md
+```
 
-See the [cmd-init](https://github.com/joshrotenberg/adrs/labels/cmd-init) label for command specific issues.
+### Custom Directory
+
+```sh
+adrs init decisions
+```
+
+Creates:
+```
+.adr-dir          # Contains "decisions"
+decisions/
+  0001-record-architecture-decisions.md
+```
+
+### Nested Directory
+
+```sh
+adrs init docs/architecture/decisions
+```
+
+Creates the full directory path.
+
+### NextGen Mode
+
+```sh
+adrs init --ng
+```
+
+Creates the initial ADR with YAML frontmatter:
+
+```markdown
+---
+status: accepted
+date: 2024-01-15
+---
+
+# Record Architecture Decisions
+
+...
+```
+
+## Error Handling
+
+If the repository is already initialized (`.adr-dir` exists), the command will fail:
+
+```
+Error: ADR repository already initialized
+```
+
+To reinitialize, remove the `.adr-dir` file first.
+
+## Related
+
+- [config](./config.md) - Show current configuration
+- [new](./new.md) - Create additional ADRs

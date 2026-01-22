@@ -1,33 +1,64 @@
 # edit
 
-## Overview
+Edit an existing Architecture Decision Record.
 
-`edit` opens an ADR in your `VISUAL` or `EDITOR` that matches the given NAME argument.
+## Usage
 
-## Help
-
-```sh
-Edit an existing Architectural Decision Record
-
-Usage: adrs edit <NAME>
-
-Arguments:
-  <NAME>  The number of the ADR to edit
-
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
 ```
+adrs edit [OPTIONS] <ADR>
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<ADR>` | ADR to edit (number or search term) |
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--ng` | Use NextGen mode |
+| `-C, --cwd <DIR>` | Working directory |
+| `-h, --help` | Print help |
+
+## Description
+
+Opens an existing ADR in your editor. The ADR can be specified by:
+- Number (e.g., `1`, `12`)
+- Partial title match (fuzzy search)
 
 ## Examples
 
+### By Number
+
 ```sh
-# find and edit the first ADR
-adrs edit 1  # looks for 0001-...
-# find and edit the first ADR with the string "data" in the filename
-adrs edit data
+adrs edit 1
 ```
 
-## Issues
+Opens `0001-record-architecture-decisions.md` in your editor.
 
-See the [cmd-edit](https://github.com/joshrotenberg/adrs/labels/cmd-edit) label for command specific issues.
+### By Title
+
+```sh
+adrs edit postgresql
+```
+
+Finds and opens the ADR with "postgresql" in its title.
+
+### Fuzzy Matching
+
+```sh
+adrs edit "database"
+```
+
+Opens the best matching ADR containing "database".
+
+## Editor
+
+Uses the `$EDITOR` environment variable. See [new](./new.md#editor) for configuration.
+
+## Related
+
+- [new](./new.md) - Create a new ADR
+- [list](./list.md) - List ADRs to find the one to edit

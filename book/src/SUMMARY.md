@@ -1,7 +1,10 @@
 # Summary
 
 - [Introduction](./README.md)
+- [Installation](./installation.md)
 - [Configuration](./configuration.md)
+- [Formats](./formats.md)
+- [Templates](./templates.md)
 - [Commands](./commands/README.md)
   - [init](./commands/init.md)
   - [new](./commands/new.md)
@@ -9,8 +12,9 @@
   - [link](./commands/link.md)
   - [list](./commands/list.md)
   - [config](./commands/config.md)
+  - [doctor](./commands/doctor.md)
   - [generate](./commands/generate.md)
+- [Library Usage](./library.md)
 - [Resources](./resources.md)
 - [Contributing](./contributing.md)
-- [Project ADRs](./adrs.md)
 - [License](./license.md)

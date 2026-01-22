@@ -1,17 +1,50 @@
 # Commands
 
-`adrs` is a command line tool for creating and managing Architectural Decision Records based on
-the original [adr-tools](https://github.com/npryce/adr-tools).
+`adrs` provides commands for managing Architecture Decision Records.
 
-`adrs` supports the following list of commands:
+## Overview
 
-```shell
-  init      Initializes the directory of Architecture Decision Records
-  new       Create a new, numbered Architectural Decision Record
-  edit      Edit an existing Architectural Decision Record
-  link      Link Architectural Decision Records
-  list      List Architectural Decision Records
-  config    Show the current configuration
-  generate  Generates summary documentation about the Architectural Decision Records
+| Command | Description |
+|---------|-------------|
+| [init](./init.md) | Initialize a new ADR repository |
+| [new](./new.md) | Create a new ADR |
+| [edit](./edit.md) | Edit an existing ADR |
+| [link](./link.md) | Link two ADRs together |
+| [list](./list.md) | List all ADRs |
+| [config](./config.md) | Show configuration |
+| [doctor](./doctor.md) | Check repository health |
+| [generate](./generate.md) | Generate documentation |
+
+## Global Options
+
+These options are available for all commands:
+
+| Option | Description |
+|--------|-------------|
+| `--ng` | Use NextGen mode (YAML frontmatter) |
+| `-C, --cwd <DIR>` | Run as if started in `<DIR>` |
+| `-h, --help` | Print help information |
+| `-V, --version` | Print version information |
+
+## Usage
+
+```
+adrs [OPTIONS] <COMMAND>
+
+Commands:
+  init      Initialize a new ADR repository
+  new       Create a new ADR
+  edit      Edit an existing ADR
+  list      List all ADRs
+  link      Link two ADRs together
+  config    Show configuration
+  doctor    Check repository health
+  generate  Generate documentation
   help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --ng                 Use next-gen mode (YAML frontmatter, enhanced features)
+  -C, --cwd <WORKING_DIR>  Working directory (defaults to current directory)
+  -h, --help               Print help
+  -V, --version            Print version
 ```
