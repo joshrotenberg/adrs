@@ -439,7 +439,7 @@ pub fn import_to_directory(
     std::fs::create_dir_all(dir)?;
 
     // If renumbering, find the next available number
-    let mut next_number = if options.renumber {
+    let next_number = if options.renumber {
         find_next_number(dir)?
     } else {
         0
@@ -466,15 +466,47 @@ pub fn import_to_directory(
 
     let engine = TemplateEngine::new();
 
+    // First pass: collect all ADRs and build the renumber map
+    let mut adrs_to_import = Vec::new();
+    let mut temp_next_number = next_number;
+
     for json_adr in json_adrs {
         let mut adr = json_adr_to_adr(&json_adr)?;
 
         // Renumber if requested
         if options.renumber {
             let old_number = adr.number;
-            adr.number = next_number;
-            result.renumber_map.push((old_number, next_number));
-            next_number += 1;
+            adr.number = temp_next_number;
+            result.renumber_map.push((old_number, temp_next_number));
+            temp_next_number += 1;
+        }
+
+        adrs_to_import.push(adr);
+    }
+
+    // Build a map for quick lookup: old_number -> new_number
+    let number_map: std::collections::HashMap<u32, u32> = result
+        .renumber_map
+        .iter()
+        .map(|&(old, new)| (old, new))
+        .collect();
+
+    // Second pass: update links and write files
+    for mut adr in adrs_to_import {
+        // Update links if renumbering
+        if options.renumber {
+            for link in &mut adr.links {
+                if let Some(&new_target) = number_map.get(&link.target) {
+                    // Link target is in the imported set, renumber it
+                    link.target = new_target;
+                } else {
+                    // Link target is NOT in the imported set - this is a broken reference
+                    result.warnings.push(format!(
+                        "ADR {} links to ADR {} which is not in the import set",
+                        adr.number, link.target
+                    ));
+                }
+            }
         }
 
         let filename = adr.filename();
@@ -1091,5 +1123,211 @@ mod tests {
 
         assert_eq!(result.imported, 1);
         assert!(temp.path().join("0001-test-decision.md").exists());
+    }
+
+    // ========== Link Renumbering Tests (Phase 2) ==========
+
+    #[test]
+    fn test_import_renumber_with_internal_links() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        // Create existing ADR 1
+        std::fs::create_dir_all(temp.path()).unwrap();
+        std::fs::write(
+            temp.path().join("0001-existing.md"),
+            "# 1. Existing\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nTest\n\n## Decision\n\nTest\n\n## Consequences\n\nTest\n",
+        )
+        .unwrap();
+
+        // Import ADRs with internal links
+        let json = r#"{
+            "version": "1.0.0",
+            "adrs": [
+                {
+                    "number": 1,
+                    "title": "First",
+                    "status": "Superseded",
+                    "date": "2024-01-15",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test",
+                    "links": [
+                        {"target": 2, "type": "SupersededBy"}
+                    ]
+                },
+                {
+                    "number": 2,
+                    "title": "Second",
+                    "status": "Accepted",
+                    "date": "2024-01-16",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test",
+                    "links": [
+                        {"target": 1, "type": "Supersedes"}
+                    ]
+                }
+            ]
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: true,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 2);
+        assert_eq!(result.renumber_map[0], (1, 2)); // ADR 1 -> ADR 2
+        assert_eq!(result.renumber_map[1], (2, 3)); // ADR 2 -> ADR 3
+
+        // Read the ADRs back and check links were updated
+        let parser = crate::Parser::new();
+
+        let adr2 = parser
+            .parse_file(&temp.path().join("0002-first.md"))
+            .unwrap();
+        assert_eq!(adr2.links.len(), 1);
+        assert_eq!(adr2.links[0].target, 3); // Was 2, now 3
+
+        let adr3 = parser
+            .parse_file(&temp.path().join("0003-second.md"))
+            .unwrap();
+        assert_eq!(adr3.links.len(), 1);
+        assert_eq!(adr3.links[0].target, 2); // Was 1, now 2
+    }
+
+    #[test]
+    fn test_import_renumber_with_broken_links() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        // Create existing ADR 1
+        std::fs::create_dir_all(temp.path()).unwrap();
+        std::fs::write(
+            temp.path().join("0001-existing.md"),
+            "# 1. Existing\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nTest\n\n## Decision\n\nTest\n\n## Consequences\n\nTest\n",
+        )
+        .unwrap();
+
+        // Import ADR with link to ADR not in the imported set
+        let json = r#"{
+            "version": "1.0.0",
+            "adrs": [
+                {
+                    "number": 5,
+                    "title": "Fifth",
+                    "status": "Accepted",
+                    "date": "2024-01-15",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test",
+                    "links": [
+                        {"target": 3, "type": "Extends"}
+                    ]
+                }
+            ]
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: true,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.renumber_map[0], (5, 2)); // ADR 5 -> ADR 2
+
+        // Should have a warning about the broken link
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].contains("ADR 2 links to ADR 3"));
+        assert!(result.warnings[0].contains("not in the import set"));
+    }
+
+    #[test]
+    fn test_import_renumber_complex_links() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        // Import multiple ADRs with various link patterns
+        let json = r#"{
+            "version": "1.0.0",
+            "adrs": [
+                {
+                    "number": 10,
+                    "title": "Ten",
+                    "status": "Accepted",
+                    "date": "2024-01-10",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test",
+                    "links": []
+                },
+                {
+                    "number": 20,
+                    "title": "Twenty",
+                    "status": "Accepted",
+                    "date": "2024-01-20",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test",
+                    "links": [
+                        {"target": 10, "type": "Amends"}
+                    ]
+                },
+                {
+                    "number": 30,
+                    "title": "Thirty",
+                    "status": "Accepted",
+                    "date": "2024-01-30",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test",
+                    "links": [
+                        {"target": 10, "type": "RelatesTo"},
+                        {"target": 20, "type": "RelatesTo"}
+                    ]
+                }
+            ]
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: true,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 3);
+        assert_eq!(result.renumber_map[0], (10, 1)); // 10 -> 1
+        assert_eq!(result.renumber_map[1], (20, 2)); // 20 -> 2
+        assert_eq!(result.renumber_map[2], (30, 3)); // 30 -> 3
+
+        // Check links were updated correctly
+        let parser = crate::Parser::new();
+
+        let adr2 = parser
+            .parse_file(&temp.path().join("0002-twenty.md"))
+            .unwrap();
+        assert_eq!(adr2.links.len(), 1);
+        assert_eq!(adr2.links[0].target, 1); // Was 10, now 1
+
+        let adr3 = parser
+            .parse_file(&temp.path().join("0003-thirty.md"))
+            .unwrap();
+        assert_eq!(adr3.links.len(), 2);
+        assert_eq!(adr3.links[0].target, 1); // Was 10, now 1
+        assert_eq!(adr3.links[1].target, 2); // Was 20, now 2
     }
 }
