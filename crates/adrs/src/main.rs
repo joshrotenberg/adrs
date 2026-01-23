@@ -226,9 +226,13 @@ enum ImportCommands {
         #[arg(short, long)]
         overwrite: bool,
 
-        /// Renumber ADRs starting from next available number
-        #[arg(short, long)]
+        /// Renumber ADRs starting from next available number (append to existing ADRs)
+        #[arg(short, long, alias = "append")]
         renumber: bool,
+
+        /// Preview import without writing files
+        #[arg(long)]
+        dry_run: bool,
 
         /// Use next-gen mode with YAML frontmatter
         #[arg(long)]
@@ -332,6 +336,7 @@ fn main() -> Result<()> {
                 dir,
                 overwrite,
                 renumber,
+                dry_run,
                 ng,
             } => {
                 if let Some(ref dir_path) = dir {
@@ -342,12 +347,21 @@ fn main() -> Result<()> {
                         Some(dir_path),
                         overwrite,
                         renumber,
+                        dry_run,
                         ng,
                     )
                 } else {
                     // Import to repository
                     let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-                    commands::import_json(&discovered.root, &file, None, overwrite, renumber, ng)
+                    commands::import_json(
+                        &discovered.root,
+                        &file,
+                        None,
+                        overwrite,
+                        renumber,
+                        dry_run,
+                        ng,
+                    )
                 }
             }
         },
