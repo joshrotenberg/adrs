@@ -295,6 +295,9 @@ pub struct ImportOptions {
     /// Renumber ADRs starting from the next available number.
     pub renumber: bool,
 
+    /// Preview import without writing files.
+    pub dry_run: bool,
+
     /// Use next-gen mode (YAML frontmatter).
     pub ng_mode: bool,
 }
@@ -313,6 +316,9 @@ pub struct ImportResult {
 
     /// Warnings encountered during import.
     pub warnings: Vec<String>,
+
+    /// Mapping of old numbers to new numbers (when renumbering).
+    pub renumber_map: Vec<(u32, u32)>,
 }
 
 /// Export all ADRs from a directory to JSON-ADR format.
@@ -444,6 +450,7 @@ pub fn import_to_directory(
         skipped: 0,
         files: Vec::new(),
         warnings: Vec::new(),
+        renumber_map: Vec::new(),
     };
 
     // Create config for template rendering
@@ -464,7 +471,9 @@ pub fn import_to_directory(
 
         // Renumber if requested
         if options.renumber {
+            let old_number = adr.number;
             adr.number = next_number;
+            result.renumber_map.push((old_number, next_number));
             next_number += 1;
         }
 
@@ -484,8 +493,10 @@ pub fn import_to_directory(
         // Render the ADR to markdown
         let content = engine.render(&adr, &config)?;
 
-        // Write the file
-        std::fs::write(&filepath, content)?;
+        // Write the file (unless dry-run)
+        if !options.dry_run {
+            std::fs::write(&filepath, content)?;
+        }
 
         result.imported += 1;
         result.files.push(filepath);
@@ -743,5 +754,342 @@ mod tests {
         assert!(!json.contains("\"description\""));
         assert!(!json.contains("\"pros\""));
         assert!(!json.contains("\"cons\""));
+    }
+
+    // ========== Import Tests ==========
+
+    #[test]
+    fn test_import_basic() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let json = r#"{
+            "number": 1,
+            "title": "Test Decision",
+            "status": "Proposed",
+            "date": "2024-01-15",
+            "context": "Test context",
+            "decision": "Test decision",
+            "consequences": "Test consequences"
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.skipped, 0);
+        assert_eq!(result.files.len(), 1);
+        assert!(result.files[0].exists());
+    }
+
+    #[test]
+    fn test_import_with_renumber() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        // Create existing ADR 1
+        std::fs::create_dir_all(temp.path()).unwrap();
+        std::fs::write(
+            temp.path().join("0001-existing.md"),
+            "# 1. Existing\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nTest\n\n## Decision\n\nTest\n\n## Consequences\n\nTest\n",
+        )
+        .unwrap();
+
+        let json = r#"{
+            "version": "1.0.0",
+            "adrs": [
+                {
+                    "number": 1,
+                    "title": "First Import",
+                    "status": "Proposed",
+                    "date": "2024-01-15",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test"
+                },
+                {
+                    "number": 2,
+                    "title": "Second Import",
+                    "status": "Proposed",
+                    "date": "2024-01-16",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test"
+                }
+            ]
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: true,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 2);
+        assert_eq!(result.renumber_map.len(), 2);
+        assert_eq!(result.renumber_map[0], (1, 2)); // ADR 1 -> ADR 2
+        assert_eq!(result.renumber_map[1], (2, 3)); // ADR 2 -> ADR 3
+
+        // Verify files were created with new numbers
+        assert!(temp.path().join("0002-first-import.md").exists());
+        assert!(temp.path().join("0003-second-import.md").exists());
+    }
+
+    #[test]
+    fn test_import_dry_run() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let json = r#"{
+            "number": 1,
+            "title": "Test Decision",
+            "status": "Proposed",
+            "date": "2024-01-15",
+            "context": "Test",
+            "decision": "Test",
+            "consequences": "Test"
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: true,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.files.len(), 1);
+
+        // File should NOT exist in dry-run mode
+        assert!(!result.files[0].exists());
+    }
+
+    #[test]
+    fn test_import_dry_run_with_renumber() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        // Create existing ADRs 1-3
+        std::fs::create_dir_all(temp.path()).unwrap();
+        for i in 1..=3 {
+            std::fs::write(
+                temp.path().join(format!("{:04}-existing-{}.md", i, i)),
+                format!("# {}. Existing\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nTest\n\n## Decision\n\nTest\n\n## Consequences\n\nTest\n", i),
+            )
+            .unwrap();
+        }
+
+        let json = r#"{
+            "version": "1.0.0",
+            "adrs": [
+                {
+                    "number": 5,
+                    "title": "Import Five",
+                    "status": "Proposed",
+                    "date": "2024-01-15",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test"
+                },
+                {
+                    "number": 7,
+                    "title": "Import Seven",
+                    "status": "Proposed",
+                    "date": "2024-01-16",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test"
+                }
+            ]
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: true,
+            dry_run: true,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 2);
+        assert_eq!(result.renumber_map.len(), 2);
+        // With gaps in source (5, 7), they should become sequential (4, 5)
+        assert_eq!(result.renumber_map[0], (5, 4)); // ADR 5 -> ADR 4
+        assert_eq!(result.renumber_map[1], (7, 5)); // ADR 7 -> ADR 5
+
+        // Files should NOT exist in dry-run
+        assert!(!temp.path().join("0004-import-five.md").exists());
+        assert!(!temp.path().join("0005-import-seven.md").exists());
+    }
+
+    #[test]
+    fn test_import_skip_existing() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        // Create existing file
+        std::fs::create_dir_all(temp.path()).unwrap();
+        std::fs::write(
+            temp.path().join("0001-test-decision.md"),
+            "# 1. Test Decision\n\nExisting content\n",
+        )
+        .unwrap();
+
+        let json = r#"{
+            "number": 1,
+            "title": "Test Decision",
+            "status": "Proposed",
+            "date": "2024-01-15",
+            "context": "Test",
+            "decision": "Test",
+            "consequences": "Test"
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 0);
+        assert_eq!(result.skipped, 1);
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].contains("already exists"));
+    }
+
+    #[test]
+    fn test_import_overwrite() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        // Create existing file
+        std::fs::create_dir_all(temp.path()).unwrap();
+        std::fs::write(
+            temp.path().join("0001-test-decision.md"),
+            "# 1. Test Decision\n\nOLD CONTENT\n",
+        )
+        .unwrap();
+
+        let json = r#"{
+            "number": 1,
+            "title": "Test Decision",
+            "status": "Proposed",
+            "date": "2024-01-15",
+            "context": "NEW CONTEXT",
+            "decision": "Test",
+            "consequences": "Test"
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: true,
+            renumber: false,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.skipped, 0);
+
+        // Verify content was overwritten
+        let content = std::fs::read_to_string(temp.path().join("0001-test-decision.md")).unwrap();
+        assert!(content.contains("NEW CONTEXT"));
+        assert!(!content.contains("OLD CONTENT"));
+    }
+
+    #[test]
+    fn test_import_bulk_format() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        let json = r#"{
+            "version": "1.0.0",
+            "adrs": [
+                {
+                    "number": 1,
+                    "title": "First",
+                    "status": "Proposed",
+                    "date": "2024-01-15",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test"
+                },
+                {
+                    "number": 2,
+                    "title": "Second",
+                    "status": "Accepted",
+                    "date": "2024-01-16",
+                    "context": "Test",
+                    "decision": "Test",
+                    "consequences": "Test"
+                }
+            ]
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 2);
+        assert!(temp.path().join("0001-first.md").exists());
+        assert!(temp.path().join("0002-second.md").exists());
+    }
+
+    #[test]
+    fn test_import_single_wrapper_format() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+
+        let json = r#"{
+            "version": "1.0.0",
+            "adr": {
+                "number": 1,
+                "title": "Test Decision",
+                "status": "Proposed",
+                "date": "2024-01-15",
+                "context": "Test",
+                "decision": "Test",
+                "consequences": "Test"
+            }
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: false,
+            ng_mode: false,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+
+        assert_eq!(result.imported, 1);
+        assert!(temp.path().join("0001-test-decision.md").exists());
     }
 }
