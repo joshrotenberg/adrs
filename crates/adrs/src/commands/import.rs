@@ -86,10 +86,26 @@ pub fn import_json(
         println!("No ADRs to import.");
     }
 
-    // Warn about renumbering limitations
+    // Show renumbering info and warnings
     if renumber && result.imported > 0 && !dry_run {
         println!("\nNote: ADRs have been renumbered sequentially.");
-        println!("Cross-references within imported ADRs may need manual adjustment.");
+        println!("Internal cross-references have been updated automatically.");
+
+        // Count broken link warnings
+        let broken_links: Vec<&String> = result
+            .warnings
+            .iter()
+            .filter(|w| w.contains("links to ADR") && w.contains("not in the import set"))
+            .collect();
+
+        if !broken_links.is_empty() {
+            println!(
+                "\nWarning: {} broken cross-reference(s) detected:",
+                broken_links.len()
+            );
+            println!("These links reference ADRs that were not included in the import.");
+            println!("You may need to manually fix these references.");
+        }
     }
 
     Ok(())
