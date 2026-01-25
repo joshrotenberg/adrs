@@ -4,6 +4,7 @@
 - [Installation](./installation.md)
 - [Configuration](./configuration.md)
 - [Formats](./formats.md)
+- [Compatibility](./compatibility.md)
 - [Templates](./templates.md)
 - [Commands](./commands/README.md)
   - [init](./commands/init.md)
