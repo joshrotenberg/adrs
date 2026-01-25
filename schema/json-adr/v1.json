@@ -93,6 +93,11 @@
           "items": { "type": "string" },
           "description": "Categorization labels"
         },
+        "source_uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI to the source ADR file (for federation/reference)"
+        },
         "context": {
           "type": "string",
           "description": "Background and problem statement"

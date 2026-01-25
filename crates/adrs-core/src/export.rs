@@ -49,6 +49,10 @@ pub struct JsonAdr {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub tags: Vec<String>,
 
+    /// URI to the source ADR file (for federation/reference).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_uri: Option<String>,
+
     /// Background and problem statement.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
@@ -211,6 +215,7 @@ impl From<&Adr> for JsonAdr {
             consulted: adr.consulted.clone(),
             informed: adr.informed.clone(),
             tags: Vec::new(), // Tags not yet implemented in Adr
+            source_uri: None, // Set externally when exporting with --base-url
             context: if adr.context.is_empty() {
                 None
             } else {
@@ -582,6 +587,43 @@ mod tests {
         assert_eq!(json_adr.date, "2024-01-15");
         assert_eq!(json_adr.deciders, vec!["Alice"]);
         assert_eq!(json_adr.consulted, vec!["Bob"]);
+        assert_eq!(json_adr.source_uri, None); // Not set by default
+    }
+
+    #[test]
+    fn test_json_adr_source_uri_field() {
+        let mut adr = JsonAdr {
+            number: 1,
+            title: "Test".to_string(),
+            status: "Accepted".to_string(),
+            date: "2024-01-15".to_string(),
+            deciders: vec![],
+            consulted: vec![],
+            informed: vec![],
+            tags: vec![],
+            source_uri: Some(
+                "https://github.com/org/repo/blob/main/doc/adr/0001-test.md".to_string(),
+            ),
+            context: Some("Test context".to_string()),
+            decision: Some("Test decision".to_string()),
+            consequences: Some("Test consequences".to_string()),
+            decision_drivers: vec![],
+            considered_options: vec![],
+            confirmation: None,
+            links: vec![],
+            custom_sections: std::collections::HashMap::new(),
+            path: None,
+        };
+
+        let json = serde_json::to_string(&adr).unwrap();
+        assert!(json.contains(
+            "\"source_uri\":\"https://github.com/org/repo/blob/main/doc/adr/0001-test.md\""
+        ));
+
+        // source_uri should be skipped when None
+        adr.source_uri = None;
+        let json = serde_json::to_string(&adr).unwrap();
+        assert!(!json.contains("source_uri"));
     }
 
     #[test]
@@ -652,6 +694,7 @@ mod tests {
             consulted: vec![],
             informed: vec![],
             tags: vec![],
+            source_uri: None,
             context: None,
             decision_drivers: vec![],
             considered_options: vec![],
@@ -685,6 +728,7 @@ mod tests {
             consulted: vec![],
             informed: vec![],
             tags: vec![],
+            source_uri: None,
             context: None,
             decision_drivers: vec![],
             considered_options: vec![],
@@ -722,6 +766,7 @@ mod tests {
             consulted: vec![],
             informed: vec![],
             tags: vec![],
+            source_uri: None,
             context: Some("We need a database for user data".to_string()),
             decision_drivers: vec![
                 "Performance requirements".to_string(),
