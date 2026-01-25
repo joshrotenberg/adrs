@@ -122,22 +122,8 @@ enum Commands {
     /// Show configuration
     Config,
 
-    /// Lint ADR files for issues
-    Lint {
-        /// ADR number or title to lint (omit for --all)
-        adr: Option<String>,
-
-        /// Lint all ADRs
-        #[arg(short, long)]
-        all: bool,
-    },
-
-    /// Check repository health (runs lint + repository-level checks)
-    Doctor {
-        /// Skip per-file lint checks, only run repository-level checks
-        #[arg(long)]
-        skip_lint: bool,
-    },
+    /// Check repository health
+    Doctor,
 
     /// Generate documentation
     Generate {
@@ -309,13 +295,9 @@ fn main() -> Result<()> {
             let discovered = discover(&start_dir).ok();
             commands::config_with_discovery(&start_dir, discovered)
         }
-        Commands::Lint { adr, all } => {
+        Commands::Doctor => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::lint(&discovered.root, adr, all)
-        }
-        Commands::Doctor { skip_lint } => {
-            let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::doctor(&discovered.root, skip_lint)
+            commands::doctor(&discovered.root)
         }
         Commands::Generate { command } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
