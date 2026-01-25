@@ -13,20 +13,21 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon-de23e50b.svg">
-        <link rel="shortcut icon" href="favicon-8114d1fc.png">
-        <link rel="stylesheet" href="css/variables-8adf115d.css">
-        <link rel="stylesheet" href="css/general-2459343d.css">
-        <link rel="stylesheet" href="css/chrome-ae938929.css">
-        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
@@ -36,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-67d8db84.js";
+            window.path_to_searchindex_js = "searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-e8219e05.js"></script>
+        <script src="toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -53,7 +54,7 @@
             </div>
         </div>
     </div>
-    <div id="mdbook-body-container">
+    <div id="body-container">
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
         <script>
             try {
@@ -82,12 +83,12 @@
             html.classList.add("js");
         </script>
 
-        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
 
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
             let sidebar = null;
-            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
@@ -102,39 +103,39 @@
             }
         </script>
 
-        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
                 <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
             </noscript>
-            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
             </div>
         </nav>
 
-        <div id="mdbook-page-wrapper" class="page-wrapper">
+        <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
-                <div id="mdbook-menu-bar-hover-placeholder"></div>
-                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
-                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
-                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
                         </label>
-                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
-                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
                         </button>
-                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
                         </ul>
-                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
-                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
                         </button>
                     </div>
 
@@ -142,41 +143,41 @@
 
                     <div class="right-buttons">
                         <a href="print.html" title="Print this book" aria-label="Print this book">
-                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                            <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/joshrotenberg/adrs/tree/main/book" title="Git repository" aria-label="Git repository">
-                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                            <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
 
                     </div>
                 </div>
 
-                <div id="mdbook-search-wrapper" class="hidden">
-                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
                         <div class="search-wrapper">
-                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                             <div class="spinner-wrapper">
-                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                                <i class="fa fa-spinner fa-spin"></i>
                             </div>
                         </div>
                     </form>
-                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
-                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
-                        <ul id="mdbook-searchresults">
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
                         </ul>
                     </div>
                 </div>
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
                 <script>
-                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
-                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
-                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
                         link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
                     });
                 </script>
 
-                <div id="mdbook-content" class="content">
+                <div id="content" class="content">
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <p><code>adrs</code> is a command line tool for creating and managing <a href="https://adr.github.io">Architecture Decision Records</a> (ADRs).</p>
@@ -229,16 +230,15 @@
 <li>Install <code>adrs</code></li>
 <li>Run commands as usual - <code>adrs</code> reads the existing <code>.adr-dir</code> file and ADR documents</li>
 </ol>
-<p>For new features like MADR format or YAML frontmatter, see the <a href="#configuration">Configuration</a> chapter.</p>
+<p>For new features like MADR format or YAML frontmatter, see the <a href="./configuration.html">Configuration</a> chapter.</p>
 <h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
 <ul>
-<li><a href="#configuration">Configuration</a> - Learn about configuration options</li>
-<li><a href="commands/README.html">Commands</a> - Detailed command reference</li>
-<li><a href="#templates">Templates</a> - Customize ADR templates</li>
-<li><a href="#formats">Formats</a> - Nygard vs MADR format comparison</li>
+<li><a href="./configuration.html">Configuration</a> - Learn about configuration options</li>
+<li><a href="./commands/README.html">Commands</a> - Detailed command reference</li>
+<li><a href="./templates.html">Templates</a> - Customize ADR templates</li>
+<li><a href="./formats.html">Formats</a> - Nygard vs MADR format comparison</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="installation-1"><a class="header" href="#installation-1">Installation</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="installation-1"><a class="header" href="#installation-1">Installation</a></h1>
 <h2 id="pre-built-binaries"><a class="header" href="#pre-built-binaries">Pre-built Binaries</a></h2>
 <p>Pre-built binaries are available for Linux, macOS, and Windows.</p>
 <h3 id="shell-installer-linuxmacos"><a class="header" href="#shell-installer-linuxmacos">Shell Installer (Linux/macOS)</a></h3>
@@ -252,19 +252,13 @@
 </code></pre>
 <h3 id="manual-download"><a class="header" href="#manual-download">Manual Download</a></h3>
 <p>Download the appropriate binary from the <a href="https://github.com/joshrotenberg/adrs/releases">releases page</a>.</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Platform</th><th>Architecture</th><th>Download</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Platform</th><th>Architecture</th><th>Download</th></tr></thead><tbody>
 <tr><td>Linux</td><td>x86_64</td><td><code>adrs-x86_64-unknown-linux-gnu.tar.gz</code></td></tr>
 <tr><td>Linux</td><td>aarch64</td><td><code>adrs-aarch64-unknown-linux-gnu.tar.gz</code></td></tr>
 <tr><td>macOS</td><td>x86_64 (Intel)</td><td><code>adrs-x86_64-apple-darwin.tar.gz</code></td></tr>
 <tr><td>macOS</td><td>aarch64 (Apple Silicon)</td><td><code>adrs-aarch64-apple-darwin.tar.gz</code></td></tr>
 <tr><td>Windows</td><td>x86_64</td><td><code>adrs-x86_64-pc-windows-msvc.zip</code></td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="from-source"><a class="header" href="#from-source">From Source</a></h2>
 <h3 id="using-cargo"><a class="header" href="#using-cargo">Using Cargo</a></h3>
@@ -301,8 +295,7 @@ adrs completions fish &gt; ~/.config/fish/completions/adrs.fish
 adrs completions powershell &gt; $PROFILE.CurrentUserAllHosts
 </code></pre>
 <p>Note: Shell completions require rebuilding after updating <code>adrs</code>.</p>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="configuration"><a class="header" href="#configuration">Configuration</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="configuration"><a class="header" href="#configuration">Configuration</a></h1>
 <p><code>adrs</code> supports multiple configuration methods with the following priority (highest to lowest):</p>
 <ol>
 <li>Command-line flags</li>
@@ -349,17 +342,11 @@ variant = "minimal"
 </code></pre>
 <p>Project configuration overrides global configuration.</p>
 <h2 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Variable</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>ADR_DIRECTORY</code></td><td>Override the ADR directory path</td></tr>
 <tr><td><code>ADRS_CONFIG</code></td><td>Path to a specific configuration file</td></tr>
 <tr><td><code>EDITOR</code></td><td>Editor to use for <code>adrs new</code> and <code>adrs edit</code></td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <p>Example:</p>
 <pre><code class="language-sh">export ADR_DIRECTORY="decisions"
@@ -402,11 +389,10 @@ ADR directory: doc/adr
 Full path: /path/to/project/doc/adr
 Mode: Compatible
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="formats"><a class="header" href="#formats">Formats</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="formats"><a class="header" href="#formats">Formats</a></h1>
 <p><code>adrs</code> supports two ADR formats: Nygard (the original adr-tools format) and MADR 4.0.0.</p>
 <h2 id="nygard-format"><a class="header" href="#nygard-format">Nygard Format</a></h2>
-<p>The classic format from <a href="https://github.com/npryce/adr-tools">adr-tools</a>, based on Michael Nygard’s blog post.</p>
+<p>The classic format from <a href="https://github.com/npryce/adr-tools">adr-tools</a>, based on Michael Nygard's blog post.</p>
 <h3 id="structure"><a class="header" href="#structure">Structure</a></h3>
 <pre><code class="language-markdown"># 1. Record architecture decisions
 
@@ -429,20 +415,14 @@ We will use Architecture Decision Records, as described by Michael Nygard.
 See Michael Nygard's article for a detailed description.
 </code></pre>
 <h3 id="sections"><a class="header" href="#sections">Sections</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Section</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Section</th><th>Description</th></tr></thead><tbody>
 <tr><td>Title</td><td>Number and title as H1 heading</td></tr>
 <tr><td>Date</td><td>When the decision was made</td></tr>
 <tr><td>Status</td><td>Proposed, Accepted, Deprecated, Superseded</td></tr>
 <tr><td>Context</td><td>Why is this decision needed?</td></tr>
 <tr><td>Decision</td><td>What was decided?</td></tr>
 <tr><td>Consequences</td><td>What are the implications?</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="madr-400-format"><a class="header" href="#madr-400-format">MADR 4.0.0 Format</a></h2>
 <p><a href="https://adr.github.io/madr/">Markdown Architectural Decision Records</a> version 4.0.0 provides a more structured format with additional metadata.</p>
@@ -509,27 +489,16 @@ We will confirm this decision after the first production deployment.
 * Bad, because not ACID compliant by default
 </code></pre>
 <h3 id="yaml-frontmatter-fields"><a class="header" href="#yaml-frontmatter-fields">YAML Frontmatter Fields</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Field</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Field</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>status</code></td><td>Decision status</td></tr>
 <tr><td><code>date</code></td><td>Date of the decision</td></tr>
 <tr><td><code>decision-makers</code></td><td>List of people who made the decision</td></tr>
 <tr><td><code>consulted</code></td><td>List of people whose opinions were sought</td></tr>
 <tr><td><code>informed</code></td><td>List of people who were informed of the decision</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h3 id="sections-1"><a class="header" href="#sections-1">Sections</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Section</th><th>Required</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Section</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td>Title</td><td>Yes</td><td>The decision as an H1 heading</td></tr>
 <tr><td>Context and Problem Statement</td><td>Yes</td><td>Why is this decision needed?</td></tr>
 <tr><td>Decision Drivers</td><td>No</td><td>Factors influencing the decision</td></tr>
@@ -539,22 +508,15 @@ We will confirm this decision after the first production deployment.
 <tr><td>Confirmation</td><td>No</td><td>How the decision will be validated</td></tr>
 <tr><td>Pros and Cons</td><td>No</td><td>Detailed option comparison</td></tr>
 <tr><td>More Information</td><td>No</td><td>Links and references</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="choosing-a-format"><a class="header" href="#choosing-a-format">Choosing a Format</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Use Nygard when…</th><th>Use MADR when…</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Use Nygard when...</th><th>Use MADR when...</th></tr></thead><tbody>
 <tr><td>Migrating from adr-tools</td><td>Starting a new project</td></tr>
 <tr><td>Simplicity is preferred</td><td>You need structured metadata</td></tr>
 <tr><td>Team is familiar with it</td><td>You want decision-maker tracking</td></tr>
 <tr><td></td><td>You need detailed option comparison</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="specifying-format"><a class="header" href="#specifying-format">Specifying Format</a></h2>
 <h3 id="per-command"><a class="header" href="#per-command">Per-command</a></h3>
@@ -567,50 +529,31 @@ format = "madr"
 </code></pre>
 <h2 id="template-variants"><a class="header" href="#template-variants">Template Variants</a></h2>
 <p>Both formats support three variants:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Variant</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>full</code></td><td>All sections with guidance comments</td></tr>
 <tr><td><code>minimal</code></td><td>Essential sections only</td></tr>
 <tr><td><code>bare</code></td><td>Bare structure, no comments</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <pre><code class="language-sh">adrs new --format madr --variant minimal "Use PostgreSQL"
 </code></pre>
-<p>See <a href="#templates">Templates</a> for more details.</p>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="templates"><a class="header" href="#templates">Templates</a></h1>
+<p>See <a href="./templates.html">Templates</a> for more details.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="templates"><a class="header" href="#templates">Templates</a></h1>
 <p><code>adrs</code> uses templates to generate new ADR documents. You can use built-in templates or create custom ones.</p>
 <h2 id="built-in-templates"><a class="header" href="#built-in-templates">Built-in Templates</a></h2>
 <h3 id="formats-1"><a class="header" href="#formats-1">Formats</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Format</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>nygard</code></td><td>Classic adr-tools format (default)</td></tr>
 <tr><td><code>madr</code></td><td>MADR 4.0.0 format</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h3 id="variants"><a class="header" href="#variants">Variants</a></h3>
 <p>Each format has three variants:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Variant</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>full</code></td><td>Complete template with all sections and guidance comments</td></tr>
 <tr><td><code>minimal</code></td><td>Essential sections only, no guidance</td></tr>
 <tr><td><code>bare</code></td><td>Minimal structure with placeholders</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h3 id="using-built-in-templates"><a class="header" href="#using-built-in-templates">Using Built-in Templates</a></h3>
 <pre><code class="language-sh"># Default: nygard format, full variant
@@ -679,33 +622,21 @@ Chosen option: "", because ...
 <h2 id="custom-templates"><a class="header" href="#custom-templates">Custom Templates</a></h2>
 <p>Create custom templates using <a href="https://jinja.palletsprojects.com/">Jinja2</a> syntax.</p>
 <h3 id="template-variables"><a class="header" href="#template-variables">Template Variables</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Variable</th><th>Description</th><th>Example</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Description</th><th>Example</th></tr></thead><tbody>
 <tr><td><code>number</code></td><td>ADR number (padded)</td><td><code>0001</code></td></tr>
 <tr><td><code>title</code></td><td>ADR title</td><td><code>Use PostgreSQL</code></td></tr>
 <tr><td><code>date</code></td><td>Current date</td><td><code>2024-01-15</code></td></tr>
 <tr><td><code>status</code></td><td>Initial status</td><td><code>Proposed</code></td></tr>
 <tr><td><code>links</code></td><td>Array of links</td><td>See below</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h3 id="link-variables"><a class="header" href="#link-variables">Link Variables</a></h3>
 <p>Each link in the <code>links</code> array has:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Variable</th><th>Description</th></tr>
-</thead>
-<tbody>
-<tr><td><code>link.kind</code></td><td>Link type (e.g., “Supersedes”)</td></tr>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>link.kind</code></td><td>Link type (e.g., "Supersedes")</td></tr>
 <tr><td><code>link.target</code></td><td>Target ADR number</td></tr>
 <tr><td><code>link.description</code></td><td>Optional description</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h3 id="creating-a-custom-template"><a class="header" href="#creating-a-custom-template">Creating a Custom Template</a></h3>
 <ol>
@@ -754,17 +685,11 @@ custom = "templates/my-template.md"
 </code></pre>
 <h3 id="filters"><a class="header" href="#filters">Filters</a></h3>
 <p>Available filters:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Filter</th><th>Description</th><th>Example</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Filter</th><th>Description</th><th>Example</th></tr></thead><tbody>
 <tr><td><code>lower</code></td><td>Lowercase</td><td><code>{{ status | lower }}</code></td></tr>
 <tr><td><code>upper</code></td><td>Uppercase</td><td><code>{{ title | upper }}</code></td></tr>
 <tr><td><code>pad(n)</code></td><td>Zero-pad number</td><td><code>{{ number | pad(4) }}</code></td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="default-configuration"><a class="header" href="#default-configuration">Default Configuration</a></h2>
 <p>Set defaults in <code>adrs.toml</code>:</p>
@@ -792,41 +717,28 @@ links:
 
 ...
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="commands"><a class="header" href="#commands">Commands</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="commands"><a class="header" href="#commands">Commands</a></h1>
 <p><code>adrs</code> provides commands for managing Architecture Decision Records.</p>
 <h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Command</th><th>Description</th></tr>
-</thead>
-<tbody>
-<tr><td><a href="#init">init</a></td><td>Initialize a new ADR repository</td></tr>
-<tr><td><a href="#new">new</a></td><td>Create a new ADR</td></tr>
-<tr><td><a href="#edit">edit</a></td><td>Edit an existing ADR</td></tr>
-<tr><td><a href="#link">link</a></td><td>Link two ADRs together</td></tr>
-<tr><td><a href="#list">list</a></td><td>List all ADRs</td></tr>
-<tr><td><a href="#config">config</a></td><td>Show configuration</td></tr>
-<tr><td><a href="#doctor">doctor</a></td><td>Check repository health</td></tr>
-<tr><td><a href="#generate">generate</a></td><td>Generate documentation</td></tr>
-</tbody>
-</table>
+<div class="table-wrapper"><table><thead><tr><th>Command</th><th>Description</th></tr></thead><tbody>
+<tr><td><a href="commands/./init.html">init</a></td><td>Initialize a new ADR repository</td></tr>
+<tr><td><a href="commands/./new.html">new</a></td><td>Create a new ADR</td></tr>
+<tr><td><a href="commands/./edit.html">edit</a></td><td>Edit an existing ADR</td></tr>
+<tr><td><a href="commands/./link.html">link</a></td><td>Link two ADRs together</td></tr>
+<tr><td><a href="commands/./list.html">list</a></td><td>List all ADRs</td></tr>
+<tr><td><a href="commands/./config.html">config</a></td><td>Show configuration</td></tr>
+<tr><td><a href="commands/./doctor.html">doctor</a></td><td>Check repository health</td></tr>
+<tr><td><a href="commands/./generate.html">generate</a></td><td>Generate documentation</td></tr>
+</tbody></table>
 </div>
 <h2 id="global-options"><a class="header" href="#global-options">Global Options</a></h2>
 <p>These options are available for all commands:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>--ng</code></td><td>Use NextGen mode (YAML frontmatter)</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Run as if started in <code>&lt;DIR&gt;</code></td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help information</td></tr>
 <tr><td><code>-V, --version</code></td><td>Print version information</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
 <pre><code>adrs [OPTIONS] &lt;COMMAND&gt;
@@ -848,35 +760,22 @@ Options:
   -h, --help               Print help
   -V, --version            Print version
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="init"><a class="header" href="#init">init</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="init"><a class="header" href="#init">init</a></h1>
 <p>Initialize a new ADR repository.</p>
 <h2 id="usage-1"><a class="header" href="#usage-1">Usage</a></h2>
 <pre><code>adrs init [OPTIONS] [DIRECTORY]
 </code></pre>
 <h2 id="arguments"><a class="header" href="#arguments">Arguments</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Argument</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>[DIRECTORY]</code></td><td>ADR directory path (default: <code>doc/adr</code>)</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="options"><a class="header" href="#options">Options</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>--ng</code></td><td>Use NextGen mode (YAML frontmatter)</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="description"><a class="header" href="#description">Description</a></h2>
 <p>The <code>init</code> command creates:</p>
@@ -927,33 +826,21 @@ date: 2024-01-15
 <p>To reinitialize, remove the <code>.adr-dir</code> file first.</p>
 <h2 id="related"><a class="header" href="#related">Related</a></h2>
 <ul>
-<li><a href="#config">config</a> - Show current configuration</li>
-<li><a href="#new">new</a> - Create additional ADRs</li>
+<li><a href="commands/./config.html">config</a> - Show current configuration</li>
+<li><a href="commands/./new.html">new</a> - Create additional ADRs</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="new"><a class="header" href="#new">new</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="new"><a class="header" href="#new">new</a></h1>
 <p>Create a new Architecture Decision Record.</p>
 <h2 id="usage-2"><a class="header" href="#usage-2">Usage</a></h2>
 <pre><code>adrs new [OPTIONS] &lt;TITLE&gt;
 </code></pre>
 <h2 id="arguments-1"><a class="header" href="#arguments-1">Arguments</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Argument</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>&lt;TITLE&gt;</code></td><td>Title of the new ADR</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-f, --format &lt;FORMAT&gt;</code></td><td>Template format: <code>nygard</code> or <code>madr</code> (default: <code>nygard</code>)</td></tr>
 <tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: <code>full</code>, <code>minimal</code>, or <code>bare</code> (default: <code>full</code>)</td></tr>
 <tr><td><code>--status &lt;STATUS&gt;</code></td><td>Initial status (default: <code>Proposed</code>)</td></tr>
@@ -962,8 +849,7 @@ date: 2024-01-15
 <tr><td><code>--ng</code></td><td>Use NextGen mode (YAML frontmatter)</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="description-1"><a class="header" href="#description-1">Description</a></h2>
 <p>Creates a new ADR file with the next available number. Opens your <code>$EDITOR</code> to edit the document. The ADR is saved when you close the editor.</p>
@@ -986,9 +872,9 @@ date: 2024-01-15
 </code></pre>
 <p>This creates a new ADR and:</p>
 <ul>
-<li>Adds a “Supersedes” link in the new ADR</li>
-<li>Adds a “Superseded by” link in ADR #2</li>
-<li>Changes ADR #2’s status to “Superseded”</li>
+<li>Adds a "Supersedes" link in the new ADR</li>
+<li>Adds a "Superseded by" link in ADR #2</li>
+<li>Changes ADR #2's status to "Superseded"</li>
 </ul>
 <h3 id="superseding-multiple-adrs"><a class="header" href="#superseding-multiple-adrs">Superseding Multiple ADRs</a></h3>
 <pre><code class="language-sh">adrs new --supersedes 2 --supersedes 3 "Consolidated database decision"
@@ -1055,39 +941,26 @@ export EDITOR="vim"          # Vim
 </ul>
 <h2 id="related-1"><a class="header" href="#related-1">Related</a></h2>
 <ul>
-<li><a href="#edit">edit</a> - Edit an existing ADR</li>
-<li><a href="#link">link</a> - Link ADRs together</li>
-<li><a href="#templates">Templates</a> - Available templates</li>
+<li><a href="commands/./edit.html">edit</a> - Edit an existing ADR</li>
+<li><a href="commands/./link.html">link</a> - Link ADRs together</li>
+<li><a href="commands/../templates.html">Templates</a> - Available templates</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="edit"><a class="header" href="#edit">edit</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="edit"><a class="header" href="#edit">edit</a></h1>
 <p>Edit an existing Architecture Decision Record.</p>
 <h2 id="usage-3"><a class="header" href="#usage-3">Usage</a></h2>
 <pre><code>adrs edit [OPTIONS] &lt;ADR&gt;
 </code></pre>
 <h2 id="arguments-2"><a class="header" href="#arguments-2">Arguments</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Argument</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>&lt;ADR&gt;</code></td><td>ADR to edit (number or search term)</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="options-2"><a class="header" href="#options-2">Options</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="description-2"><a class="header" href="#description-2">Description</a></h2>
 <p>Opens an existing ADR in your editor. The ADR can be specified by:</p>
@@ -1103,50 +976,37 @@ export EDITOR="vim"          # Vim
 <h3 id="by-title"><a class="header" href="#by-title">By Title</a></h3>
 <pre><code class="language-sh">adrs edit postgresql
 </code></pre>
-<p>Finds and opens the ADR with “postgresql” in its title.</p>
+<p>Finds and opens the ADR with "postgresql" in its title.</p>
 <h3 id="fuzzy-matching"><a class="header" href="#fuzzy-matching">Fuzzy Matching</a></h3>
 <pre><code class="language-sh">adrs edit "database"
 </code></pre>
-<p>Opens the best matching ADR containing “database”.</p>
+<p>Opens the best matching ADR containing "database".</p>
 <h2 id="editor-1"><a class="header" href="#editor-1">Editor</a></h2>
-<p>Uses the <code>$EDITOR</code> environment variable. See <a href="#editor">new</a> for configuration.</p>
+<p>Uses the <code>$EDITOR</code> environment variable. See <a href="commands/./new.html#editor">new</a> for configuration.</p>
 <h2 id="related-2"><a class="header" href="#related-2">Related</a></h2>
 <ul>
-<li><a href="#new">new</a> - Create a new ADR</li>
-<li><a href="#list">list</a> - List ADRs to find the one to edit</li>
+<li><a href="commands/./new.html">new</a> - Create a new ADR</li>
+<li><a href="commands/./list.html">list</a> - List ADRs to find the one to edit</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="link"><a class="header" href="#link">link</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="link"><a class="header" href="#link">link</a></h1>
 <p>Link two Architecture Decision Records together.</p>
 <h2 id="usage-4"><a class="header" href="#usage-4">Usage</a></h2>
 <pre><code>adrs link [OPTIONS] &lt;SOURCE&gt; &lt;LINK&gt; &lt;TARGET&gt; &lt;REVERSE_LINK&gt;
 </code></pre>
 <h2 id="arguments-3"><a class="header" href="#arguments-3">Arguments</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Argument</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>&lt;SOURCE&gt;</code></td><td>Source ADR number</td></tr>
 <tr><td><code>&lt;LINK&gt;</code></td><td>Link description from source to target</td></tr>
 <tr><td><code>&lt;TARGET&gt;</code></td><td>Target ADR number</td></tr>
 <tr><td><code>&lt;REVERSE_LINK&gt;</code></td><td>Reverse link description from target to source</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="options-3"><a class="header" href="#options-3">Options</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="description-3"><a class="header" href="#description-3">Description</a></h2>
 <p>Creates bidirectional links between two ADRs. The link is added to the status section of both ADRs.</p>
@@ -1175,19 +1035,13 @@ Amended by [3. Clarify decision format](0003-clarify-decision-format.md)
 <pre><code class="language-sh">adrs link 5 "Depends on" 3 "Dependency of"
 </code></pre>
 <h2 id="common-link-types"><a class="header" href="#common-link-types">Common Link Types</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Forward Link</th><th>Reverse Link</th><th>Use Case</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Forward Link</th><th>Reverse Link</th><th>Use Case</th></tr></thead><tbody>
 <tr><td>Amends</td><td>Amended by</td><td>Modifying a previous decision</td></tr>
 <tr><td>Extends</td><td>Extended by</td><td>Building on a previous decision</td></tr>
 <tr><td>Supersedes</td><td>Superseded by</td><td>Replacing a decision</td></tr>
 <tr><td>Relates to</td><td>Relates to</td><td>General relationship</td></tr>
 <tr><td>Depends on</td><td>Dependency of</td><td>Dependencies</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="superseding"><a class="header" href="#superseding">Superseding</a></h2>
 <p>For superseding relationships, prefer using <code>adrs new --supersedes</code>:</p>
@@ -1198,7 +1052,7 @@ adrs link 3 "Supersedes" 2 "Superseded by"
 # Use:
 adrs new --supersedes 2 "New approach"
 </code></pre>
-<p>The <code>--supersedes</code> option also updates the target ADR’s status to “Superseded”.</p>
+<p>The <code>--supersedes</code> option also updates the target ADR's status to "Superseded".</p>
 <h2 id="nextgen-mode-2"><a class="header" href="#nextgen-mode-2">NextGen Mode</a></h2>
 <p>In NextGen mode (<code>--ng</code>), links are stored in YAML frontmatter:</p>
 <pre><code class="language-yaml">---
@@ -1211,27 +1065,20 @@ links:
 </code></pre>
 <h2 id="related-3"><a class="header" href="#related-3">Related</a></h2>
 <ul>
-<li><a href="#new">new</a> - Create ADRs with links</li>
-<li><a href="#list">list</a> - Find ADR numbers</li>
+<li><a href="commands/./new.html">new</a> - Create ADRs with links</li>
+<li><a href="commands/./list.html">list</a> - Find ADR numbers</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="list"><a class="header" href="#list">list</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="list"><a class="header" href="#list">list</a></h1>
 <p>List all Architecture Decision Records.</p>
 <h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
 <pre><code>adrs list [OPTIONS]
 </code></pre>
 <h2 id="options-4"><a class="header" href="#options-4">Options</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="description-4"><a class="header" href="#description-4">Description</a></h2>
 <p>Lists all ADRs in the repository, showing their number, title, and status.</p>
@@ -1263,27 +1110,20 @@ adrs list
 <p>ADRs are sorted by number.</p>
 <h2 id="related-4"><a class="header" href="#related-4">Related</a></h2>
 <ul>
-<li><a href="#new">new</a> - Create a new ADR</li>
-<li><a href="#edit">edit</a> - Edit an ADR from the list</li>
+<li><a href="commands/./new.html">new</a> - Create a new ADR</li>
+<li><a href="commands/./edit.html">edit</a> - Edit an ADR from the list</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="config"><a class="header" href="#config">config</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="config"><a class="header" href="#config">config</a></h1>
 <p>Show the current configuration.</p>
 <h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
 <pre><code>adrs config [OPTIONS]
 </code></pre>
 <h2 id="options-5"><a class="header" href="#options-5">Options</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="description-5"><a class="header" href="#description-5">Description</a></h2>
 <p>Displays the current configuration, including where it was loaded from.</p>
@@ -1309,61 +1149,42 @@ Full path: /home/user/myproject/doc/adr
 Mode: Compatible
 </code></pre>
 <h2 id="config-sources"><a class="header" href="#config-sources">Config Sources</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Source</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Source</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>adrs.toml</code></td><td>TOML configuration file</td></tr>
 <tr><td><code>.adr-dir</code></td><td>Legacy adr-tools configuration</td></tr>
 <tr><td><code>global (~/.config/adrs/config.toml)</code></td><td>User-wide configuration</td></tr>
 <tr><td><code>environment</code></td><td>Environment variable override</td></tr>
 <tr><td><code>defaults</code></td><td>Built-in defaults</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="related-5"><a class="header" href="#related-5">Related</a></h2>
 <ul>
-<li><a href="#configuration">Configuration</a> - Configuration options</li>
-<li><a href="#init">init</a> - Initialize a repository</li>
+<li><a href="commands/../configuration.html">Configuration</a> - Configuration options</li>
+<li><a href="commands/./init.html">init</a> - Initialize a repository</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="doctor"><a class="header" href="#doctor">doctor</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="doctor"><a class="header" href="#doctor">doctor</a></h1>
 <p>Check the health of your ADR repository.</p>
 <h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
 <pre><code>adrs doctor [OPTIONS]
 </code></pre>
 <h2 id="options-6"><a class="header" href="#options-6">Options</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="description-6"><a class="header" href="#description-6">Description</a></h2>
 <p>Runs diagnostic checks on your ADR repository and reports any issues found.</p>
 <h2 id="checks-performed"><a class="header" href="#checks-performed">Checks Performed</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Check</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Check</th><th>Description</th></tr></thead><tbody>
 <tr><td>File Naming</td><td>ADR files follow the <code>NNNN-title.md</code> pattern</td></tr>
 <tr><td>Duplicate Numbers</td><td>No two ADRs have the same number</td></tr>
 <tr><td>Numbering Gaps</td><td>Sequential numbering without gaps</td></tr>
 <tr><td>Broken Links</td><td>All referenced ADRs exist</td></tr>
 <tr><td>Superseded Status</td><td>Superseded ADRs have corresponding links</td></tr>
 <tr><td>Parse Errors</td><td>All ADRs can be parsed correctly</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="examples-6"><a class="header" href="#examples-6">Examples</a></h2>
 <h3 id="healthy-repository"><a class="header" href="#healthy-repository">Healthy Repository</a></h3>
@@ -1395,29 +1216,17 @@ Health check passed!
 Health check found 3 issue(s)
 </code></pre>
 <h2 id="severity-levels"><a class="header" href="#severity-levels">Severity Levels</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Level</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Level</th><th>Description</th></tr></thead><tbody>
 <tr><td>OK</td><td>Check passed</td></tr>
 <tr><td>WARN</td><td>Potential issue, but not critical</td></tr>
 <tr><td>ERROR</td><td>Problem that should be fixed</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h2 id="exit-codes"><a class="header" href="#exit-codes">Exit Codes</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Code</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Code</th><th>Description</th></tr></thead><tbody>
 <tr><td>0</td><td>All checks passed</td></tr>
 <tr><td>1</td><td>One or more checks failed</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <p>This allows using <code>doctor</code> in CI pipelines:</p>
 <pre><code class="language-yaml">- name: Check ADR health
@@ -1425,41 +1234,29 @@ Health check found 3 issue(s)
 </code></pre>
 <h2 id="related-6"><a class="header" href="#related-6">Related</a></h2>
 <ul>
-<li><a href="#list">list</a> - List ADRs</li>
-<li><a href="#link">link</a> - Fix broken links</li>
+<li><a href="commands/./list.html">list</a> - List ADRs</li>
+<li><a href="commands/./link.html">link</a> - Fix broken links</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="generate"><a class="header" href="#generate">generate</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="generate"><a class="header" href="#generate">generate</a></h1>
 <p>Generate documentation from ADRs.</p>
 <h2 id="usage-8"><a class="header" href="#usage-8">Usage</a></h2>
 <pre><code>adrs generate &lt;SUBCOMMAND&gt;
 </code></pre>
 <h2 id="subcommands"><a class="header" href="#subcommands">Subcommands</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Subcommand</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Subcommand</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>toc</code></td><td>Generate a table of contents</td></tr>
 <tr><td><code>graph</code></td><td>Generate a Graphviz dependency graph</td></tr>
 <tr><td><code>book</code></td><td>Generate an mdbook</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
-<hr>
+<hr />
 <h2 id="generate-toc"><a class="header" href="#generate-toc">generate toc</a></h2>
 <p>Generate a markdown table of contents to stdout.</p>
-<h3 id="usage-1-1"><a class="header" href="#usage-1-1">Usage</a></h3>
+<h3 id="usage-9"><a class="header" href="#usage-9">Usage</a></h3>
 <pre><code>adrs generate toc [OPTIONS]
 </code></pre>
 <h3 id="options-7"><a class="header" href="#options-7">Options</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-o, --ordered</code></td><td>Use ordered list (1. 2. 3.) instead of bullets</td></tr>
 <tr><td><code>-i, --intro &lt;FILE&gt;</code></td><td>Prepend content from file</td></tr>
 <tr><td><code>-O, --outro &lt;FILE&gt;</code></td><td>Append content from file</td></tr>
@@ -1467,8 +1264,7 @@ Health check found 3 issue(s)
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
 <h3 id="examples-7"><a class="header" href="#examples-7">Examples</a></h3>
 <h4 id="basic-table-of-contents"><a class="header" href="#basic-table-of-contents">Basic Table of Contents</a></h4>
@@ -1496,28 +1292,22 @@ Health check found 3 issue(s)
 <h4 id="link-prefix-for-wikis"><a class="header" href="#link-prefix-for-wikis">Link Prefix for Wikis</a></h4>
 <pre><code class="language-sh">adrs generate toc -p "wiki/adr/"
 </code></pre>
-<hr>
+<hr />
 <h2 id="generate-graph"><a class="header" href="#generate-graph">generate graph</a></h2>
 <p>Generate a Graphviz DOT graph showing ADR relationships.</p>
-<h3 id="usage-2-1"><a class="header" href="#usage-2-1">Usage</a></h3>
+<h3 id="usage-10"><a class="header" href="#usage-10">Usage</a></h3>
 <pre><code>adrs generate graph [OPTIONS]
 </code></pre>
-<h3 id="options-1-1"><a class="header" href="#options-1-1">Options</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<h3 id="options-8"><a class="header" href="#options-8">Options</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-p, --prefix &lt;PREFIX&gt;</code></td><td>Prefix for node URLs</td></tr>
 <tr><td><code>-e, --extension &lt;EXT&gt;</code></td><td>File extension for links (default: md)</td></tr>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
-<h3 id="examples-1-1"><a class="header" href="#examples-1-1">Examples</a></h3>
+<h3 id="examples-8"><a class="header" href="#examples-8">Examples</a></h3>
 <h4 id="basic-graph"><a class="header" href="#basic-graph">Basic Graph</a></h4>
 <pre><code class="language-sh">adrs generate graph
 </code></pre>
@@ -1554,29 +1344,23 @@ Health check found 3 issue(s)
 <li>Explicit links between ADRs shown as solid edges with labels</li>
 <li>Nodes link to their ADR files (clickable in SVG)</li>
 </ul>
-<hr>
+<hr />
 <h2 id="generate-book"><a class="header" href="#generate-book">generate book</a></h2>
 <p>Generate an mdbook from your ADRs.</p>
-<h3 id="usage-3-1"><a class="header" href="#usage-3-1">Usage</a></h3>
+<h3 id="usage-11"><a class="header" href="#usage-11">Usage</a></h3>
 <pre><code>adrs generate book [OPTIONS]
 </code></pre>
-<h3 id="options-2-1"><a class="header" href="#options-2-1">Options</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Option</th><th>Description</th></tr>
-</thead>
-<tbody>
+<h3 id="options-9"><a class="header" href="#options-9">Options</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-o, --output &lt;DIR&gt;</code></td><td>Output directory (default: book)</td></tr>
 <tr><td><code>-t, --title &lt;TITLE&gt;</code></td><td>Book title</td></tr>
 <tr><td><code>-d, --description &lt;DESC&gt;</code></td><td>Book description</td></tr>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody>
-</table>
+</tbody></table>
 </div>
-<h3 id="examples-2-1"><a class="header" href="#examples-2-1">Examples</a></h3>
+<h3 id="examples-9"><a class="header" href="#examples-9">Examples</a></h3>
 <h4 id="basic-book"><a class="header" href="#basic-book">Basic Book</a></h4>
 <pre><code class="language-sh">adrs generate book
 </code></pre>
@@ -1613,11 +1397,10 @@ mdbook serve
 </code></pre>
 <h2 id="related-7"><a class="header" href="#related-7">Related</a></h2>
 <ul>
-<li><a href="#list">list</a> - List ADRs</li>
-<li><a href="#doctor">doctor</a> - Check repository health</li>
+<li><a href="commands/./list.html">list</a> - List ADRs</li>
+<li><a href="commands/./doctor.html">doctor</a> - Check repository health</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="library-usage"><a class="header" href="#library-usage">Library Usage</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="library-usage"><a class="header" href="#library-usage">Library Usage</a></h1>
 <p>The <code>adrs-core</code> crate provides a Rust library for working with ADRs programmatically.</p>
 <h2 id="installation-2"><a class="header" href="#installation-2">Installation</a></h2>
 <p>Add to your <code>Cargo.toml</code>:</p>
@@ -1626,7 +1409,7 @@ adrs-core = "0.4"
 </code></pre>
 <h2 id="basic-usage-3"><a class="header" href="#basic-usage-3">Basic Usage</a></h2>
 <h3 id="opening-a-repository"><a class="header" href="#opening-a-repository">Opening a Repository</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::Repository;
+<pre><pre class="playground"><code class="language-rust">use adrs_core::Repository;
 use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
@@ -1637,9 +1420,9 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open_or_default(Path::new("."))?;
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h3 id="listing-adrs"><a class="header" href="#listing-adrs">Listing ADRs</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::Repository;
+<pre><pre class="playground"><code class="language-rust">use adrs_core::Repository;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -1649,9 +1432,9 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     }
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h3 id="creating-an-adr"><a class="header" href="#creating-an-adr">Creating an ADR</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::{Repository, Adr, AdrStatus};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Adr, AdrStatus};
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -1665,9 +1448,9 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     println!("Created: {}", path.display());
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h3 id="finding-an-adr"><a class="header" href="#finding-an-adr">Finding an ADR</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::Repository;
+<pre><pre class="playground"><code class="language-rust">use adrs_core::Repository;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -1679,9 +1462,9 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     let adr = repo.find("postgresql")?;
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h3 id="linking-adrs"><a class="header" href="#linking-adrs">Linking ADRs</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::{Repository, LinkKind};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, LinkKind};
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -1694,10 +1477,10 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     )?;
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h2 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h2>
 <h3 id="loading-configuration"><a class="header" href="#loading-configuration">Loading Configuration</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::{Config, discover};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Config, discover};
 use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
@@ -1709,9 +1492,9 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     println!("Source: {:?}", discovered.source);
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h3 id="creating-configuration"><a class="header" href="#creating-configuration">Creating Configuration</a></h3>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>use adrs_core::Config;
 
@@ -1720,10 +1503,10 @@ let config = Config {
     mode: adrs_core::ConfigMode::NextGen,
     ..Default::default()
 };
-<span class="boring">}</span></code></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="templates-1"><a class="header" href="#templates-1">Templates</a></h2>
 <h3 id="using-built-in-templates-1"><a class="header" href="#using-built-in-templates-1">Using Built-in Templates</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::{TemplateEngine, TemplateFormat, TemplateVariant, Adr};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{TemplateEngine, TemplateFormat, TemplateVariant, Adr};
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let engine = TemplateEngine::new(TemplateFormat::Madr, TemplateVariant::Minimal);
@@ -1734,9 +1517,9 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     println!("{}", content);
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h3 id="custom-templates-1"><a class="header" href="#custom-templates-1">Custom Templates</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::{TemplateEngine, Adr};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{TemplateEngine, Adr};
 use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
@@ -1746,10 +1529,10 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     let content = engine.render(&amp;adr)?;
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h2 id="parsing-adrs"><a class="header" href="#parsing-adrs">Parsing ADRs</a></h2>
 <h3 id="parse-from-file"><a class="header" href="#parse-from-file">Parse from File</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::Parser;
+<pre><pre class="playground"><code class="language-rust">use adrs_core::Parser;
 use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
@@ -1765,9 +1548,9 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     }
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h3 id="parse-from-string"><a class="header" href="#parse-from-string">Parse from String</a></h3>
-<pre class="playground"><code class="language-rust">use adrs_core::Parser;
+<pre><pre class="playground"><code class="language-rust">use adrs_core::Parser;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let content = r#"
@@ -1796,9 +1579,9 @@ None significant.
     let adr = parser.parse(content, Some(1))?;
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h2 id="health-checks"><a class="header" href="#health-checks">Health Checks</a></h2>
-<pre class="playground"><code class="language-rust">use adrs_core::{Repository, doctor_check};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, doctor_check};
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -1817,29 +1600,29 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     }
     
     Ok(())
-}</code></pre>
+}</code></pre></pre>
 <h2 id="types"><a class="header" href="#types">Types</a></h2>
 <h3 id="adrstatus"><a class="header" href="#adrstatus">AdrStatus</a></h3>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>use adrs_core::AdrStatus;
 
 let status = AdrStatus::Accepted;
 let status = AdrStatus::Superseded;
 let status = AdrStatus::Custom("In Review".to_string());
-<span class="boring">}</span></code></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="linkkind"><a class="header" href="#linkkind">LinkKind</a></h3>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>use adrs_core::LinkKind;
 
 let kind = LinkKind::Supersedes;
 let kind = LinkKind::AmendedBy;
 let kind = LinkKind::Custom("Depends on".to_string());
-<span class="boring">}</span></code></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="error-handling-1"><a class="header" href="#error-handling-1">Error Handling</a></h2>
 <p>The library uses <code>thiserror</code> for error types:</p>
-<pre class="playground"><code class="language-rust">use adrs_core::{Repository, Error};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Error};
 
 fn main() {
     match Repository::open(Path::new(".")) {
@@ -1851,17 +1634,16 @@ fn main() {
             eprintln!("Error: {}", e);
         }
     }
-}</code></pre>
+}</code></pre></pre>
 <h2 id="feature-flags"><a class="header" href="#feature-flags">Feature Flags</a></h2>
 <p>The <code>adrs-core</code> crate has no optional features currently. All functionality is included by default.</p>
 <h2 id="api-documentation"><a class="header" href="#api-documentation">API Documentation</a></h2>
 <p>Full API documentation is available on <a href="https://docs.rs/adrs-core">docs.rs</a>.</p>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="resources"><a class="header" href="#resources">Resources</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="resources"><a class="header" href="#resources">Resources</a></h1>
 <h2 id="adr-background"><a class="header" href="#adr-background">ADR Background</a></h2>
 <ul>
 <li><a href="https://adr.github.io">Architectural Decision Records</a> - The official ADR homepage</li>
-<li><a href="https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions">Documenting Architecture Decisions</a> - Michael Nygard’s original blog post</li>
+<li><a href="https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions">Documenting Architecture Decisions</a> - Michael Nygard's original blog post</li>
 <li><a href="https://adr.github.io/madr/">MADR</a> - Markdown Architectural Decision Records</li>
 </ul>
 <h2 id="tools"><a class="header" href="#tools">Tools</a></h2>
@@ -1887,8 +1669,7 @@ fn main() {
 <li><a href="https://www.amazon.com/Documenting-Software-Architectures-Views-Beyond/dp/0321552687">Documenting Software Architectures</a> - Clements et al.</li>
 <li><a href="https://pragprog.com/titles/mkdsa/design-it/">Design It!</a> - Michael Keeling</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="contributing"><a class="header" href="#contributing">Contributing</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="contributing"><a class="header" href="#contributing">Contributing</a></h1>
 <p>Contributions are welcome! See <a href="https://github.com/joshrotenberg/adrs/issues">issues</a> for ideas or open a new issue to discuss your proposal.</p>
 <h2 id="development-setup"><a class="header" href="#development-setup">Development Setup</a></h2>
 <pre><code class="language-sh">git clone https://github.com/joshrotenberg/adrs
@@ -1984,8 +1765,7 @@ chore: maintenance tasks
 <li>Add doc comments to public APIs</li>
 <li>Update CHANGELOG.md (handled by release-plz)</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="license"><a class="header" href="#license">License</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="license"><a class="header" href="#license">License</a></h1>
 <p>See <a href="https://github.com/joshrotenberg/adrs/blob/main/LICENSE-MIT">LICENSE-MIT</a> or <a href="https://github.com/joshrotenberg/adrs/blob/main/LICENSE-APACHE-2.0">LICENSE-APACHE</a>.</p>
 
                     </main>
@@ -2005,11 +1785,6 @@ chore: maintenance tasks
 
         </div>
 
-        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
-        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
-        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
-        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
-        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
 
 
@@ -2018,13 +1793,13 @@ chore: maintenance tasks
         </script>
 
 
-        <script src="elasticlunr-ef4e11c1.min.js"></script>
-        <script src="mark-09e88c2c.min.js"></script>
-        <script src="searcher-c2a407aa.js"></script>
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
 
-        <script src="clipboard-1626706a.min.js"></script>
-        <script src="highlight-abc7f01d.js"></script>
-        <script src="book-a0b12cfe.js"></script>
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
 
         <!-- Custom JS scripts -->
 
