@@ -1,22 +1,17 @@
 //! Doctor command implementation.
 
-use adrs_core::{IssueSeverity, Repository, check_all, check_repository};
+use adrs_core::{IssueSeverity, Repository, check_all};
 use anyhow::{Context, Result};
 use std::path::Path;
 
 /// Run health checks on the ADR repository.
 ///
-/// By default, runs both per-file lint checks and repository-level checks.
-/// Use `skip_lint` to only run repository-level checks.
-pub fn doctor(root: &Path, skip_lint: bool) -> Result<()> {
+/// Runs all lint checks (per-file and repository-level).
+pub fn doctor(root: &Path) -> Result<()> {
     let repo =
         Repository::open(root).context("Failed to open repository. Have you run 'adrs init'?")?;
 
-    let report = if skip_lint {
-        check_repository(&repo).context("Failed to run repository checks")?
-    } else {
-        check_all(&repo).context("Failed to run health checks")?
-    };
+    let report = check_all(&repo).context("Failed to run health checks")?;
 
     if report.issues.is_empty() {
         println!("No issues found. Your ADR repository is healthy!");
