@@ -21,6 +21,10 @@ time.workspace = true
 fuzzy-matcher.workspace = true
 regex.workspace = true
 
+# Linting (mdbook-lint integration)
+mdbook-lint-core = { path = "../../../mdblnt/mdbook-lint/crates/mdbook-lint-core" }
+mdbook-lint-rulesets = { path = "../../../mdblnt/mdbook-lint/crates/mdbook-lint-rulesets", default-features = false, features = ["adr"] }
+
 [dev-dependencies]
 tempfile.workspace = true
 proptest.workspace = true

@@ -18,20 +18,25 @@ mod config;
 pub mod doctor;
 mod error;
 pub mod export;
+pub mod lint;
 mod parse;
 mod repository;
 mod template;
 mod types;
 
 pub use config::{Config, ConfigMode, ConfigSource, DiscoveredConfig, discover};
-pub use doctor::{Check, Diagnostic, DoctorReport, Severity, check as doctor_check};
 pub use error::{Error, Result};
 pub use export::{
     ConsideredOption, ImportOptions, ImportResult, JSON_ADR_SCHEMA, JSON_ADR_VERSION, JsonAdr,
     JsonAdrBulkExport, JsonAdrLink, JsonAdrSingle, RepositoryInfo, ToolInfo, export_adr,
     export_directory, export_repository, import_to_directory,
 };
+pub use lint::{Issue, IssueSeverity, LintReport, check_all, check_repository, lint_adr, lint_all};
 pub use parse::Parser;
 pub use repository::Repository;
 pub use template::{Template, TemplateEngine, TemplateFormat, TemplateVariant};
 pub use types::{Adr, AdrLink, AdrStatus, LinkKind};
+
+// Legacy doctor module - deprecated, use lint module instead
+#[deprecated(since = "0.6.0", note = "Use lint module instead")]
+pub use doctor::{Check, Diagnostic, DoctorReport, Severity, check as doctor_check};
