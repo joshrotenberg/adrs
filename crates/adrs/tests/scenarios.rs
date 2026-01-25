@@ -405,12 +405,12 @@ fn scenario_doctor_finds_issues() {
     )
     .unwrap();
 
-    // Step 3: Doctor should find the gap (reports as "Missing ADR numbers")
+    // Step 3: Doctor should find the gap (reports as "Missing ADR number X")
     adrs()
         .current_dir(temp.path())
         .args(["doctor"])
         .assert()
-        .stdout(predicate::str::contains("Missing ADR numbers"));
+        .stdout(predicate::str::contains("Missing ADR number"));
 
     temp.close().unwrap();
 }

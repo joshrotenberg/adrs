@@ -1,25 +1,35 @@
-//! Doctor command implementation.
+//! Lint command implementation.
 
-use adrs_core::{IssueSeverity, Repository, check_all, check_repository};
+use adrs_core::{IssueSeverity, Repository, lint_adr, lint_all};
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Run health checks on the ADR repository.
-///
-/// By default, runs both per-file lint checks and repository-level checks.
-/// Use `skip_lint` to only run repository-level checks.
-pub fn doctor(root: &Path, skip_lint: bool) -> Result<()> {
+/// Lint a single ADR or all ADRs.
+pub fn lint(root: &Path, adr: Option<String>, all: bool) -> Result<()> {
     let repo =
         Repository::open(root).context("Failed to open repository. Have you run 'adrs init'?")?;
 
-    let report = if skip_lint {
-        check_repository(&repo).context("Failed to run repository checks")?
+    let report = if all {
+        lint_all(&repo).context("Failed to lint ADRs")?
+    } else if let Some(adr_ref) = adr {
+        // Parse as number or find by title
+        let adr = if let Ok(num) = adr_ref.parse::<u32>() {
+            repo.get(num)
+                .context(format!("ADR {} not found", num))?
+                .clone()
+        } else {
+            repo.find(&adr_ref)
+                .context(format!("ADR '{}' not found", adr_ref))?
+                .clone()
+        };
+        lint_adr(&adr).context("Failed to lint ADR")?
     } else {
-        check_all(&repo).context("Failed to run health checks")?
+        // No ADR specified and --all not set, show help
+        anyhow::bail!("Specify an ADR number/title or use --all to lint all ADRs");
     };
 
     if report.issues.is_empty() {
-        println!("No issues found. Your ADR repository is healthy!");
+        println!("No issues found.");
         return Ok(());
     }
 
