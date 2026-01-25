@@ -207,6 +207,14 @@ enum ExportCommands {
         /// Pretty-print the JSON output
         #[arg(short, long)]
         pretty: bool,
+
+        /// Export metadata only (excludes content, includes source_uri)
+        #[arg(long)]
+        metadata_only: bool,
+
+        /// Base URL for source_uri (e.g., https://github.com/org/repo/blob/main/doc/adr)
+        #[arg(long, value_name = "URL")]
+        base_url: Option<String>,
     },
 }
 
@@ -319,14 +327,34 @@ fn main() -> Result<()> {
             }
         }
         Commands::Export { command } => match command {
-            ExportCommands::Json { adr, dir, pretty } => {
+            ExportCommands::Json {
+                adr,
+                dir,
+                pretty,
+                metadata_only,
+                base_url,
+            } => {
                 if let Some(ref dir_path) = dir {
                     // Export from arbitrary directory - no repo needed
-                    commands::export_json(&start_dir, adr, Some(dir_path), pretty)
+                    commands::export_json(
+                        &start_dir,
+                        adr,
+                        Some(dir_path),
+                        pretty,
+                        metadata_only,
+                        base_url,
+                    )
                 } else {
                     // Export from repository
                     let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-                    commands::export_json(&discovered.root, adr, None, pretty)
+                    commands::export_json(
+                        &discovered.root,
+                        adr,
+                        None,
+                        pretty,
+                        metadata_only,
+                        base_url,
+                    )
                 }
             }
         },
