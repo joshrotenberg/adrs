@@ -1010,7 +1010,9 @@ dependencies = [
 
 [[package]]
 name = "mdbook-lint-core"
-version = "0.13.6"
+version = "0.13.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16638fdfd2bdf5f24c363f7a8438b5c15a446ff90d7d600a4c04a09968979c28"
 dependencies = [
  "anyhow",
  "comrak",
@@ -1025,7 +1027,9 @@ dependencies = [
 
 [[package]]
 name = "mdbook-lint-rulesets"
-version = "0.13.6"
+version = "0.13.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ffac3e035272a557e440a5b45ad52ffd1453e305c7297524dbe1bae7cf84ab"
 dependencies = [
  "anyhow",
  "comrak",
@@ -1510,7 +1514,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
