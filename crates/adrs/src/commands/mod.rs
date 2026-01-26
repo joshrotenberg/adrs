@@ -12,6 +12,7 @@ mod list;
 mod new;
 mod search;
 mod status;
+mod template;
 
 pub use config::config_with_discovery;
 pub use doctor::doctor;
@@ -25,3 +26,4 @@ pub use list::list;
 pub use new::new;
 pub use search::search;
 pub use status::status;
+pub use template::{list as template_list, show as template_show};

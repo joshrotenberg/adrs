@@ -103,6 +103,16 @@ impl Template {
         }
     }
 
+    /// Get the template content.
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    /// Get the template name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Load a template from a file.
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
