@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+<<<<<<< Updated upstream
+=======
+## [0.6.0] - 2026-01-26
+
+### Features
+
+- Add source_uri field to JSON-ADR spec for federation
+
+
+## [0.5.1] - 2026-01-22
+
+### Features
+
+- Add status command to change ADR status
+
+
+>>>>>>> Stashed changes
 ## [0.5.0] - 2026-01-22
 
 ### Bug Fixes
