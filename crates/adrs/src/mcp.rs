@@ -181,6 +181,52 @@ pub struct ValidateAdrParams {
     pub number: u32,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetAdrSectionsParams {
+    /// ADR number to retrieve
+    #[schemars(description = "The ADR number (e.g., 1, 2, 3)")]
+    pub number: u32,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CompareAdrsParams {
+    /// First ADR number (source)
+    #[schemars(description = "The first ADR number to compare (source)")]
+    pub source: u32,
+
+    /// Second ADR number (target)
+    #[schemars(description = "The second ADR number to compare (target)")]
+    pub target: u32,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct BulkUpdateStatusParams {
+    /// ADR numbers to update
+    #[schemars(description = "Array of ADR numbers to update")]
+    pub numbers: Vec<u32>,
+
+    /// New status for all ADRs
+    #[schemars(
+        description = "New status: proposed, accepted, deprecated, superseded, or rejected"
+    )]
+    pub status: String,
+
+    /// For superseded status, the ADR that supersedes these
+    #[schemars(description = "If status is 'superseded', the ADR number that supersedes these")]
+    pub superseded_by: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SuggestTagsParams {
+    /// ADR number to analyze
+    #[schemars(description = "The ADR number to analyze for tag suggestions")]
+    pub number: u32,
+
+    /// Maximum number of tags to suggest
+    #[schemars(description = "Maximum number of tags to suggest (default: 5)")]
+    pub max_tags: Option<usize>,
+}
+
 // Response types
 
 #[derive(Debug, Serialize)]
@@ -237,6 +283,86 @@ struct SectionStatus {
 struct SectionInfo {
     present: bool,
     empty: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct AdrSections {
+    number: u32,
+    title: String,
+    status: String,
+    date: Option<String>,
+    tags: Vec<String>,
+    context: String,
+    decision: String,
+    consequences: String,
+    links: Vec<LinkInfo>,
+}
+
+#[derive(Debug, Serialize)]
+struct CompareResult {
+    source: AdrBrief,
+    target: AdrBrief,
+    differences: Differences,
+}
+
+#[derive(Debug, Serialize)]
+struct AdrBrief {
+    number: u32,
+    title: String,
+    status: String,
+}
+
+#[derive(Debug, Serialize)]
+struct Differences {
+    title_changed: bool,
+    status_changed: bool,
+    context: SectionDiff,
+    decision: SectionDiff,
+    consequences: SectionDiff,
+}
+
+#[derive(Debug, Serialize)]
+struct SectionDiff {
+    changed: bool,
+    source_empty: bool,
+    target_empty: bool,
+    source_length: usize,
+    target_length: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkUpdateResult {
+    updated: Vec<UpdatedAdr>,
+    failed: Vec<FailedAdr>,
+    summary: String,
+}
+
+#[derive(Debug, Serialize)]
+struct UpdatedAdr {
+    number: u32,
+    old_status: String,
+    new_status: String,
+}
+
+#[derive(Debug, Serialize)]
+struct FailedAdr {
+    number: u32,
+    error: String,
+}
+
+#[derive(Debug, Serialize)]
+struct SuggestTagsResult {
+    number: u32,
+    title: String,
+    existing_tags: Vec<String>,
+    suggested_tags: Vec<SuggestedTag>,
+}
+
+#[derive(Debug, Serialize)]
+struct SuggestedTag {
+    tag: String,
+    confidence: f32,
+    reason: String,
 }
 
 #[tool_router]
@@ -359,6 +485,50 @@ impl AdrService {
     )]
     fn validate_adr(&self, Parameters(params): Parameters<ValidateAdrParams>) -> String {
         match self.validate_adr_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Get ADR with parsed sections
+    #[tool(
+        description = "Get an ADR with its content parsed into separate sections (context, decision, consequences). Returns structured data instead of raw markdown, making it easier to analyze specific sections independently."
+    )]
+    fn get_adr_sections(&self, Parameters(params): Parameters<GetAdrSectionsParams>) -> String {
+        match self.get_adr_sections_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Compare two ADRs
+    #[tool(
+        description = "Compare two ADRs and show the differences between them. Useful for understanding how decisions evolved, especially when one ADR supersedes another. Returns structural comparison of title, status, and content sections."
+    )]
+    fn compare_adrs(&self, Parameters(params): Parameters<CompareAdrsParams>) -> String {
+        match self.compare_adrs_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Bulk update status of multiple ADRs
+    #[tool(
+        description = "Update the status of multiple ADRs in a single operation. Useful for batch accepting related ADRs or deprecating multiple outdated decisions. Returns detailed results for each ADR including any failures."
+    )]
+    fn bulk_update_status(&self, Parameters(params): Parameters<BulkUpdateStatusParams>) -> String {
+        match self.bulk_update_status_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Suggest tags for an ADR
+    #[tool(
+        description = "Analyze an ADR's content and suggest relevant tags based on keywords and common architectural categories. Returns suggested tags with confidence scores and reasons. Requires NextGen mode for tags to be applied."
+    )]
+    fn suggest_tags(&self, Parameters(params): Parameters<SuggestTagsParams>) -> String {
+        match self.suggest_tags_impl(params) {
             Ok(json) => json,
             Err(e) => format!("Error: {}", e),
         }
@@ -843,6 +1013,334 @@ impl AdrService {
                     empty: consequences_empty,
                 },
             },
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
+    }
+
+    fn get_adr_sections_impl(&self, params: GetAdrSectionsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let adr = repo.get(params.number).map_err(|e| e.to_string())?;
+
+        let sections = AdrSections {
+            number: adr.number,
+            title: adr.title.clone(),
+            status: adr.status.to_string(),
+            date: Some(adr.date.to_string()),
+            tags: adr.tags.clone(),
+            context: adr.context.clone(),
+            decision: adr.decision.clone(),
+            consequences: adr.consequences.clone(),
+            links: adr
+                .links
+                .iter()
+                .map(|l| LinkInfo {
+                    kind: l.kind.to_string(),
+                    target: l.target,
+                    description: l.description.clone(),
+                })
+                .collect(),
+        };
+
+        serde_json::to_string_pretty(&sections).map_err(|e| e.to_string())
+    }
+
+    fn compare_adrs_impl(&self, params: CompareAdrsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let source_adr = repo.get(params.source).map_err(|e| e.to_string())?;
+        let target_adr = repo.get(params.target).map_err(|e| e.to_string())?;
+
+        let result = CompareResult {
+            source: AdrBrief {
+                number: source_adr.number,
+                title: source_adr.title.clone(),
+                status: source_adr.status.to_string(),
+            },
+            target: AdrBrief {
+                number: target_adr.number,
+                title: target_adr.title.clone(),
+                status: target_adr.status.to_string(),
+            },
+            differences: Differences {
+                title_changed: source_adr.title != target_adr.title,
+                status_changed: source_adr.status.to_string() != target_adr.status.to_string(),
+                context: SectionDiff {
+                    changed: source_adr.context != target_adr.context,
+                    source_empty: source_adr.context.trim().is_empty(),
+                    target_empty: target_adr.context.trim().is_empty(),
+                    source_length: source_adr.context.len(),
+                    target_length: target_adr.context.len(),
+                },
+                decision: SectionDiff {
+                    changed: source_adr.decision != target_adr.decision,
+                    source_empty: source_adr.decision.trim().is_empty(),
+                    target_empty: target_adr.decision.trim().is_empty(),
+                    source_length: source_adr.decision.len(),
+                    target_length: target_adr.decision.len(),
+                },
+                consequences: SectionDiff {
+                    changed: source_adr.consequences != target_adr.consequences,
+                    source_empty: source_adr.consequences.trim().is_empty(),
+                    target_empty: target_adr.consequences.trim().is_empty(),
+                    source_length: source_adr.consequences.len(),
+                    target_length: target_adr.consequences.len(),
+                },
+            },
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
+    }
+
+    fn bulk_update_status_impl(&self, params: BulkUpdateStatusParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let status: AdrStatus = params.status.parse().unwrap(); // Infallible
+
+        let mut updated = Vec::new();
+        let mut failed = Vec::new();
+
+        for number in params.numbers {
+            match repo.get(number) {
+                Ok(adr) => {
+                    let old_status = adr.status.to_string();
+                    match repo.set_status(number, status.clone(), params.superseded_by) {
+                        Ok(_) => {
+                            updated.push(UpdatedAdr {
+                                number,
+                                old_status,
+                                new_status: status.to_string(),
+                            });
+                        }
+                        Err(e) => {
+                            failed.push(FailedAdr {
+                                number,
+                                error: e.to_string(),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    failed.push(FailedAdr {
+                        number,
+                        error: e.to_string(),
+                    });
+                }
+            }
+        }
+
+        let summary = if failed.is_empty() {
+            format!(
+                "Successfully updated {} ADR(s) to '{}'",
+                updated.len(),
+                status
+            )
+        } else {
+            format!("Updated {} ADR(s), {} failed", updated.len(), failed.len())
+        };
+
+        let result = BulkUpdateResult {
+            updated,
+            failed,
+            summary,
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
+    }
+
+    fn suggest_tags_impl(&self, params: SuggestTagsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let adr = repo.get(params.number).map_err(|e| e.to_string())?;
+        let max_tags = params.max_tags.unwrap_or(5);
+
+        let text = format!(
+            "{} {} {} {}",
+            adr.title, adr.context, adr.decision, adr.consequences
+        )
+        .to_lowercase();
+
+        let categories: Vec<(&str, Vec<&str>)> = vec![
+            (
+                "security",
+                vec![
+                    "security",
+                    "auth",
+                    "authentication",
+                    "authorization",
+                    "encrypt",
+                    "password",
+                    "token",
+                    "oauth",
+                    "jwt",
+                    "permission",
+                    "access control",
+                ],
+            ),
+            (
+                "database",
+                vec![
+                    "database",
+                    "sql",
+                    "postgres",
+                    "mysql",
+                    "mongodb",
+                    "redis",
+                    "schema",
+                    "migration",
+                    "query",
+                    "orm",
+                    "persistence",
+                    "storage",
+                ],
+            ),
+            (
+                "api",
+                vec![
+                    "api",
+                    "rest",
+                    "graphql",
+                    "endpoint",
+                    "http",
+                    "grpc",
+                    "websocket",
+                    "request",
+                    "response",
+                    "route",
+                ],
+            ),
+            (
+                "testing",
+                vec![
+                    "test",
+                    "testing",
+                    "unit test",
+                    "integration",
+                    "e2e",
+                    "mock",
+                    "fixture",
+                    "coverage",
+                    "tdd",
+                    "bdd",
+                ],
+            ),
+            (
+                "infrastructure",
+                vec![
+                    "infrastructure",
+                    "deploy",
+                    "docker",
+                    "kubernetes",
+                    "k8s",
+                    "ci/cd",
+                    "pipeline",
+                    "cloud",
+                    "aws",
+                    "gcp",
+                    "azure",
+                    "terraform",
+                ],
+            ),
+            (
+                "performance",
+                vec![
+                    "performance",
+                    "cache",
+                    "caching",
+                    "optimization",
+                    "latency",
+                    "throughput",
+                    "scalability",
+                    "load",
+                    "benchmark",
+                ],
+            ),
+            (
+                "architecture",
+                vec![
+                    "architecture",
+                    "pattern",
+                    "microservice",
+                    "monolith",
+                    "modular",
+                    "layer",
+                    "component",
+                    "design",
+                    "structure",
+                ],
+            ),
+            (
+                "frontend",
+                vec![
+                    "frontend",
+                    "ui",
+                    "ux",
+                    "react",
+                    "vue",
+                    "angular",
+                    "css",
+                    "html",
+                    "component",
+                    "browser",
+                ],
+            ),
+            (
+                "documentation",
+                vec![
+                    "documentation",
+                    "docs",
+                    "readme",
+                    "wiki",
+                    "guide",
+                    "tutorial",
+                    "reference",
+                    "markdown",
+                ],
+            ),
+            (
+                "tooling",
+                vec![
+                    "tooling",
+                    "cli",
+                    "tool",
+                    "linter",
+                    "formatter",
+                    "build",
+                    "compile",
+                    "bundle",
+                ],
+            ),
+        ];
+
+        let mut suggestions: Vec<SuggestedTag> = categories
+            .iter()
+            .filter_map(|(tag, keywords)| {
+                let matches: Vec<&str> = keywords
+                    .iter()
+                    .filter(|kw| text.contains(*kw))
+                    .copied()
+                    .collect();
+
+                if matches.is_empty() {
+                    None
+                } else {
+                    let confidence = (matches.len() as f32 / keywords.len() as f32).min(1.0);
+                    let reason = format!("Found keywords: {}", matches.join(", "));
+                    Some(SuggestedTag {
+                        tag: tag.to_string(),
+                        confidence,
+                        reason,
+                    })
+                }
+            })
+            .collect();
+
+        suggestions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        suggestions.truncate(max_tags);
+        suggestions.retain(|s| !adr.tags.iter().any(|t| t.to_lowercase() == s.tag));
+
+        let result = SuggestTagsResult {
+            number: adr.number,
+            title: adr.title,
+            existing_tags: adr.tags,
+            suggested_tags: suggestions,
         };
 
         serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
