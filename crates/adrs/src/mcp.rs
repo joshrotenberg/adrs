@@ -3,7 +3,7 @@
 //! This module provides an MCP server that allows AI agents to interact with ADRs.
 //! Enable with the `mcp` feature flag.
 
-use adrs_core::Repository;
+use adrs_core::{AdrStatus, LinkKind, Repository};
 use anyhow::Result;
 use rmcp::{
     ServerHandler,
@@ -69,6 +69,68 @@ pub struct SearchAdrsParams {
     pub title_only: Option<bool>,
 }
 
+// Write operation parameter types
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[allow(dead_code)] // Fields exposed in schema for future content population
+pub struct CreateAdrParams {
+    /// Title of the ADR
+    #[schemars(description = "Title describing the architectural decision")]
+    pub title: String,
+
+    /// Context/background for the decision
+    #[schemars(
+        description = "Context explaining why this decision is needed (optional, can be filled in later)"
+    )]
+    pub context: Option<String>,
+
+    /// The decision that was made
+    #[schemars(description = "The actual decision statement (optional, can be filled in later)")]
+    pub decision: Option<String>,
+
+    /// Consequences of the decision
+    #[schemars(
+        description = "Expected consequences of this decision (optional, can be filled in later)"
+    )]
+    pub consequences: Option<String>,
+
+    /// ADR number this supersedes (if any)
+    #[schemars(description = "If this ADR supersedes another, provide its number (optional)")]
+    pub supersedes: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateStatusParams {
+    /// ADR number to update
+    #[schemars(description = "The ADR number to update")]
+    pub number: u32,
+
+    /// New status
+    #[schemars(
+        description = "New status: proposed, accepted, deprecated, superseded, or rejected"
+    )]
+    pub status: String,
+
+    /// For superseded status, the ADR that supersedes this one
+    #[schemars(description = "If status is 'superseded', the ADR number that supersedes this one")]
+    pub superseded_by: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct LinkAdrsParams {
+    /// Source ADR number
+    #[schemars(description = "The ADR number that is the source of the link")]
+    pub source: u32,
+
+    /// Target ADR number
+    #[schemars(description = "The ADR number that is the target of the link")]
+    pub target: u32,
+
+    /// Link type
+    #[schemars(description = "Link type: Supersedes, Amends, or 'Relates to'")]
+    pub link_type: String,
+}
+
 // Response types
 
 #[derive(Debug, Serialize)]
@@ -128,6 +190,41 @@ impl AdrService {
     )]
     fn search_adrs(&self, Parameters(params): Parameters<SearchAdrsParams>) -> String {
         match self.search_adrs_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    // Write operations
+
+    /// Create a new ADR
+    #[tool(
+        description = "Create a new Architecture Decision Record. The ADR will be created with 'proposed' status and requires human review before acceptance. Returns the created ADR details including its number and file path."
+    )]
+    fn create_adr(&self, Parameters(params): Parameters<CreateAdrParams>) -> String {
+        match self.create_adr_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Update an ADR's status
+    #[tool(
+        description = "Update the status of an existing ADR. Valid statuses: proposed, accepted, deprecated, superseded, rejected. For 'superseded', provide the superseded_by number. Note: Status changes should be reviewed by humans."
+    )]
+    fn update_status(&self, Parameters(params): Parameters<UpdateStatusParams>) -> String {
+        match self.update_status_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Link two ADRs together
+    #[tool(
+        description = "Create a bidirectional link between two ADRs. Link types: 'Supersedes', 'Amends', or 'Relates to'. The reverse link is automatically created on the target ADR."
+    )]
+    fn link_adrs(&self, Parameters(params): Parameters<LinkAdrsParams>) -> String {
+        match self.link_adrs_impl(params) {
             Ok(json) => json,
             Err(e) => format!("Error: {}", e),
         }
@@ -224,6 +321,106 @@ impl AdrService {
 
         serde_json::to_string_pretty(&matches).map_err(|e| e.to_string())
     }
+
+    // Phase 2: Write operations
+
+    fn create_adr_impl(&self, params: CreateAdrParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+
+        let (adr, path) = if let Some(supersedes) = params.supersedes {
+            repo.supersede(&params.title, supersedes)
+                .map_err(|e| e.to_string())?
+        } else {
+            repo.new_adr(&params.title).map_err(|e| e.to_string())?
+        };
+
+        // Note: Created ADRs are always in 'proposed' status by default
+        // The optional context/decision/consequences fields are noted for future enhancement
+        // when we support updating ADR content programmatically
+
+        #[derive(Serialize)]
+        struct CreateResponse {
+            message: String,
+            number: u32,
+            title: String,
+            status: String,
+            path: String,
+        }
+
+        let response = CreateResponse {
+            message: "ADR created successfully. Please review and edit as needed.".to_string(),
+            number: adr.number,
+            title: adr.title,
+            status: adr.status.to_string(),
+            path: path.display().to_string(),
+        };
+
+        serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn update_status_impl(&self, params: UpdateStatusParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+
+        let status: AdrStatus = params.status.parse().unwrap(); // Infallible
+
+        let path = repo
+            .set_status(params.number, status.clone(), params.superseded_by)
+            .map_err(|e| e.to_string())?;
+
+        #[derive(Serialize)]
+        struct StatusResponse {
+            message: String,
+            number: u32,
+            new_status: String,
+            path: String,
+        }
+
+        let response = StatusResponse {
+            message: format!("Status updated to '{}'. Please verify the change.", status),
+            number: params.number,
+            new_status: status.to_string(),
+            path: path.display().to_string(),
+        };
+
+        serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn link_adrs_impl(&self, params: LinkAdrsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+
+        let source_kind: LinkKind = params.link_type.parse().unwrap(); // Infallible
+        let target_kind = source_kind.reverse();
+
+        repo.link(
+            params.source,
+            params.target,
+            source_kind.clone(),
+            target_kind.clone(),
+        )
+        .map_err(|e| e.to_string())?;
+
+        #[derive(Serialize)]
+        struct LinkResponse {
+            message: String,
+            source: u32,
+            target: u32,
+            source_link_type: String,
+            target_link_type: String,
+        }
+
+        let response = LinkResponse {
+            message: format!(
+                "ADRs {} and {} linked successfully.",
+                params.source, params.target
+            ),
+            source: params.source,
+            target: params.target,
+            source_link_type: source_kind.to_string(),
+            target_link_type: target_kind.to_string(),
+        };
+
+        serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
 }
 
 impl ServerHandler for AdrService {
@@ -233,6 +430,8 @@ impl ServerHandler for AdrService {
                 "ADR (Architecture Decision Record) management server. \
                 Use list_adrs to see all decisions, get_adr to read a specific one, \
                 and search_adrs to find relevant decisions. \
+                For modifications: create_adr creates new ADRs (always as 'proposed' status for human review), \
+                update_status changes an ADR's status, and link_adrs creates bidirectional links. \
                 ADRs document important architectural decisions and their context."
                     .into(),
             ),
