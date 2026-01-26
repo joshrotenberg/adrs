@@ -59,13 +59,14 @@ impl Repository {
         let adr_dir = adr_dir.unwrap_or_else(|| PathBuf::from(crate::config::DEFAULT_ADR_DIR));
         let adr_path = root.join(&adr_dir);
 
-        // Check if already initialized
-        if adr_path.exists() {
-            return Err(Error::AdrDirExists(adr_path));
-        }
-
-        // Create the directory
-        fs::create_dir_all(&adr_path)?;
+        // Check if directory exists and count existing ADRs
+        let existing_adrs = if adr_path.exists() {
+            count_existing_adrs(&adr_path)
+        } else {
+            // Create the directory
+            fs::create_dir_all(&adr_path)?;
+            0
+        };
 
         // Create config
         let config = Config {
@@ -86,13 +87,16 @@ impl Repository {
             template_engine: TemplateEngine::new(),
         };
 
-        // Create the initial ADR
-        let mut adr = Adr::new(1, "Record architecture decisions");
-        adr.status = AdrStatus::Accepted;
-        adr.context = "We need to record the architectural decisions made on this project.".into();
-        adr.decision = "We will use Architecture Decision Records, as described by Michael Nygard in his article \"Documenting Architecture Decisions\".".into();
-        adr.consequences = "See Michael Nygard's article, linked above. For a lightweight ADR toolset, see Nat Pryce's adr-tools.".into();
-        repo.create(&adr)?;
+        // Only create initial ADR if no ADRs exist
+        if existing_adrs == 0 {
+            let mut adr = Adr::new(1, "Record architecture decisions");
+            adr.status = AdrStatus::Accepted;
+            adr.context =
+                "We need to record the architectural decisions made on this project.".into();
+            adr.decision = "We will use Architecture Decision Records, as described by Michael Nygard in his article \"Documenting Architecture Decisions\".".into();
+            adr.consequences = "See Michael Nygard's article, linked above. For a lightweight ADR toolset, see Nat Pryce's adr-tools.".into();
+            repo.create(&adr)?;
+        }
 
         Ok(repo)
     }
@@ -333,6 +337,30 @@ impl Repository {
     }
 }
 
+/// Count existing ADR files in a directory.
+fn count_existing_adrs(path: &Path) -> usize {
+    if !path.is_dir() {
+        return 0;
+    }
+
+    fs::read_dir(path)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    let path = e.path();
+                    path.is_file()
+                        && path.extension().is_some_and(|ext| ext == "md")
+                        && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                            // Match NNNN-*.md pattern (adr-tools style)
+                            n.len() > 5 && n[..4].chars().all(|c| c.is_ascii_digit())
+                        })
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,12 +410,40 @@ mod tests {
     }
 
     #[test]
-    fn test_init_repository_already_exists() {
+    fn test_init_repository_already_exists_skips_initial_adr() {
         let temp = TempDir::new().unwrap();
         Repository::init(temp.path(), None, false).unwrap();
 
-        let result = Repository::init(temp.path(), None, false);
-        assert!(result.is_err());
+        // Re-init should succeed but not create another ADR
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adrs = repo.list().unwrap();
+        assert_eq!(adrs.len(), 1); // Still just the original initial ADR
+    }
+
+    #[test]
+    fn test_init_with_existing_adrs_skips_initial() {
+        let temp = TempDir::new().unwrap();
+        let adr_dir = temp.path().join("doc/adr");
+        fs::create_dir_all(&adr_dir).unwrap();
+
+        // Create some existing ADR files
+        fs::write(
+            adr_dir.join("0001-existing-decision.md"),
+            "# 1. Existing Decision\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nTest\n\n## Decision\n\nTest\n\n## Consequences\n\nTest\n",
+        )
+        .unwrap();
+        fs::write(
+            adr_dir.join("0002-another-decision.md"),
+            "# 2. Another Decision\n\nDate: 2024-01-02\n\n## Status\n\nAccepted\n\n## Context\n\nTest\n\n## Decision\n\nTest\n\n## Consequences\n\nTest\n",
+        )
+        .unwrap();
+
+        // Init should succeed and NOT create initial ADR
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adrs = repo.list().unwrap();
+        assert_eq!(adrs.len(), 2); // Only the existing ADRs, no "Record architecture decisions"
+        assert_eq!(adrs[0].title, "Existing Decision");
+        assert_eq!(adrs[1].title, "Another Decision");
     }
 
     #[test]
