@@ -12,8 +12,12 @@ A command-line tool for creating and managing [Architecture Decision Records](ht
 - **adr-tools compatible** - works with existing ADR repositories
 - **Multiple formats** - supports Nygard (classic) and [MADR 4.0.0](https://adr.github.io/madr/) formats
 - **Template variants** - full, minimal, and bare templates
+- **Tags support** - categorize ADRs with tags (NextGen mode)
+- **Full-text search** - search ADR titles and content
 - **Repository health checks** - `doctor` command finds issues
 - **Config discovery** - automatically finds ADR directory from subdirectories
+- **Import/Export** - JSON-ADR format with federation support
+- **MCP server** - AI agent integration via Model Context Protocol
 - **Cross-platform** - macOS, Linux, and Windows binaries
 
 ## Installation
@@ -62,14 +66,21 @@ adrs doctor
 adrs [OPTIONS] <COMMAND>
 
 Commands:
-  init      Initialize a new ADR repository
-  new       Create a new ADR
-  edit      Edit an existing ADR
-  list      List all ADRs
-  link      Link two ADRs together
-  config    Show configuration
-  doctor    Check repository health
-  generate  Generate documentation (toc, graph, book)
+  init         Initialize a new ADR repository
+  new          Create a new ADR
+  edit         Edit an existing ADR
+  list         List all ADRs
+  search       Search ADRs for matching content
+  link         Link two ADRs together
+  status       Change an ADR's status
+  config       Show configuration
+  doctor       Check repository health
+  generate     Generate documentation (toc, graph, book)
+  export       Export ADRs to different formats
+  import       Import ADRs from different formats
+  template     Manage ADR templates
+  completions  Generate shell completions
+  cheatsheet   Show quick reference for common workflows
 
 Options:
       --ng         Enable NextGen mode with YAML frontmatter
@@ -91,6 +102,22 @@ adrs new --format madr "Use GraphQL"
 
 # Minimal template
 adrs new --variant minimal "Quick decision"
+
+# With tags (NextGen mode)
+adrs --ng new --tags security,api "Use JWT for authentication"
+```
+
+### Search and filter
+
+```sh
+# Full-text search
+adrs search postgres
+
+# Filter by status
+adrs list --status accepted
+
+# Filter by tag (NextGen mode)
+adrs --ng list --tag security
 ```
 
 ### Supersede and link decisions
@@ -99,8 +126,8 @@ adrs new --variant minimal "Quick decision"
 # Supersede an existing ADR
 adrs new --supersedes 2 "Use MySQL instead"
 
-# Link related ADRs
-adrs link 3 "Amends" 1 "Amended by"
+# Link related ADRs (auto-derives reverse link)
+adrs link 3 Amends 1
 ```
 
 ### Generate documentation
@@ -116,13 +143,47 @@ adrs generate graph | dot -Tsvg > doc/adr/graph.svg
 adrs generate book && cd book && mdbook serve
 ```
 
+### Import/Export
+
+```sh
+# Export to JSON-ADR format
+adrs export json > decisions.json
+
+# Import from another repository
+adrs import decisions.json --renumber
+```
+
+## MCP Server (AI Integration)
+
+`adrs` includes an MCP (Model Context Protocol) server for AI agent integration. Build with:
+
+```sh
+cargo install adrs --features mcp
+```
+
+Add to Claude Desktop config (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "adrs": {
+      "command": "adrs",
+      "args": ["mcp", "serve"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+The MCP server provides 15 tools for reading, creating, and managing ADRs.
+
 ## Library
 
 `adrs` is built on the `adrs-core` library, which can be used independently:
 
 ```toml
 [dependencies]
-adrs-core = "0.5"
+adrs-core = "0.6"
 ```
 
 ```rust
