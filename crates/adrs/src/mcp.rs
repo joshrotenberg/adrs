@@ -174,6 +174,13 @@ pub struct GetRelatedParams {
     pub number: u32,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ValidateAdrParams {
+    /// ADR number to validate
+    #[schemars(description = "The ADR number to validate")]
+    pub number: u32,
+}
+
 // Response types
 
 #[derive(Debug, Serialize)]
@@ -201,6 +208,35 @@ struct LinkInfo {
     kind: String,
     target: u32,
     description: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ValidationResult {
+    number: u32,
+    title: String,
+    valid: bool,
+    issues: Vec<ValidationIssue>,
+    sections: SectionStatus,
+}
+
+#[derive(Debug, Serialize)]
+struct ValidationIssue {
+    severity: String,
+    message: String,
+    section: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct SectionStatus {
+    context: SectionInfo,
+    decision: SectionInfo,
+    consequences: SectionInfo,
+}
+
+#[derive(Debug, Serialize)]
+struct SectionInfo {
+    present: bool,
+    empty: bool,
 }
 
 #[tool_router]
@@ -312,6 +348,17 @@ impl AdrService {
     )]
     fn get_related_adrs(&self, Parameters(params): Parameters<GetRelatedParams>) -> String {
         match self.get_related_adrs_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Validate an ADR's structure and content
+    #[tool(
+        description = "Validate a single ADR's structure and content. Checks for required sections (Context, Decision, Consequences), validates status, and reports any issues. Returns validation results with severity levels (error/warning)."
+    )]
+    fn validate_adr(&self, Parameters(params): Parameters<ValidateAdrParams>) -> String {
+        match self.validate_adr_impl(params) {
             Ok(json) => json,
             Err(e) => format!("Error: {}", e),
         }
@@ -713,6 +760,92 @@ impl AdrService {
         };
 
         serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn validate_adr_impl(&self, params: ValidateAdrParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let adr = repo.get(params.number).map_err(|e| e.to_string())?;
+        let all_adrs = repo.list().map_err(|e| e.to_string())?;
+
+        let mut issues = Vec::new();
+
+        // Check sections
+        let context_present = !adr.context.is_empty();
+        let context_empty = adr.context.trim().is_empty();
+        let decision_present = !adr.decision.is_empty();
+        let decision_empty = adr.decision.trim().is_empty();
+        let consequences_present = !adr.consequences.is_empty();
+        let consequences_empty = adr.consequences.trim().is_empty();
+
+        // Report missing sections
+        if !context_present || context_empty {
+            issues.push(ValidationIssue {
+                severity: "warning".to_string(),
+                message: "Context section is missing or empty".to_string(),
+                section: Some("context".to_string()),
+            });
+        }
+
+        if !decision_present || decision_empty {
+            issues.push(ValidationIssue {
+                severity: "error".to_string(),
+                message: "Decision section is missing or empty".to_string(),
+                section: Some("decision".to_string()),
+            });
+        }
+
+        if !consequences_present || consequences_empty {
+            issues.push(ValidationIssue {
+                severity: "warning".to_string(),
+                message: "Consequences section is missing or empty".to_string(),
+                section: Some("consequences".to_string()),
+            });
+        }
+
+        // Check title
+        if adr.title.trim().is_empty() {
+            issues.push(ValidationIssue {
+                severity: "error".to_string(),
+                message: "ADR title is empty".to_string(),
+                section: None,
+            });
+        }
+
+        // Validate links reference existing ADRs
+        for link in &adr.links {
+            if !all_adrs.iter().any(|a| a.number == link.target) {
+                issues.push(ValidationIssue {
+                    severity: "error".to_string(),
+                    message: format!("Link references non-existent ADR #{}", link.target),
+                    section: None,
+                });
+            }
+        }
+
+        let valid = !issues.iter().any(|i| i.severity == "error");
+
+        let result = ValidationResult {
+            number: adr.number,
+            title: adr.title,
+            valid,
+            issues,
+            sections: SectionStatus {
+                context: SectionInfo {
+                    present: context_present,
+                    empty: context_empty,
+                },
+                decision: SectionInfo {
+                    present: decision_present,
+                    empty: decision_empty,
+                },
+                consequences: SectionInfo {
+                    present: consequences_present,
+                    empty: consequences_empty,
+                },
+            },
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
     }
 }
 
