@@ -343,6 +343,10 @@ The server reads ADRs from the current working directory's repository.")]
         #[command(subcommand)]
         command: McpCommands,
     },
+
+    /// Show quick reference for common workflows
+    #[command(alias = "qr")]
+    Cheatsheet,
 }
 
 #[cfg(feature = "mcp")]
@@ -749,7 +753,6 @@ fn main() -> Result<()> {
             generate(shell, &mut cmd, "adrs", &mut io::stdout());
             Ok(())
         }
-        #[cfg(feature = "mcp")]
         #[cfg(all(feature = "mcp", not(feature = "mcp-http")))]
         Commands::Mcp { command } => match command {
             McpCommands::Serve {} => {
@@ -778,7 +781,69 @@ fn main() -> Result<()> {
                 }
             }
         },
+        Commands::Cheatsheet => {
+            print_cheatsheet();
+            Ok(())
+        }
     }
+}
+
+fn print_cheatsheet() {
+    print!(
+        r#"ADR CHEATSHEET
+==============
+
+GETTING STARTED
+  adrs init                              Create ADR repository in doc/adr
+  adrs init docs/decisions               Use custom directory
+  adrs --ng init                         Enable NextGen mode (YAML frontmatter)
+
+CREATING ADRs
+  adrs new "Use PostgreSQL"              Create new ADR (opens editor)
+  adrs new --no-edit "Quick Decision"    Create without editor (CI/scripts)
+  adrs new --format madr "..."           Use MADR format
+  adrs new --status accepted "..."       Start as accepted
+  adrs --ng new -t api,db "..."          Add tags (requires --ng)
+
+SUPERSEDING & LINKING
+  adrs new --supersedes 2 "Use MySQL"    Create ADR that supersedes #2
+  adrs link 3 Supersedes 1               Link: ADR 3 supersedes ADR 1
+  adrs link 3 Amends 1                   Link: ADR 3 amends ADR 1
+  adrs link 3 "Relates to" 2             Symmetric relationship
+
+MANAGING STATUS
+  adrs status 3 accepted                 Mark as accepted
+  adrs status 2 deprecated               Mark as deprecated
+  adrs status 1 superseded --by 3        Mark as superseded by ADR 3
+
+VIEWING & SEARCHING
+  adrs list                              List all ADRs
+  adrs list -l                           Detailed view (status, date)
+  adrs list --status accepted            Filter by status
+  adrs list --since 2024-01-01           Filter by date
+  adrs search postgres                   Search content
+  adrs search -t database                Search titles only
+
+GENERATING DOCS
+  adrs generate toc > doc/adr/README.md  Create table of contents
+  adrs generate graph | dot -Tpng > g.png  Create relationship graph
+  adrs generate book                     Create mdbook
+
+IMPORT/EXPORT
+  adrs export json --pretty > adrs.json  Export to JSON
+  adrs import json external.json         Import from JSON
+  adrs import json --renumber ext.json   Append with new numbers
+  adrs import json --dry-run ext.json    Preview import
+
+CONFIGURATION
+  adrs config                            Show current config
+  adrs doctor                            Check repository health
+  adrs template list                     Show available templates
+
+For detailed help: adrs <command> --help
+Documentation: https://joshrotenberg.github.io/adrs-book/
+"#
+    );
 }
 
 /// Discover config or return a helpful error.
