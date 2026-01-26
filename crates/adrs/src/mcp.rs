@@ -6,9 +6,12 @@
 use adrs_core::{AdrStatus, LinkKind, Repository};
 use anyhow::Result;
 use rmcp::{
-    ServerHandler,
-    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{ServerCapabilities, ServerInfo},
+    ErrorData as McpError, ServerHandler,
+    handler::server::{router::tool::ToolRouter, tool::ToolCallContext, wrapper::Parameters},
+    model::{
+        CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams,
+        ServerCapabilities, ServerInfo,
+    },
     schemars, tool, tool_router,
 };
 use serde::{Deserialize, Serialize};
@@ -730,6 +733,34 @@ impl ServerHandler for AdrService {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             ..Default::default()
         }
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<ListToolsResult, McpError> {
+        Ok(ListToolsResult {
+            tools: self.tool_router.list_all(),
+            next_cursor: None,
+            meta: None,
+        })
+    }
+
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        self.tool_router
+            .call(ToolCallContext {
+                request_context: context,
+                service: self,
+                name: request.name,
+                arguments: request.arguments,
+                task: request.task,
+            })
+            .await
     }
 }
 
