@@ -89,7 +89,27 @@ enum Commands {
     },
 
     /// List all ADRs
-    List,
+    List {
+        /// Filter by status (e.g., proposed, accepted, deprecated, superseded)
+        #[arg(short, long, value_name = "STATUS")]
+        status: Option<String>,
+
+        /// Filter by date (show ADRs from this date onwards, YYYY-MM-DD)
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
+
+        /// Filter by date (show ADRs up to this date, YYYY-MM-DD)
+        #[arg(long, value_name = "DATE")]
+        until: Option<String>,
+
+        /// Filter by decision maker (MADR format)
+        #[arg(long, value_name = "NAME")]
+        decider: Option<String>,
+
+        /// Show detailed output (number, status, date, title)
+        #[arg(short = 'l', long)]
+        long: bool,
+    },
 
     /// Link two ADRs together
     Link {
@@ -282,9 +302,15 @@ fn main() -> Result<()> {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
             commands::edit(&discovered.root, &adr)
         }
-        Commands::List => {
+        Commands::List {
+            status,
+            since,
+            until,
+            decider,
+            long,
+        } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::list(&discovered.root)
+            commands::list(&discovered.root, status, since, until, decider, long)
         }
         Commands::Link {
             source,
