@@ -9,6 +9,9 @@ use std::path::PathBuf;
 
 mod commands;
 
+#[cfg(feature = "mcp")]
+mod mcp;
+
 #[derive(Parser)]
 #[command(name = "adrs")]
 #[command(author, version)]
@@ -312,6 +315,41 @@ FISH:
         #[arg(value_enum)]
         shell: ShellArg,
     },
+
+    /// Start MCP server for AI agent integration (requires --features mcp)
+    #[cfg(feature = "mcp")]
+    #[command(after_long_help = "\
+Starts an MCP (Model Context Protocol) server on stdio for AI agent integration.
+
+TOOLS PROVIDED:
+  list_adrs     List all ADRs with optional status/tag filters
+  get_adr       Get full content of an ADR by number
+  search_adrs   Search ADRs for matching text
+
+USAGE WITH CLAUDE:
+  Add to your Claude Desktop config (claude_desktop_config.json):
+  {
+    \"mcpServers\": {
+      \"adrs\": {
+        \"command\": \"adrs\",
+        \"args\": [\"mcp\", \"serve\"],
+        \"cwd\": \"/path/to/your/project\"
+      }
+    }
+  }
+
+The server reads ADRs from the current working directory's repository.")]
+    Mcp {
+        #[command(subcommand)]
+        command: McpCommands,
+    },
+}
+
+#[cfg(feature = "mcp")]
+#[derive(Subcommand)]
+enum McpCommands {
+    /// Start the MCP server on stdio
+    Serve,
 }
 
 /// Shell types for completion generation
@@ -692,6 +730,16 @@ fn main() -> Result<()> {
             generate(shell, &mut cmd, "adrs", &mut io::stdout());
             Ok(())
         }
+        #[cfg(feature = "mcp")]
+        Commands::Mcp { command } => match command {
+            McpCommands::Serve => {
+                let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+                tokio::runtime::Runtime::new()
+                    .context("Failed to create tokio runtime")?
+                    .block_on(mcp::serve(discovered.root))
+                    .context("MCP server error")
+            }
+        },
     }
 }
 

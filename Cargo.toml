@@ -42,6 +42,11 @@ clap_complete = "4"
 edit = "0.1"
 whoami = "1"
 
+# MCP server (optional feature)
+rmcp = { version = "0.14", features = ["server", "transport-io"] }
+schemars = "1"
+tokio = { version = "1", features = ["full"] }
+
 # Internal
 adrs-core = { path = "crates/adrs-core", version = "0.5.1" }
 
