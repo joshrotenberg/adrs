@@ -171,6 +171,17 @@ pub struct GetRelatedParams {
     pub number: u32,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SuggestTagsParams {
+    /// ADR number to analyze
+    #[schemars(description = "The ADR number to analyze for tag suggestions")]
+    pub number: u32,
+
+    /// Maximum number of tags to suggest
+    #[schemars(description = "Maximum number of tags to suggest (default: 5)")]
+    pub max_tags: Option<usize>,
+}
+
 // Response types
 
 #[derive(Debug, Serialize)]
@@ -198,6 +209,21 @@ struct LinkInfo {
     kind: String,
     target: u32,
     description: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct SuggestTagsResult {
+    number: u32,
+    title: String,
+    existing_tags: Vec<String>,
+    suggested_tags: Vec<SuggestedTag>,
+}
+
+#[derive(Debug, Serialize)]
+struct SuggestedTag {
+    tag: String,
+    confidence: f32,
+    reason: String,
 }
 
 #[tool_router]
@@ -309,6 +335,17 @@ impl AdrService {
     )]
     fn get_related_adrs(&self, Parameters(params): Parameters<GetRelatedParams>) -> String {
         match self.get_related_adrs_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Suggest tags for an ADR
+    #[tool(
+        description = "Analyze an ADR's content and suggest relevant tags based on keywords and common architectural categories. Returns suggested tags with confidence scores and reasons. Requires NextGen mode for tags to be applied."
+    )]
+    fn suggest_tags(&self, Parameters(params): Parameters<SuggestTagsParams>) -> String {
+        match self.suggest_tags_impl(params) {
             Ok(json) => json,
             Err(e) => format!("Error: {}", e),
         }
@@ -710,6 +747,217 @@ impl AdrService {
         };
 
         serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn suggest_tags_impl(&self, params: SuggestTagsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let adr = repo.get(params.number).map_err(|e| e.to_string())?;
+        let max_tags = params.max_tags.unwrap_or(5);
+
+        // Combine all text for analysis
+        let text = format!(
+            "{} {} {} {}",
+            adr.title, adr.context, adr.decision, adr.consequences
+        )
+        .to_lowercase();
+
+        // Define tag categories with their keywords
+        let categories: Vec<(&str, Vec<&str>)> = vec![
+            (
+                "security",
+                vec![
+                    "security",
+                    "auth",
+                    "authentication",
+                    "authorization",
+                    "encrypt",
+                    "password",
+                    "token",
+                    "oauth",
+                    "jwt",
+                    "permission",
+                    "access control",
+                    "vulnerability",
+                ],
+            ),
+            (
+                "database",
+                vec![
+                    "database",
+                    "sql",
+                    "postgres",
+                    "mysql",
+                    "mongodb",
+                    "redis",
+                    "schema",
+                    "migration",
+                    "query",
+                    "orm",
+                    "persistence",
+                    "storage",
+                ],
+            ),
+            (
+                "api",
+                vec![
+                    "api",
+                    "rest",
+                    "graphql",
+                    "endpoint",
+                    "http",
+                    "grpc",
+                    "websocket",
+                    "request",
+                    "response",
+                    "route",
+                ],
+            ),
+            (
+                "testing",
+                vec![
+                    "test",
+                    "testing",
+                    "unit test",
+                    "integration",
+                    "e2e",
+                    "mock",
+                    "fixture",
+                    "coverage",
+                    "tdd",
+                    "bdd",
+                ],
+            ),
+            (
+                "infrastructure",
+                vec![
+                    "infrastructure",
+                    "deploy",
+                    "docker",
+                    "kubernetes",
+                    "k8s",
+                    "ci/cd",
+                    "pipeline",
+                    "cloud",
+                    "aws",
+                    "gcp",
+                    "azure",
+                    "terraform",
+                ],
+            ),
+            (
+                "performance",
+                vec![
+                    "performance",
+                    "cache",
+                    "caching",
+                    "optimization",
+                    "latency",
+                    "throughput",
+                    "scalability",
+                    "load",
+                    "benchmark",
+                ],
+            ),
+            (
+                "architecture",
+                vec![
+                    "architecture",
+                    "pattern",
+                    "microservice",
+                    "monolith",
+                    "modular",
+                    "layer",
+                    "component",
+                    "design",
+                    "structure",
+                ],
+            ),
+            (
+                "frontend",
+                vec![
+                    "frontend",
+                    "ui",
+                    "ux",
+                    "react",
+                    "vue",
+                    "angular",
+                    "css",
+                    "html",
+                    "component",
+                    "browser",
+                ],
+            ),
+            (
+                "documentation",
+                vec![
+                    "documentation",
+                    "docs",
+                    "readme",
+                    "wiki",
+                    "guide",
+                    "tutorial",
+                    "reference",
+                    "markdown",
+                ],
+            ),
+            (
+                "tooling",
+                vec![
+                    "tooling",
+                    "cli",
+                    "tool",
+                    "linter",
+                    "formatter",
+                    "build",
+                    "compile",
+                    "bundle",
+                ],
+            ),
+        ];
+
+        // Score each category
+        let mut suggestions: Vec<SuggestedTag> = categories
+            .iter()
+            .filter_map(|(tag, keywords)| {
+                let matches: Vec<&str> = keywords
+                    .iter()
+                    .filter(|kw| text.contains(*kw))
+                    .copied()
+                    .collect();
+
+                if matches.is_empty() {
+                    None
+                } else {
+                    // Calculate confidence based on number of matching keywords
+                    let confidence = (matches.len() as f32 / keywords.len() as f32).min(1.0);
+                    let reason = format!("Found keywords: {}", matches.join(", "));
+
+                    Some(SuggestedTag {
+                        tag: tag.to_string(),
+                        confidence,
+                        reason,
+                    })
+                }
+            })
+            .collect();
+
+        // Sort by confidence (highest first)
+        suggestions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+
+        // Limit to max_tags
+        suggestions.truncate(max_tags);
+
+        // Filter out tags that already exist
+        suggestions.retain(|s| !adr.tags.iter().any(|t| t.to_lowercase() == s.tag));
+
+        let result = SuggestTagsResult {
+            number: adr.number,
+            title: adr.title,
+            existing_tags: adr.tags,
+            suggested_tags: suggestions,
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
     }
 }
 
