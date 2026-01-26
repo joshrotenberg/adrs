@@ -17,6 +17,7 @@ dependencies = [
  "assert_cmd",
  "assert_fs",
  "clap",
+ "clap_complete",
  "edit",
  "predicates",
  "serde_json",

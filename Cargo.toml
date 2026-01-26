@@ -38,6 +38,7 @@ regex = "1"
 # CLI only
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env", "string"] }
+clap_complete = "4"
 edit = "0.1"
 whoami = "1"
 
