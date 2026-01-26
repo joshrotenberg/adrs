@@ -2,7 +2,9 @@
 
 use adrs_core::{ConfigSource, discover};
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::{Shell, generate};
+use std::io;
 use std::path::PathBuf;
 
 mod commands;
@@ -285,6 +287,46 @@ Note: Use --by with 'superseded' to create a link to the replacing ADR.")]
         #[command(subcommand)]
         command: TemplateCommands,
     },
+
+    /// Generate shell completions
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs completions bash > ~/.bash_completion.d/adrs
+  adrs completions zsh > ~/.zfunc/_adrs
+  adrs completions fish > ~/.config/fish/completions/adrs.fish
+  adrs completions powershell > _adrs.ps1
+
+BASH:
+  Add to ~/.bashrc:
+    source ~/.bash_completion.d/adrs
+
+ZSH:
+  Add to ~/.zshrc (before compinit):
+    fpath=(~/.zfunc $fpath)
+    autoload -Uz compinit && compinit
+
+FISH:
+  Completions are loaded automatically from ~/.config/fish/completions/")]
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: ShellArg,
+    },
+}
+
+/// Shell types for completion generation
+#[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
+enum ShellArg {
+    /// Bourne Again Shell
+    Bash,
+    /// Z Shell
+    Zsh,
+    /// Fish Shell
+    Fish,
+    /// PowerShell
+    Powershell,
+    /// Elvish Shell
+    Elvish,
 }
 
 #[derive(Subcommand)]
@@ -638,6 +680,18 @@ fn main() -> Result<()> {
                 commands::template_show(&format, variant.as_deref())
             }
         },
+        Commands::Completions { shell } => {
+            let shell = match shell {
+                ShellArg::Bash => Shell::Bash,
+                ShellArg::Zsh => Shell::Zsh,
+                ShellArg::Fish => Shell::Fish,
+                ShellArg::Powershell => Shell::PowerShell,
+                ShellArg::Elvish => Shell::Elvish,
+            };
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "adrs", &mut io::stdout());
+            Ok(())
+        }
     }
 }
 
