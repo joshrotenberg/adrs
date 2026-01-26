@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+<<<<<<< Updated upstream
+=======
+## [0.6.0] - 2026-01-26
+
+### Bug Fixes
+
+- Init detects existing ADRs and skips initial ADR creation
+- Expose MCP tools via ServerHandler list_tools/call_tool
+
+### Documentation
+
+- Improve CLI help discoverability with examples
+
+### Features
+
+- Add source_uri field to JSON-ADR spec for federation
+- Add filtering options to list command
+- Add search command for full-text search
+- Add template management commands
+- Add tags support for ADR categorization
+- Add --no-edit flag for non-interactive ADR creation
+- Simplify link command with auto-derived reverse links
+- Add shell completions command
+- Add MCP server for AI agent integration
+- Add MCP write operations (create, status, link)
+- Add HTTP transport for MCP server
+- Add MCP tools for content updates and repository info
+- **mcp:** Add validate_adr tool
+- Add cheatsheet command for quick reference
+
+
+## [0.5.1] - 2026-01-22
+
+### Documentation
+
+- Refresh README for v0.5.0
+
+### Features
+
+- Add status command to change ADR status
+
+### Testing
+
+- Add integration tests for status command
+
+
+>>>>>>> Stashed changes
 ## [0.5.0] - 2026-01-22
 
 ### Bug Fixes
