@@ -162,6 +162,12 @@ enum Commands {
         #[command(subcommand)]
         command: ImportCommands,
     },
+
+    /// Manage ADR templates
+    Template {
+        #[command(subcommand)]
+        command: TemplateCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -265,6 +271,22 @@ enum ImportCommands {
         /// Use next-gen mode with YAML frontmatter
         #[arg(long)]
         ng: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum TemplateCommands {
+    /// List available templates
+    List,
+
+    /// Show a template's content
+    Show {
+        /// Template format: nygard, madr
+        format: String,
+
+        /// Template variant: full, minimal, bare, bare-minimal
+        #[arg(short, long, value_name = "VARIANT")]
+        variant: Option<String>,
     },
 }
 
@@ -417,6 +439,12 @@ fn main() -> Result<()> {
                         ng,
                     )
                 }
+            }
+        },
+        Commands::Template { command } => match command {
+            TemplateCommands::List => commands::template_list(),
+            TemplateCommands::Show { format, variant } => {
+                commands::template_show(&format, variant.as_deref())
             }
         },
     }
