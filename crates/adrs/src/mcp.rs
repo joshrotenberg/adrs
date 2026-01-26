@@ -72,7 +72,6 @@ pub struct SearchAdrsParams {
 // Write operation parameter types
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-#[allow(dead_code)] // Fields exposed in schema for future content population
 pub struct CreateAdrParams {
     /// Title of the ADR
     #[schemars(description = "Title describing the architectural decision")]
@@ -129,6 +128,47 @@ pub struct LinkAdrsParams {
     /// Link type
     #[schemars(description = "Link type: Supersedes, Amends, or 'Relates to'")]
     pub link_type: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateContentParams {
+    /// ADR number to update
+    #[schemars(description = "The ADR number to update")]
+    pub number: u32,
+
+    /// Context/background for the decision
+    #[schemars(description = "New context section content (optional, omit to keep existing)")]
+    pub context: Option<String>,
+
+    /// The decision that was made
+    #[schemars(description = "New decision section content (optional, omit to keep existing)")]
+    pub decision: Option<String>,
+
+    /// Consequences of the decision
+    #[schemars(description = "New consequences section content (optional, omit to keep existing)")]
+    pub consequences: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateTagsParams {
+    /// ADR number to update
+    #[schemars(description = "The ADR number to update")]
+    pub number: u32,
+
+    /// Tags to add
+    #[schemars(description = "Tags to add to the ADR (requires NextGen mode)")]
+    pub tags: Vec<String>,
+
+    /// Replace existing tags instead of appending
+    #[schemars(description = "If true, replace all existing tags; if false, append to existing")]
+    pub replace: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetRelatedParams {
+    /// ADR number
+    #[schemars(description = "The ADR number to get related ADRs for")]
+    pub number: u32,
 }
 
 // Response types
@@ -225,6 +265,50 @@ impl AdrService {
     )]
     fn link_adrs(&self, Parameters(params): Parameters<LinkAdrsParams>) -> String {
         match self.link_adrs_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Update ADR content sections
+    #[tool(
+        description = "Update the content sections (context, decision, consequences) of an existing ADR. Only provided fields are updated; omitted fields are preserved. Changes should be reviewed by humans."
+    )]
+    fn update_content(&self, Parameters(params): Parameters<UpdateContentParams>) -> String {
+        match self.update_content_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Update ADR tags
+    #[tool(
+        description = "Add or replace tags on an ADR. Requires NextGen mode (YAML frontmatter). Use replace=true to replace all tags, or false/omit to append."
+    )]
+    fn update_tags(&self, Parameters(params): Parameters<UpdateTagsParams>) -> String {
+        match self.update_tags_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Get repository information
+    #[tool(
+        description = "Get information about the ADR repository including mode (compatible/nextgen), ADR count, and configuration."
+    )]
+    fn get_repository_info(&self) -> String {
+        match self.get_repository_info_impl() {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Get ADRs related to a specific ADR
+    #[tool(
+        description = "Get all ADRs that are linked to or from a specific ADR. Returns both incoming and outgoing links with their types."
+    )]
+    fn get_related_adrs(&self, Parameters(params): Parameters<GetRelatedParams>) -> String {
+        match self.get_related_adrs_impl(params) {
             Ok(json) => json,
             Err(e) => format!("Error: {}", e),
         }
@@ -327,16 +411,34 @@ impl AdrService {
     fn create_adr_impl(&self, params: CreateAdrParams) -> Result<String, String> {
         let repo = self.open_repo()?;
 
-        let (adr, path) = if let Some(supersedes) = params.supersedes {
+        let (mut adr, path) = if let Some(supersedes) = params.supersedes {
             repo.supersede(&params.title, supersedes)
                 .map_err(|e| e.to_string())?
         } else {
             repo.new_adr(&params.title).map_err(|e| e.to_string())?
         };
 
-        // Note: Created ADRs are always in 'proposed' status by default
-        // The optional context/decision/consequences fields are noted for future enhancement
-        // when we support updating ADR content programmatically
+        // Update content if provided
+        let mut content_updated = false;
+        if let Some(context) = params.context {
+            adr.context = context;
+            content_updated = true;
+        }
+        if let Some(decision) = params.decision {
+            adr.decision = decision;
+            content_updated = true;
+        }
+        if let Some(consequences) = params.consequences {
+            adr.consequences = consequences;
+            content_updated = true;
+        }
+
+        // Re-render if content was provided
+        let final_path = if content_updated {
+            repo.update(&adr).map_err(|e| e.to_string())?
+        } else {
+            path
+        };
 
         #[derive(Serialize)]
         struct CreateResponse {
@@ -345,6 +447,7 @@ impl AdrService {
             title: String,
             status: String,
             path: String,
+            content_populated: bool,
         }
 
         let response = CreateResponse {
@@ -352,7 +455,8 @@ impl AdrService {
             number: adr.number,
             title: adr.title,
             status: adr.status.to_string(),
-            path: path.display().to_string(),
+            path: final_path.display().to_string(),
+            content_populated: content_updated,
         };
 
         serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
@@ -421,6 +525,192 @@ impl AdrService {
 
         serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
     }
+
+    fn update_content_impl(&self, params: UpdateContentParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let mut adr = repo.get(params.number).map_err(|e| e.to_string())?;
+
+        // Update only provided fields
+        if let Some(context) = params.context {
+            adr.context = context;
+        }
+        if let Some(decision) = params.decision {
+            adr.decision = decision;
+        }
+        if let Some(consequences) = params.consequences {
+            adr.consequences = consequences;
+        }
+
+        let path = repo.update(&adr).map_err(|e| e.to_string())?;
+
+        #[derive(Serialize)]
+        struct ContentResponse {
+            message: String,
+            number: u32,
+            path: String,
+        }
+
+        let response = ContentResponse {
+            message: "ADR content updated. Please review the changes.".to_string(),
+            number: params.number,
+            path: path.display().to_string(),
+        };
+
+        serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn update_tags_impl(&self, params: UpdateTagsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+
+        if !repo.config().is_next_gen() {
+            return Err("Tags require NextGen mode. Initialize with 'adrs --ng init'.".to_string());
+        }
+
+        let mut adr = repo.get(params.number).map_err(|e| e.to_string())?;
+
+        if params.replace.unwrap_or(false) {
+            adr.set_tags(params.tags.clone());
+        } else {
+            for tag in &params.tags {
+                if !adr.tags.contains(tag) {
+                    adr.add_tag(tag.clone());
+                }
+            }
+        }
+
+        let path = repo.update(&adr).map_err(|e| e.to_string())?;
+
+        #[derive(Serialize)]
+        struct TagsResponse {
+            message: String,
+            number: u32,
+            tags: Vec<String>,
+            path: String,
+        }
+
+        let response = TagsResponse {
+            message: "ADR tags updated.".to_string(),
+            number: params.number,
+            tags: adr.tags,
+            path: path.display().to_string(),
+        };
+
+        serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn get_repository_info_impl(&self) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let adrs = repo.list().map_err(|e| e.to_string())?;
+        let config = repo.config();
+
+        #[derive(Serialize)]
+        struct RepoInfo {
+            mode: String,
+            adr_count: usize,
+            adr_directory: String,
+            statuses: StatusCounts,
+        }
+
+        #[derive(Serialize)]
+        struct StatusCounts {
+            proposed: usize,
+            accepted: usize,
+            deprecated: usize,
+            superseded: usize,
+            other: usize,
+        }
+
+        let mut counts = StatusCounts {
+            proposed: 0,
+            accepted: 0,
+            deprecated: 0,
+            superseded: 0,
+            other: 0,
+        };
+
+        for adr in &adrs {
+            match adr.status.to_string().to_lowercase().as_str() {
+                "proposed" => counts.proposed += 1,
+                "accepted" => counts.accepted += 1,
+                "deprecated" => counts.deprecated += 1,
+                "superseded" => counts.superseded += 1,
+                _ => counts.other += 1,
+            }
+        }
+
+        let info = RepoInfo {
+            mode: if config.is_next_gen() {
+                "nextgen".to_string()
+            } else {
+                "compatible".to_string()
+            },
+            adr_count: adrs.len(),
+            adr_directory: config.adr_dir.display().to_string(),
+            statuses: counts,
+        };
+
+        serde_json::to_string_pretty(&info).map_err(|e| e.to_string())
+    }
+
+    fn get_related_adrs_impl(&self, params: GetRelatedParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let adr = repo.get(params.number).map_err(|e| e.to_string())?;
+        let all_adrs = repo.list().map_err(|e| e.to_string())?;
+
+        #[derive(Serialize)]
+        struct RelatedAdr {
+            number: u32,
+            title: String,
+            link_type: String,
+            direction: String,
+        }
+
+        #[derive(Serialize)]
+        struct RelatedResponse {
+            number: u32,
+            title: String,
+            related: Vec<RelatedAdr>,
+        }
+
+        let mut related = Vec::new();
+
+        // Outgoing links from this ADR
+        for link in &adr.links {
+            if let Some(target) = all_adrs.iter().find(|a| a.number == link.target) {
+                related.push(RelatedAdr {
+                    number: target.number,
+                    title: target.title.clone(),
+                    link_type: link.kind.to_string(),
+                    direction: "outgoing".to_string(),
+                });
+            }
+        }
+
+        // Incoming links to this ADR
+        for other in &all_adrs {
+            if other.number == params.number {
+                continue;
+            }
+            for link in &other.links {
+                if link.target == params.number {
+                    related.push(RelatedAdr {
+                        number: other.number,
+                        title: other.title.clone(),
+                        link_type: link.kind.to_string(),
+                        direction: "incoming".to_string(),
+                    });
+                }
+            }
+        }
+
+        let response = RelatedResponse {
+            number: adr.number,
+            title: adr.title,
+            related,
+        };
+
+        serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
 }
 
 impl ServerHandler for AdrService {
@@ -429,10 +719,12 @@ impl ServerHandler for AdrService {
             instructions: Some(
                 "ADR (Architecture Decision Record) management server. \
                 Use list_adrs to see all decisions, get_adr to read a specific one, \
-                and search_adrs to find relevant decisions. \
-                For modifications: create_adr creates new ADRs (always as 'proposed' status for human review), \
-                update_status changes an ADR's status, and link_adrs creates bidirectional links. \
-                ADRs document important architectural decisions and their context."
+                and search_adrs to find relevant decisions. For modifications: create_adr creates new ADRs \
+                (always as 'proposed' status for human review), update_status changes an ADR's status, \
+                link_adrs creates bidirectional links, update_content edits ADR sections, \
+                and update_tags manages ADR tags (NextGen mode only). \
+                Use get_repository_info to understand the repo configuration and get_related_adrs \
+                to explore ADR relationships. ADRs document important architectural decisions and their context."
                     .into(),
             ),
             capabilities: ServerCapabilities::builder().enable_tools().build(),
