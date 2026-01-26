@@ -10,6 +10,7 @@ mod init;
 mod link;
 mod list;
 mod new;
+mod search;
 mod status;
 
 pub use config::config_with_discovery;
@@ -22,4 +23,5 @@ pub use init::init;
 pub use link::link;
 pub use list::list;
 pub use new::new;
+pub use search::search;
 pub use status::status;

@@ -111,6 +111,24 @@ enum Commands {
         long: bool,
     },
 
+    /// Search ADRs for matching content
+    Search {
+        /// Search query
+        query: String,
+
+        /// Search titles only
+        #[arg(short = 't', long)]
+        title: bool,
+
+        /// Filter by status
+        #[arg(short, long, value_name = "STATUS")]
+        status: Option<String>,
+
+        /// Case-sensitive search
+        #[arg(short = 'c', long)]
+        case_sensitive: bool,
+    },
+
     /// Link two ADRs together
     Link {
         /// Source ADR number
@@ -311,6 +329,15 @@ fn main() -> Result<()> {
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
             commands::list(&discovered.root, status, since, until, decider, long)
+        }
+        Commands::Search {
+            query,
+            title,
+            status,
+            case_sensitive,
+        } => {
+            let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+            commands::search(&discovered.root, &query, title, status, case_sensitive)
         }
         Commands::Link {
             source,
