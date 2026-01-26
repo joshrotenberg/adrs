@@ -348,8 +348,27 @@ The server reads ADRs from the current working directory's repository.")]
 #[cfg(feature = "mcp")]
 #[derive(Subcommand)]
 enum McpCommands {
-    /// Start the MCP server on stdio
-    Serve,
+    /// Start the MCP server
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs mcp serve                         Start on stdio (for Claude Desktop)
+  adrs mcp serve --http 127.0.0.1:3000   Start HTTP server (requires mcp-http feature)
+
+STDIO MODE (default):
+  Claude Desktop spawns this process. Server lifecycle tied to Claude session.
+
+HTTP MODE (--http):
+  Server runs independently. Can restart without restarting Claude.
+  Configure Claude with: {\"url\": \"http://127.0.0.1:3000/mcp\"}
+
+Build with HTTP support:
+  cargo build --release --features mcp-http")]
+    Serve {
+        /// Run HTTP server on this address instead of stdio
+        #[cfg(feature = "mcp-http")]
+        #[arg(long, value_name = "ADDR")]
+        http: Option<std::net::SocketAddr>,
+    },
 }
 
 /// Shell types for completion generation
@@ -731,13 +750,32 @@ fn main() -> Result<()> {
             Ok(())
         }
         #[cfg(feature = "mcp")]
+        #[cfg(all(feature = "mcp", not(feature = "mcp-http")))]
         Commands::Mcp { command } => match command {
-            McpCommands::Serve => {
+            McpCommands::Serve {} => {
                 let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
                 tokio::runtime::Runtime::new()
                     .context("Failed to create tokio runtime")?
-                    .block_on(mcp::serve(discovered.root))
+                    .block_on(mcp::serve_stdio(discovered.root))
                     .context("MCP server error")
+            }
+        },
+        #[cfg(feature = "mcp-http")]
+        Commands::Mcp { command } => match command {
+            McpCommands::Serve { http } => {
+                let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+                let runtime =
+                    tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+
+                if let Some(addr) = http {
+                    runtime
+                        .block_on(mcp::serve_http(discovered.root, addr))
+                        .context("MCP HTTP server error")
+                } else {
+                    runtime
+                        .block_on(mcp::serve_stdio(discovered.root))
+                        .context("MCP server error")
+                }
             }
         },
     }

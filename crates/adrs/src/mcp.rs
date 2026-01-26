@@ -442,12 +442,50 @@ impl ServerHandler for AdrService {
 }
 
 /// Run the MCP server on stdio.
-pub async fn serve(root: PathBuf) -> Result<()> {
+pub async fn serve_stdio(root: PathBuf) -> Result<()> {
     use rmcp::ServiceExt;
     use rmcp::transport::stdio;
 
     let service = AdrService::new(root);
     let server = service.serve(stdio()).await?;
     server.waiting().await?;
+    Ok(())
+}
+
+/// Run the MCP server over HTTP.
+#[cfg(feature = "mcp-http")]
+pub async fn serve_http(root: PathBuf, addr: std::net::SocketAddr) -> Result<()> {
+    use rmcp::transport::streamable_http_server::{
+        StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+    };
+    use tokio_util::sync::CancellationToken;
+
+    let ct = CancellationToken::new();
+
+    let service: StreamableHttpService<AdrService, LocalSessionManager> =
+        StreamableHttpService::new(
+            move || Ok(AdrService::new(root.clone())),
+            Default::default(),
+            StreamableHttpServerConfig {
+                stateful_mode: true,
+                sse_keep_alive: Some(std::time::Duration::from_secs(30)),
+                cancellation_token: ct.child_token(),
+                ..Default::default()
+            },
+        );
+
+    let router = axum::Router::new().nest_service("/mcp", service);
+    let tcp_listener = tokio::net::TcpListener::bind(addr).await?;
+
+    eprintln!("MCP server listening on http://{}/mcp", addr);
+
+    axum::serve(tcp_listener, router)
+        .with_graceful_shutdown(async move {
+            tokio::signal::ctrl_c().await.ok();
+            eprintln!("\nShutting down MCP server...");
+            ct.cancel();
+        })
+        .await?;
+
     Ok(())
 }
