@@ -12,6 +12,7 @@ pub fn list(
     since: Option<String>,
     until: Option<String>,
     decider: Option<String>,
+    tag: Option<String>,
     long_format: bool,
 ) -> Result<()> {
     let repo =
@@ -29,7 +30,16 @@ pub fn list(
     // Filter ADRs
     let filtered: Vec<&Adr> = adrs
         .iter()
-        .filter(|adr| matches_filters(adr, &status_filter, &since_date, &until_date, &decider))
+        .filter(|adr| {
+            matches_filters(
+                adr,
+                &status_filter,
+                &since_date,
+                &until_date,
+                &decider,
+                &tag,
+            )
+        })
         .collect();
 
     // Output
@@ -63,6 +73,7 @@ fn matches_filters(
     since_date: &Option<Date>,
     until_date: &Option<Date>,
     decider: &Option<String>,
+    tag: &Option<String>,
 ) -> bool {
     // Status filter (case-insensitive match)
     if let Some(filter_status) = status_filter
@@ -93,6 +104,15 @@ fn matches_filters(
             .iter()
             .any(|dm| dm.to_lowercase().contains(&decider_lower));
         if !has_decider {
+            return false;
+        }
+    }
+
+    // Tag filter (case-insensitive match)
+    if let Some(tag_filter) = tag {
+        let tag_lower = tag_filter.to_lowercase();
+        let has_tag = adr.tags.iter().any(|t| t.to_lowercase() == tag_lower);
+        if !has_tag {
             return false;
         }
     }
@@ -195,6 +215,7 @@ mod tests {
             &Some(AdrStatus::Accepted),
             &None,
             &None,
+            &None,
             &None
         ));
         assert!(!matches_filters(
@@ -202,7 +223,51 @@ mod tests {
             &Some(AdrStatus::Proposed),
             &None,
             &None,
+            &None,
             &None
+        ));
+    }
+
+    #[test]
+    fn test_matches_filters_tag() {
+        let date = Date::from_calendar_date(2024, Month::January, 15).unwrap();
+        let mut adr = create_test_adr(1, AdrStatus::Accepted, date);
+        adr.tags = vec!["security".to_string(), "api".to_string()];
+
+        // Tag matches (case-insensitive)
+        assert!(matches_filters(
+            &adr,
+            &None,
+            &None,
+            &None,
+            &None,
+            &Some("security".to_string())
+        ));
+        assert!(matches_filters(
+            &adr,
+            &None,
+            &None,
+            &None,
+            &None,
+            &Some("SECURITY".to_string())
+        ));
+        assert!(matches_filters(
+            &adr,
+            &None,
+            &None,
+            &None,
+            &None,
+            &Some("api".to_string())
+        ));
+
+        // Tag doesn't match
+        assert!(!matches_filters(
+            &adr,
+            &None,
+            &None,
+            &None,
+            &None,
+            &Some("database".to_string())
         ));
     }
 
@@ -214,8 +279,22 @@ mod tests {
         let before = Date::from_calendar_date(2024, Month::January, 1).unwrap();
         let after = Date::from_calendar_date(2024, Month::December, 1).unwrap();
 
-        assert!(matches_filters(&adr, &None, &Some(before), &None, &None));
-        assert!(!matches_filters(&adr, &None, &Some(after), &None, &None));
+        assert!(matches_filters(
+            &adr,
+            &None,
+            &Some(before),
+            &None,
+            &None,
+            &None
+        ));
+        assert!(!matches_filters(
+            &adr,
+            &None,
+            &Some(after),
+            &None,
+            &None,
+            &None
+        ));
     }
 
     #[test]
@@ -226,8 +305,22 @@ mod tests {
         let before = Date::from_calendar_date(2024, Month::January, 1).unwrap();
         let after = Date::from_calendar_date(2024, Month::December, 1).unwrap();
 
-        assert!(matches_filters(&adr, &None, &None, &Some(after), &None));
-        assert!(!matches_filters(&adr, &None, &None, &Some(before), &None));
+        assert!(matches_filters(
+            &adr,
+            &None,
+            &None,
+            &Some(after),
+            &None,
+            &None
+        ));
+        assert!(!matches_filters(
+            &adr,
+            &None,
+            &None,
+            &Some(before),
+            &None,
+            &None
+        ));
     }
 
     #[test]
@@ -241,28 +334,32 @@ mod tests {
             &None,
             &None,
             &None,
-            &Some("alice".to_string())
+            &Some("alice".to_string()),
+            &None
         ));
         assert!(matches_filters(
             &adr,
             &None,
             &None,
             &None,
-            &Some("Smith".to_string())
+            &Some("Smith".to_string()),
+            &None
         ));
         assert!(matches_filters(
             &adr,
             &None,
             &None,
             &None,
-            &Some("bob".to_string())
+            &Some("bob".to_string()),
+            &None
         ));
         assert!(!matches_filters(
             &adr,
             &None,
             &None,
             &None,
-            &Some("charlie".to_string())
+            &Some("charlie".to_string()),
+            &None
         ));
     }
 
@@ -271,6 +368,7 @@ mod tests {
         let date = Date::from_calendar_date(2024, Month::June, 15).unwrap();
         let mut adr = create_test_adr(1, AdrStatus::Accepted, date);
         adr.decision_makers = vec!["Alice".to_string()];
+        adr.tags = vec!["security".to_string()];
 
         let since = Date::from_calendar_date(2024, Month::January, 1).unwrap();
         let until = Date::from_calendar_date(2024, Month::December, 1).unwrap();
@@ -281,25 +379,18 @@ mod tests {
             &Some(AdrStatus::Accepted),
             &Some(since),
             &Some(until),
-            &Some("Alice".to_string())
+            &Some("Alice".to_string()),
+            &Some("security".to_string())
         ));
 
-        // Status doesn't match
-        assert!(!matches_filters(
-            &adr,
-            &Some(AdrStatus::Proposed),
-            &Some(since),
-            &Some(until),
-            &Some("Alice".to_string())
-        ));
-
-        // Decider doesn't match
+        // Tag doesn't match
         assert!(!matches_filters(
             &adr,
             &Some(AdrStatus::Accepted),
             &Some(since),
             &Some(until),
-            &Some("Bob".to_string())
+            &Some("Alice".to_string()),
+            &Some("database".to_string())
         ));
     }
 

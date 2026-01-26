@@ -42,6 +42,10 @@ pub struct Adr {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub informed: Vec<String>,
 
+    /// Tags for categorization.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+
     /// The context section (why this decision was needed).
     #[serde(skip)]
     pub context: String,
@@ -71,6 +75,7 @@ impl Adr {
             decision_makers: Vec::new(),
             consulted: Vec::new(),
             informed: Vec::new(),
+            tags: Vec::new(),
             context: String::new(),
             decision: String::new(),
             consequences: String::new(),
@@ -126,6 +131,16 @@ impl Adr {
     /// Add an informed person (MADR 4.0.0).
     pub fn add_informed(&mut self, person: impl Into<String>) {
         self.informed.push(person.into());
+    }
+
+    /// Set the tags for categorization.
+    pub fn set_tags(&mut self, tags: Vec<String>) {
+        self.tags = tags;
+    }
+
+    /// Add a tag for categorization.
+    pub fn add_tag(&mut self, tag: impl Into<String>) {
+        self.tags.push(tag.into());
     }
 }
 
@@ -615,6 +630,23 @@ mod tests {
         adr.add_informed("Eve");
 
         assert_eq!(adr.informed, vec!["Dave", "Eve"]);
+    }
+
+    #[test]
+    fn test_adr_set_tags() {
+        let mut adr = Adr::new(1, "Test");
+        adr.set_tags(vec!["security".into(), "api".into()]);
+
+        assert_eq!(adr.tags, vec!["security", "api"]);
+    }
+
+    #[test]
+    fn test_adr_add_tag() {
+        let mut adr = Adr::new(1, "Test");
+        adr.add_tag("security");
+        adr.add_tag("api");
+
+        assert_eq!(adr.tags, vec!["security", "api"]);
     }
 
     #[test]

@@ -80,6 +80,10 @@ enum Commands {
         /// Initial status [default: Proposed]
         #[arg(long, value_name = "STATUS")]
         status: Option<String>,
+
+        /// Tags for categorization (comma-separated, requires --ng)
+        #[arg(short = 't', long, value_name = "TAGS", value_delimiter = ',')]
+        tags: Option<Vec<String>>,
     },
 
     /// Edit an existing ADR
@@ -105,6 +109,10 @@ enum Commands {
         /// Filter by decision maker (MADR format)
         #[arg(long, value_name = "NAME")]
         decider: Option<String>,
+
+        /// Filter by tag
+        #[arg(short = 't', long, value_name = "TAG")]
+        tag: Option<String>,
 
         /// Show detailed output (number, status, date, title)
         #[arg(short = 'l', long)]
@@ -325,6 +333,7 @@ fn main() -> Result<()> {
             format,
             variant,
             status,
+            tags,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
             commands::new(
@@ -336,6 +345,7 @@ fn main() -> Result<()> {
                 format,
                 variant,
                 status,
+                tags,
             )
         }
         Commands::Edit { adr } => {
@@ -347,10 +357,11 @@ fn main() -> Result<()> {
             since,
             until,
             decider,
+            tag,
             long,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::list(&discovered.root, status, since, until, decider, long)
+            commands::list(&discovered.root, status, since, until, decider, tag, long)
         }
         Commands::Search {
             query,

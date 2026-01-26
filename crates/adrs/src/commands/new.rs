@@ -7,13 +7,14 @@ use std::path::Path;
 #[allow(clippy::too_many_arguments)]
 pub fn new(
     root: &Path,
-    _ng: bool,
+    ng: bool,
     title: String,
     supersedes: Option<u32>,
     link: Option<String>,
     format: Option<String>,
     variant: Option<String>,
     status: Option<String>,
+    tags: Option<Vec<String>>,
 ) -> Result<()> {
     // Parse template format if specified
     let template_format = if let Some(ref fmt) = format {
@@ -54,6 +55,19 @@ pub fn new(
     if supersedes.is_none() && status.is_some() {
         adr.status = initial_status;
         repo.update(&adr).context("Failed to update ADR status")?;
+    }
+
+    // Set tags if specified (requires --ng mode for YAML frontmatter)
+    if let Some(tag_list) = tags {
+        if !ng {
+            anyhow::bail!(
+                "Tags require --ng mode (YAML frontmatter). Use: adrs --ng new --tags ..."
+            );
+        }
+        if !tag_list.is_empty() {
+            adr.set_tags(tag_list);
+            repo.update(&adr).context("Failed to update ADR tags")?;
+        }
     }
 
     // Handle linking if specified
