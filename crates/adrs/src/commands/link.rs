@@ -9,13 +9,16 @@ pub fn link(
     source: u32,
     link_kind: &str,
     target: u32,
-    reverse_kind: &str,
+    reverse_kind: Option<&str>,
 ) -> Result<()> {
     let repo =
         Repository::open(root).context("ADR repository not found. Run 'adrs init' first.")?;
 
     let source_kind: LinkKind = link_kind.parse().unwrap_or(LinkKind::RelatesTo);
-    let target_kind: LinkKind = reverse_kind.parse().unwrap_or(LinkKind::RelatesTo);
+    let target_kind: LinkKind = match reverse_kind {
+        Some(kind) => kind.parse().unwrap_or(LinkKind::RelatesTo),
+        None => source_kind.reverse(),
+    };
 
     repo.link(source, target, source_kind, target_kind)?;
 

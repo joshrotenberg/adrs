@@ -282,6 +282,31 @@ impl std::str::FromStr for LinkKind {
     }
 }
 
+impl LinkKind {
+    /// Get the reverse link kind.
+    ///
+    /// For predefined link types, returns the opposite direction.
+    /// For custom types, returns the same type (symmetric relation).
+    ///
+    /// # Examples
+    /// ```
+    /// use adrs_core::LinkKind;
+    /// assert_eq!(LinkKind::Supersedes.reverse(), LinkKind::SupersededBy);
+    /// assert_eq!(LinkKind::AmendedBy.reverse(), LinkKind::Amends);
+    /// assert_eq!(LinkKind::RelatesTo.reverse(), LinkKind::RelatesTo);
+    /// ```
+    pub fn reverse(&self) -> Self {
+        match self {
+            Self::Supersedes => Self::SupersededBy,
+            Self::SupersededBy => Self::Supersedes,
+            Self::Amends => Self::AmendedBy,
+            Self::AmendedBy => Self::Amends,
+            Self::RelatesTo => Self::RelatesTo,
+            Self::Custom(s) => Self::Custom(s.clone()),
+        }
+    }
+}
+
 /// Convert a title to a URL-safe slug.
 ///
 /// Only ASCII alphanumeric characters are preserved; everything else becomes a dash.
@@ -585,6 +610,19 @@ mod tests {
                 .unwrap()
                 .trim(),
             "supersededby"
+        );
+    }
+
+    #[test]
+    fn test_link_kind_reverse() {
+        assert_eq!(LinkKind::Supersedes.reverse(), LinkKind::SupersededBy);
+        assert_eq!(LinkKind::SupersededBy.reverse(), LinkKind::Supersedes);
+        assert_eq!(LinkKind::Amends.reverse(), LinkKind::AmendedBy);
+        assert_eq!(LinkKind::AmendedBy.reverse(), LinkKind::Amends);
+        assert_eq!(LinkKind::RelatesTo.reverse(), LinkKind::RelatesTo);
+        assert_eq!(
+            LinkKind::Custom("Extends".into()).reverse(),
+            LinkKind::Custom("Extends".into())
         );
     }
 
