@@ -624,3 +624,325 @@ fn test_adr_dir_file_content() {
 
     temp.close().unwrap();
 }
+
+// ============================================================================
+// Search Command
+// ============================================================================
+
+#[test]
+fn test_search_help() {
+    adrs()
+        .args(["search", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Search ADRs for matching content"));
+}
+
+#[test]
+fn test_search_without_init() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["search", "test"])
+        .assert()
+        .failure();
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_search_finds_matching_adr() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Initialize
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Search for text in the default ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["search", "architecture"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Record architecture decisions"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_search_title_only() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Search titles only - "architecture" is in the title
+    adrs()
+        .current_dir(temp.path())
+        .args(["search", "-t", "architecture"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Record architecture decisions"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_search_no_results() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Search for non-existent text
+    adrs()
+        .current_dir(temp.path())
+        .args(["search", "xyzzyzzy"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No matches found"));
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
+// Template Command
+// ============================================================================
+
+#[test]
+fn test_template_help() {
+    adrs()
+        .args(["template", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Manage ADR templates"));
+}
+
+#[test]
+fn test_template_list() {
+    adrs()
+        .args(["template", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("nygard"))
+        .stdout(predicate::str::contains("madr"));
+}
+
+#[test]
+fn test_template_show_nygard() {
+    adrs()
+        .args(["template", "show", "nygard"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("## Status"))
+        .stdout(predicate::str::contains("## Context"))
+        .stdout(predicate::str::contains("## Decision"))
+        .stdout(predicate::str::contains("## Consequences"));
+}
+
+#[test]
+fn test_template_show_madr() {
+    adrs()
+        .args(["template", "show", "madr"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Status"))
+        .stdout(predicate::str::contains("Context"));
+}
+
+#[test]
+fn test_template_show_minimal_variant() {
+    adrs()
+        .args(["template", "show", "nygard", "--variant", "minimal"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("## Status"));
+}
+
+// ============================================================================
+// Completions Command
+// ============================================================================
+
+#[test]
+fn test_completions_help() {
+    adrs()
+        .args(["completions", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Generate shell completions"))
+        .stdout(predicate::str::contains("bash"))
+        .stdout(predicate::str::contains("zsh"))
+        .stdout(predicate::str::contains("fish"));
+}
+
+#[test]
+fn test_completions_bash() {
+    adrs()
+        .args(["completions", "bash"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("complete"))
+        .stdout(predicate::str::contains("adrs"));
+}
+
+#[test]
+fn test_completions_zsh() {
+    adrs()
+        .args(["completions", "zsh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("#compdef adrs"));
+}
+
+#[test]
+fn test_completions_fish() {
+    adrs()
+        .args(["completions", "fish"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("complete"));
+}
+
+// ============================================================================
+// Cheatsheet Command
+// ============================================================================
+
+#[test]
+fn test_cheatsheet_help() {
+    adrs()
+        .args(["cheatsheet", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Show quick reference"));
+}
+
+#[test]
+fn test_cheatsheet_output() {
+    adrs()
+        .arg("cheatsheet")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("GETTING STARTED"))
+        .stdout(predicate::str::contains("adrs init"))
+        .stdout(predicate::str::contains("adrs new"));
+}
+
+// ============================================================================
+// Export Command
+// ============================================================================
+
+#[test]
+fn test_export_help() {
+    adrs()
+        .args(["export", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Export ADRs"));
+}
+
+#[test]
+fn test_export_json_after_init() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["export", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"adrs\""))
+        .stdout(predicate::str::contains("Record architecture decisions"));
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
+// Import Command
+// ============================================================================
+
+#[test]
+fn test_import_help() {
+    adrs()
+        .args(["import", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Import ADRs"));
+}
+
+// ============================================================================
+// List Filtering
+// ============================================================================
+
+#[test]
+fn test_list_filter_by_status() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create a new ADR (starts as Proposed)
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Test decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // List only proposed ADRs - should only show ADR 2
+    // (ADR 1 from init is Accepted by default)
+    adrs()
+        .current_dir(temp.path())
+        .args(["list", "--status", "proposed"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-test-decision.md"))
+        .stdout(predicate::str::contains("0001-record-architecture").not());
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
+// New Command with --no-edit flag
+// ============================================================================
+
+#[test]
+fn test_new_no_edit_flag() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create ADR without editor
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Quick decision"])
+        .assert()
+        .success();
+
+    // Verify ADR was created
+    temp.child("doc/adr/0002-quick-decision.md")
+        .assert(predicate::path::exists());
+
+    temp.close().unwrap();
+}
