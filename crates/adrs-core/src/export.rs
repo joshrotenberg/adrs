@@ -214,7 +214,7 @@ impl From<&Adr> for JsonAdr {
             deciders: adr.decision_makers.clone(),
             consulted: adr.consulted.clone(),
             informed: adr.informed.clone(),
-            tags: Vec::new(), // Tags not yet implemented in Adr
+            tags: adr.tags.clone(),
             source_uri: None, // Set externally when exporting with --base-url
             context: if adr.context.is_empty() {
                 None
@@ -398,6 +398,7 @@ fn json_adr_to_adr(json_adr: &JsonAdr) -> Result<Adr> {
         decision_makers: json_adr.deciders.clone(),
         consulted: json_adr.consulted.clone(),
         informed: json_adr.informed.clone(),
+        tags: json_adr.tags.clone(),
         context: json_adr.context.clone().unwrap_or_default(),
         decision: json_adr.decision.clone().unwrap_or_default(),
         consequences: json_adr.consequences.clone().unwrap_or_default(),
