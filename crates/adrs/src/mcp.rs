@@ -171,6 +171,13 @@ pub struct GetRelatedParams {
     pub number: u32,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetAdrSectionsParams {
+    /// ADR number to retrieve
+    #[schemars(description = "The ADR number (e.g., 1, 2, 3)")]
+    pub number: u32,
+}
+
 // Response types
 
 #[derive(Debug, Serialize)]
@@ -198,6 +205,19 @@ struct LinkInfo {
     kind: String,
     target: u32,
     description: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct AdrSections {
+    number: u32,
+    title: String,
+    status: String,
+    date: Option<String>,
+    tags: Vec<String>,
+    context: String,
+    decision: String,
+    consequences: String,
+    links: Vec<LinkInfo>,
 }
 
 #[tool_router]
@@ -309,6 +329,17 @@ impl AdrService {
     )]
     fn get_related_adrs(&self, Parameters(params): Parameters<GetRelatedParams>) -> String {
         match self.get_related_adrs_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Get ADR with parsed sections
+    #[tool(
+        description = "Get an ADR with its content parsed into separate sections (context, decision, consequences). Returns structured data instead of raw markdown, making it easier to analyze specific sections independently."
+    )]
+    fn get_adr_sections(&self, Parameters(params): Parameters<GetAdrSectionsParams>) -> String {
+        match self.get_adr_sections_impl(params) {
             Ok(json) => json,
             Err(e) => format!("Error: {}", e),
         }
@@ -710,6 +741,33 @@ impl AdrService {
         };
 
         serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn get_adr_sections_impl(&self, params: GetAdrSectionsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let adr = repo.get(params.number).map_err(|e| e.to_string())?;
+
+        let sections = AdrSections {
+            number: adr.number,
+            title: adr.title.clone(),
+            status: adr.status.to_string(),
+            date: Some(adr.date.to_string()),
+            tags: adr.tags.clone(),
+            context: adr.context.clone(),
+            decision: adr.decision.clone(),
+            consequences: adr.consequences.clone(),
+            links: adr
+                .links
+                .iter()
+                .map(|l| LinkInfo {
+                    kind: l.kind.to_string(),
+                    target: l.target,
+                    description: l.description.clone(),
+                })
+                .collect(),
+        };
+
+        serde_json::to_string_pretty(&sections).map_err(|e| e.to_string())
     }
 }
 
