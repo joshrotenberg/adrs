@@ -26,6 +26,10 @@ FORMATS:
   nygard    Classic adr-tools format (default)
   madr      MADR 4.0.0 with structured metadata
 
+MODES:
+  Compatible (default)    Works with adr-tools, metadata in markdown
+  NextGen (--ng)          YAML frontmatter for richer metadata (tags, custom fields)
+
 EXAMPLES:
   adrs init                                      Initialize repository
   adrs new --format madr \"Use PostgreSQL\"       Create MADR-format ADR
@@ -35,8 +39,12 @@ EXAMPLES:
 
 DOCUMENTATION: https://joshrotenberg.github.io/adrs-book/")]
 struct Cli {
-    /// Enable NextGen mode with YAML frontmatter
-    #[arg(long, global = true)]
+    /// Enable NextGen mode with YAML frontmatter for richer metadata
+    #[arg(
+        long,
+        global = true,
+        help = "Enable NextGen mode with YAML frontmatter"
+    )]
     ng: bool,
 
     /// Run from a different directory
@@ -50,6 +58,14 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize a new ADR repository
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs init                    Initialize in doc/adr (default)
+  adrs init docs/decisions     Use custom directory
+  adrs --ng init               Initialize with NextGen mode (YAML frontmatter)
+
+Creates the ADR directory and an initial ADR documenting the use of ADRs.
+If ADRs already exist in the directory, they are preserved.")]
     Init {
         /// Directory to store ADRs [default: doc/adr]
         #[arg(default_value = "doc/adr")]
@@ -57,6 +73,22 @@ enum Commands {
     },
 
     /// Create a new ADR
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs new \"Use PostgreSQL for persistence\"      Basic ADR
+  adrs new --format madr \"Use React\"             MADR format with structured sections
+  adrs new --supersedes 2 \"Use MySQL instead\"    Supersede ADR 2
+  adrs new --link \"2:Amends:Amended by\" \"...\"    Create with link to ADR 2
+  adrs new --status accepted \"Already decided\"   Start with accepted status
+  adrs new --no-edit \"Quick note\"                Create without opening editor
+
+NEXTGEN MODE (--ng):
+  adrs --ng new -t api,security \"Auth Design\"   Create with tags (requires --ng)
+  adrs --ng new \"My Decision\"                   Enable YAML frontmatter metadata
+
+LINK FORMAT:
+  The --link option uses format: TARGET:KIND:REVERSE_KIND
+  Example: \"2:Amends:Amended by\" links to ADR 2 with bidirectional links")]
     New {
         /// Title of the ADR
         title: String,
@@ -97,6 +129,19 @@ enum Commands {
     },
 
     /// List all ADRs
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs list                              List all ADRs (default format)
+  adrs list -l                           Detailed view with status and date
+  adrs list --status accepted            Show only accepted ADRs
+  adrs list --since 2024-01-01           ADRs created since Jan 1, 2024
+  adrs list --until 2024-06-30           ADRs created before July 2024
+  adrs list --tag security               Filter by tag (requires --ng mode)
+  adrs list --decider \"Alice\"            Filter by decision maker (MADR)
+
+COMBINING FILTERS:
+  adrs list -l --status accepted --since 2024-01-01
+  adrs list --tag api --status proposed")]
     List {
         /// Filter by status (e.g., proposed, accepted, deprecated, superseded)
         #[arg(short, long, value_name = "STATUS")]
@@ -124,6 +169,17 @@ enum Commands {
     },
 
     /// Search ADRs for matching content
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs search postgres                   Search all content for 'postgres'
+  adrs search -t database                Search titles only
+  adrs search --status accepted auth     Search accepted ADRs for 'auth'
+  adrs search -c PostgreSQL              Case-sensitive search
+
+TIPS:
+  - Search is case-insensitive by default
+  - Searches both title and full content unless -t is used
+  - Combine with --status to narrow results")]
     Search {
         /// Search query
         query: String,
@@ -142,6 +198,21 @@ enum Commands {
     },
 
     /// Link two ADRs together
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs link 3 Supersedes 1               ADR 3 supersedes ADR 1
+  adrs link 5 Amends 2                   ADR 5 amends ADR 2
+  adrs link 4 \"Relates to\" 3             ADR 4 relates to ADR 3
+
+CUSTOM REVERSE LINK:
+  adrs link 3 Extends 1 \"Extended by\"    Specify custom reverse link
+
+COMMON LINK TYPES (reverse auto-derived):
+  Supersedes    ->  Superseded by
+  Amends        ->  Amended by
+  Relates to    ->  Relates to (symmetric)
+
+The reverse link is automatically added to the target ADR.")]
     Link {
         /// Source ADR number
         source: u32,
@@ -157,6 +228,22 @@ enum Commands {
     },
 
     /// Change an ADR's status
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs status 3 accepted                 Mark ADR 3 as accepted
+  adrs status 2 deprecated               Mark ADR 2 as deprecated
+  adrs status 1 superseded --by 5        Mark ADR 1 as superseded by ADR 5
+  adrs status 4 rejected                 Mark ADR 4 as rejected
+  adrs status 3 \"In Review\"              Use custom status
+
+STANDARD STATUSES:
+  proposed      Initial state (default for new ADRs)
+  accepted      Decision has been approved
+  deprecated    No longer recommended but not replaced
+  superseded    Replaced by another ADR (use --by)
+  rejected      Decision was not approved
+
+Note: Use --by with 'superseded' to create a link to the replacing ADR.")]
     Status {
         /// ADR number
         adr: u32,
@@ -203,6 +290,13 @@ enum Commands {
 #[derive(Subcommand)]
 enum GenerateCommands {
     /// Generate a table of contents
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs generate toc                      Generate markdown TOC
+  adrs generate toc > doc/adr/README.md  Save to README
+  adrs generate toc --ordered            Use numbered list (1. 2. 3.)
+  adrs generate toc --prefix ./          Adjust link paths
+  adrs generate toc --intro header.md    Prepend content from file")]
     Toc {
         /// Use ordered list (1. 2. 3.)
         #[arg(short, long)]
@@ -222,6 +316,13 @@ enum GenerateCommands {
     },
 
     /// Generate a Graphviz graph
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs generate graph                    Generate DOT format graph
+  adrs generate graph | dot -Tpng > g.png  Render as PNG
+  adrs generate graph --prefix https://example.com/adr/
+                                         Add URLs to nodes
+  adrs generate graph -e html            Use .html extension for links")]
     Graph {
         /// Prefix for node URLs
         #[arg(short, long, value_name = "PREFIX")]
@@ -233,6 +334,12 @@ enum GenerateCommands {
     },
 
     /// Generate an mdbook
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs generate book                     Generate in ./book directory
+  adrs generate book -o docs/adr-book    Custom output directory
+  adrs generate book -t \"Our ADRs\"       Set book title
+  cd book && mdbook serve                Preview the generated book")]
     Book {
         /// Output directory [default: book]
         #[arg(short, long, default_value = "book")]
@@ -251,6 +358,21 @@ enum GenerateCommands {
 #[derive(Subcommand)]
 enum ExportCommands {
     /// Export ADRs to JSON-ADR format
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs export json                       Export all ADRs as JSON array
+  adrs export json --pretty              Pretty-printed JSON output
+  adrs export json 3                     Export only ADR 3
+  adrs export json --dir ./adrs          Export from directory (no repo needed)
+
+FOR DOCUMENTATION/CATALOGS:
+  adrs export json --metadata-only       Export metadata without full content
+  adrs export json --base-url https://github.com/org/repo/blob/main/doc/adr
+                                         Include source URLs in export
+
+PIPING:
+  adrs export json --pretty > adrs.json  Save to file
+  adrs export json | jq '.[] | .title'   Process with jq")]
     Json {
         /// Export a single ADR by number
         #[arg(value_name = "NUMBER")]
@@ -277,6 +399,25 @@ enum ExportCommands {
 #[derive(Subcommand)]
 enum ImportCommands {
     /// Import ADRs from JSON-ADR format
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs import json adrs.json             Import from JSON file
+  adrs import json --dry-run adrs.json   Preview without writing files
+  adrs import json --overwrite adrs.json Replace existing ADRs
+  cat adrs.json | adrs import json -     Import from stdin
+
+MERGING REPOSITORIES:
+  adrs import json --renumber external.json
+                                         Append ADRs with new numbers
+  adrs import json --renumber --dry-run external.json
+                                         Preview renumbering
+
+OPTIONS:
+  --dry-run     See what would be imported without making changes
+  --renumber    Assign new numbers starting after existing ADRs
+                (also available as --append)
+  --overwrite   Replace existing files instead of skipping
+  --ng          Use YAML frontmatter in imported files")]
     Json {
         /// JSON-ADR file to import (use "-" for stdin)
         #[arg(value_name = "FILE")]
