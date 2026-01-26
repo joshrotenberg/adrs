@@ -15,6 +15,7 @@ pub fn new(
     variant: Option<String>,
     status: Option<String>,
     tags: Option<Vec<String>>,
+    no_edit: bool,
 ) -> Result<()> {
     // Parse template format if specified
     let template_format = if let Some(ref fmt) = format {
@@ -85,10 +86,12 @@ pub fn new(
         }
     }
 
-    // Open in editor
-    let content = repo.read_content(&adr)?;
-    let edited = edit::edit(&content).context("Failed to open editor")?;
-    repo.write_content(&adr, &edited)?;
+    // Open in editor unless --no-edit was specified
+    if !no_edit {
+        let content = repo.read_content(&adr)?;
+        let edited = edit::edit(&content).context("Failed to open editor")?;
+        repo.write_content(&adr, &edited)?;
+    }
 
     println!("{}", path.display());
     Ok(())

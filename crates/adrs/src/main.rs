@@ -84,6 +84,10 @@ enum Commands {
         /// Tags for categorization (comma-separated, requires --ng)
         #[arg(short = 't', long, value_name = "TAGS", value_delimiter = ',')]
         tags: Option<Vec<String>>,
+
+        /// Create ADR without opening editor (for scripting/CI)
+        #[arg(long)]
+        no_edit: bool,
     },
 
     /// Edit an existing ADR
@@ -334,6 +338,7 @@ fn main() -> Result<()> {
             variant,
             status,
             tags,
+            no_edit,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
             commands::new(
@@ -346,6 +351,7 @@ fn main() -> Result<()> {
                 variant,
                 status,
                 tags,
+                no_edit,
             )
         }
         Commands::Edit { adr } => {
