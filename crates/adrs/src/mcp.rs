@@ -171,6 +171,23 @@ pub struct GetRelatedParams {
     pub number: u32,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct BulkUpdateStatusParams {
+    /// ADR numbers to update
+    #[schemars(description = "Array of ADR numbers to update")]
+    pub numbers: Vec<u32>,
+
+    /// New status for all ADRs
+    #[schemars(
+        description = "New status: proposed, accepted, deprecated, superseded, or rejected"
+    )]
+    pub status: String,
+
+    /// For superseded status, the ADR that supersedes these
+    #[schemars(description = "If status is 'superseded', the ADR number that supersedes these")]
+    pub superseded_by: Option<u32>,
+}
+
 // Response types
 
 #[derive(Debug, Serialize)]
@@ -198,6 +215,26 @@ struct LinkInfo {
     kind: String,
     target: u32,
     description: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkUpdateResult {
+    updated: Vec<UpdatedAdr>,
+    failed: Vec<FailedAdr>,
+    summary: String,
+}
+
+#[derive(Debug, Serialize)]
+struct UpdatedAdr {
+    number: u32,
+    old_status: String,
+    new_status: String,
+}
+
+#[derive(Debug, Serialize)]
+struct FailedAdr {
+    number: u32,
+    error: String,
 }
 
 #[tool_router]
@@ -309,6 +346,17 @@ impl AdrService {
     )]
     fn get_related_adrs(&self, Parameters(params): Parameters<GetRelatedParams>) -> String {
         match self.get_related_adrs_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Bulk update status of multiple ADRs
+    #[tool(
+        description = "Update the status of multiple ADRs in a single operation. Useful for batch accepting related ADRs or deprecating multiple outdated decisions. Returns detailed results for each ADR including any failures."
+    )]
+    fn bulk_update_status(&self, Parameters(params): Parameters<BulkUpdateStatusParams>) -> String {
+        match self.bulk_update_status_impl(params) {
             Ok(json) => json,
             Err(e) => format!("Error: {}", e),
         }
@@ -710,6 +758,64 @@ impl AdrService {
         };
 
         serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn bulk_update_status_impl(&self, params: BulkUpdateStatusParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let status: AdrStatus = params.status.parse().unwrap(); // Infallible
+
+        let mut updated = Vec::new();
+        let mut failed = Vec::new();
+
+        for number in params.numbers {
+            // Get current ADR to capture old status
+            match repo.get(number) {
+                Ok(adr) => {
+                    let old_status = adr.status.to_string();
+
+                    // Attempt to update status
+                    match repo.set_status(number, status.clone(), params.superseded_by) {
+                        Ok(_) => {
+                            updated.push(UpdatedAdr {
+                                number,
+                                old_status,
+                                new_status: status.to_string(),
+                            });
+                        }
+                        Err(e) => {
+                            failed.push(FailedAdr {
+                                number,
+                                error: e.to_string(),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    failed.push(FailedAdr {
+                        number,
+                        error: e.to_string(),
+                    });
+                }
+            }
+        }
+
+        let summary = if failed.is_empty() {
+            format!(
+                "Successfully updated {} ADR(s) to '{}'",
+                updated.len(),
+                status
+            )
+        } else {
+            format!("Updated {} ADR(s), {} failed", updated.len(), failed.len())
+        };
+
+        let result = BulkUpdateResult {
+            updated,
+            failed,
+            summary,
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
     }
 }
 
