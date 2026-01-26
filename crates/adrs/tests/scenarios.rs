@@ -216,6 +216,58 @@ fn scenario_link_decisions() {
     temp.close().unwrap();
 }
 
+/// User links two ADRs using simplified syntax (reverse link auto-derived).
+#[test]
+fn scenario_link_simplified_syntax() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Setup: Initialize and create two ADRs
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Original decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Updated decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // Step 1: Link ADR 3 supersedes ADR 2 (without specifying reverse link)
+    adrs()
+        .current_dir(temp.path())
+        .args(["link", "3", "Supersedes", "2"])
+        .assert()
+        .success();
+
+    // Step 2: Verify ADR 3 has the forward link
+    let adr3 = temp.child("doc/adr/0003-updated-decision.md");
+    let adr3_content = fs::read_to_string(adr3.path()).unwrap();
+    assert!(
+        adr3_content.contains("Supersedes"),
+        "ADR 3 should contain 'Supersedes' link"
+    );
+
+    // Step 3: Verify ADR 2 has the auto-derived reverse link
+    let adr2 = temp.child("doc/adr/0002-original-decision.md");
+    let adr2_content = fs::read_to_string(adr2.path()).unwrap();
+    assert!(
+        adr2_content.contains("Superseded by"),
+        "ADR 2 should contain auto-derived 'Superseded by' link"
+    );
+
+    temp.close().unwrap();
+}
+
 // ============================================================================
 // Scenario: Working from Subdirectory
 // ============================================================================

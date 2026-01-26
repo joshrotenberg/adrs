@@ -30,7 +30,7 @@ EXAMPLES:
   adrs init                                      Initialize repository
   adrs new --format madr \"Use PostgreSQL\"       Create MADR-format ADR
   adrs new --supersedes 2 \"Use MySQL instead\"   Supersede an ADR
-  adrs link 3 \"Amends\" 1 \"Amended by\"           Link two ADRs
+  adrs link 3 Amends 1                          Link two ADRs (auto-derives reverse)
   adrs generate toc > doc/adr/README.md         Generate table of contents
 
 DOCUMENTATION: https://joshrotenberg.github.io/adrs-book/")]
@@ -142,14 +142,14 @@ enum Commands {
         /// Source ADR number
         source: u32,
 
-        /// Link description (e.g., "Amends")
+        /// Link description (e.g., "Amends", "Supersedes", "Relates to")
         link: String,
 
         /// Target ADR number
         target: u32,
 
-        /// Reverse link description (e.g., "Amended by")
-        reverse_link: String,
+        /// Reverse link description (auto-derived if omitted)
+        reverse_link: Option<String>,
     },
 
     /// Change an ADR's status
@@ -379,7 +379,13 @@ fn main() -> Result<()> {
             reverse_link,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::link(&discovered.root, source, &link, target, &reverse_link)
+            commands::link(
+                &discovered.root,
+                source,
+                &link,
+                target,
+                reverse_link.as_deref(),
+            )
         }
         Commands::Status { adr, status, by } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
