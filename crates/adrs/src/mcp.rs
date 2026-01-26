@@ -171,6 +171,17 @@ pub struct GetRelatedParams {
     pub number: u32,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CompareAdrsParams {
+    /// First ADR number (source)
+    #[schemars(description = "The first ADR number to compare (source)")]
+    pub source: u32,
+
+    /// Second ADR number (target)
+    #[schemars(description = "The second ADR number to compare (target)")]
+    pub target: u32,
+}
+
 // Response types
 
 #[derive(Debug, Serialize)]
@@ -198,6 +209,38 @@ struct LinkInfo {
     kind: String,
     target: u32,
     description: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CompareResult {
+    source: AdrBrief,
+    target: AdrBrief,
+    differences: Differences,
+}
+
+#[derive(Debug, Serialize)]
+struct AdrBrief {
+    number: u32,
+    title: String,
+    status: String,
+}
+
+#[derive(Debug, Serialize)]
+struct Differences {
+    title_changed: bool,
+    status_changed: bool,
+    context: SectionDiff,
+    decision: SectionDiff,
+    consequences: SectionDiff,
+}
+
+#[derive(Debug, Serialize)]
+struct SectionDiff {
+    changed: bool,
+    source_empty: bool,
+    target_empty: bool,
+    source_length: usize,
+    target_length: usize,
 }
 
 #[tool_router]
@@ -309,6 +352,17 @@ impl AdrService {
     )]
     fn get_related_adrs(&self, Parameters(params): Parameters<GetRelatedParams>) -> String {
         match self.get_related_adrs_impl(params) {
+            Ok(json) => json,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Compare two ADRs
+    #[tool(
+        description = "Compare two ADRs and show the differences between them. Useful for understanding how decisions evolved, especially when one ADR supersedes another. Returns structural comparison of title, status, and content sections."
+    )]
+    fn compare_adrs(&self, Parameters(params): Parameters<CompareAdrsParams>) -> String {
+        match self.compare_adrs_impl(params) {
             Ok(json) => json,
             Err(e) => format!("Error: {}", e),
         }
@@ -710,6 +764,52 @@ impl AdrService {
         };
 
         serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
+    }
+
+    fn compare_adrs_impl(&self, params: CompareAdrsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let source_adr = repo.get(params.source).map_err(|e| e.to_string())?;
+        let target_adr = repo.get(params.target).map_err(|e| e.to_string())?;
+
+        let result = CompareResult {
+            source: AdrBrief {
+                number: source_adr.number,
+                title: source_adr.title.clone(),
+                status: source_adr.status.to_string(),
+            },
+            target: AdrBrief {
+                number: target_adr.number,
+                title: target_adr.title.clone(),
+                status: target_adr.status.to_string(),
+            },
+            differences: Differences {
+                title_changed: source_adr.title != target_adr.title,
+                status_changed: source_adr.status.to_string() != target_adr.status.to_string(),
+                context: SectionDiff {
+                    changed: source_adr.context != target_adr.context,
+                    source_empty: source_adr.context.trim().is_empty(),
+                    target_empty: target_adr.context.trim().is_empty(),
+                    source_length: source_adr.context.len(),
+                    target_length: target_adr.context.len(),
+                },
+                decision: SectionDiff {
+                    changed: source_adr.decision != target_adr.decision,
+                    source_empty: source_adr.decision.trim().is_empty(),
+                    target_empty: target_adr.decision.trim().is_empty(),
+                    source_length: source_adr.decision.len(),
+                    target_length: target_adr.decision.len(),
+                },
+                consequences: SectionDiff {
+                    changed: source_adr.consequences != target_adr.consequences,
+                    source_empty: source_adr.consequences.trim().is_empty(),
+                    target_empty: target_adr.consequences.trim().is_empty(),
+                    source_length: source_adr.consequences.len(),
+                    target_length: target_adr.consequences.len(),
+                },
+            },
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
     }
 }
 
