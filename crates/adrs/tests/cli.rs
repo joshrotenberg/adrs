@@ -1074,3 +1074,250 @@ fn test_madr_export_includes_adr() {
 
     temp.close().unwrap();
 }
+
+// ============================================================================
+// Smoke Tests - End-to-end workflow validation
+// ============================================================================
+
+/// Comprehensive smoke test simulating a real workflow with multiple ADRs
+#[test]
+fn test_smoke_full_workflow() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // 1. Initialize repository
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // 2. Create Nygard format ADRs
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Use PostgreSQL for persistence"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Implement REST API"])
+        .assert()
+        .success();
+
+    // 3. Create MADR format ADR (verifies MADR parsing fix)
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "--ng",
+            "new",
+            "--no-edit",
+            "--format",
+            "madr",
+            "Use Kubernetes for orchestration",
+        ])
+        .assert()
+        .success();
+
+    // 4. Verify all ADRs appear in list
+    adrs()
+        .current_dir(temp.path())
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "0001-record-architecture-decisions.md",
+        ))
+        .stdout(predicate::str::contains(
+            "0002-use-postgresql-for-persistence.md",
+        ))
+        .stdout(predicate::str::contains("0003-implement-rest-api.md"))
+        .stdout(predicate::str::contains(
+            "0004-use-kubernetes-for-orchestration.md",
+        ));
+
+    // 5. Search works for both formats
+    adrs()
+        .current_dir(temp.path())
+        .args(["search", "PostgreSQL"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Use PostgreSQL"));
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["search", "Kubernetes"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Use Kubernetes"));
+
+    // 6. Change status
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "accepted"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status changed to Accepted"));
+
+    // 7. Create superseding ADR and link
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Use MySQL instead"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["link", "5", "Supersedes", "2"])
+        .assert()
+        .success();
+
+    // 8. Export to JSON
+    adrs()
+        .current_dir(temp.path())
+        .args(["export", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"adrs\""))
+        .stdout(predicate::str::contains("Use PostgreSQL"))
+        .stdout(predicate::str::contains("Use Kubernetes"))
+        .stdout(predicate::str::contains("supersedes"));
+
+    // 9. Generate TOC
+    adrs()
+        .current_dir(temp.path())
+        .args(["generate", "toc"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Record architecture decisions"))
+        .stdout(predicate::str::contains("Use PostgreSQL"))
+        .stdout(predicate::str::contains("Use Kubernetes"));
+
+    // 10. Generate graph with links
+    adrs()
+        .current_dir(temp.path())
+        .args(["generate", "graph"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("digraph"))
+        .stdout(predicate::str::contains("Supersedes"));
+
+    // 11. Run doctor
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success();
+
+    temp.close().unwrap();
+}
+
+/// Smoke test for MCP feature availability (default since 0.6.1)
+#[test]
+#[cfg(feature = "mcp")]
+fn test_smoke_mcp_available() {
+    // MCP command should be available
+    adrs()
+        .args(["mcp", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("MCP server"))
+        .stdout(predicate::str::contains("serve"));
+}
+
+/// Smoke test for template system
+#[test]
+fn test_smoke_template_system() {
+    // List templates
+    adrs()
+        .args(["template", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("nygard"))
+        .stdout(predicate::str::contains("madr"))
+        .stdout(predicate::str::contains("full"))
+        .stdout(predicate::str::contains("minimal"))
+        .stdout(predicate::str::contains("bare"));
+
+    // Show each format
+    adrs()
+        .args(["template", "show", "nygard"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("## Status"));
+
+    adrs()
+        .args(["template", "show", "madr"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status:"));
+
+    // Show variants
+    adrs()
+        .args(["template", "show", "nygard", "--variant", "minimal"])
+        .assert()
+        .success();
+
+    adrs()
+        .args(["template", "show", "madr", "--variant", "bare"])
+        .assert()
+        .success();
+}
+
+/// Smoke test for shell completions
+#[test]
+fn test_smoke_completions() {
+    for shell in ["bash", "zsh", "fish", "powershell", "elvish"] {
+        adrs().args(["completions", shell]).assert().success();
+    }
+}
+
+/// Smoke test for cheatsheet
+#[test]
+fn test_smoke_cheatsheet() {
+    adrs()
+        .arg("cheatsheet")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("GETTING STARTED"))
+        .stdout(predicate::str::contains("CREATING ADRs"))
+        .stdout(predicate::str::contains("SUPERSEDING"))
+        .stdout(predicate::str::contains("STATUS"))
+        .stdout(predicate::str::contains("SEARCHING"));
+}
+
+/// Smoke test for NextGen mode workflow
+#[test]
+fn test_smoke_nextgen_workflow() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Initialize in NextGen mode
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    // Create ADR in NextGen mode
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "--no-edit", "Use PostgreSQL"])
+        .assert()
+        .success();
+
+    // Verify YAML frontmatter was created
+    let content = fs::read_to_string(temp.path().join("doc/adr/0002-use-postgresql.md")).unwrap();
+    assert!(content.starts_with("---"));
+    assert!(content.contains("number: 2"));
+    assert!(content.contains("title: Use PostgreSQL"));
+    assert!(content.contains("status: proposed"));
+
+    // List works in NextGen mode
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-use-postgresql.md"));
+
+    temp.close().unwrap();
+}
