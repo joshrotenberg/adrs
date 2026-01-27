@@ -946,3 +946,131 @@ fn test_new_no_edit_flag() {
 
     temp.close().unwrap();
 }
+
+// ============================================================================
+// MADR Format Tests
+// ============================================================================
+
+#[test]
+fn test_new_madr_format_listed() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create MADR format ADR
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--format",
+            "madr",
+            "Use Redis for caching",
+        ])
+        .assert()
+        .success();
+
+    // Verify ADR appears in list
+    adrs()
+        .current_dir(temp.path())
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-use-redis-for-caching.md"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_new_madr_format_searchable() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create MADR format ADR
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--format",
+            "madr",
+            "Use Redis for caching",
+        ])
+        .assert()
+        .success();
+
+    // Verify ADR is searchable by title
+    adrs()
+        .current_dir(temp.path())
+        .args(["search", "Redis"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Use Redis for caching"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_madr_status_change() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create MADR format ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "--format", "madr", "Use GraphQL"])
+        .assert()
+        .success();
+
+    // Change status
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "accepted"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status changed to Accepted"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_madr_export_includes_adr() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create MADR format ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "--format", "madr", "Use PostgreSQL"])
+        .assert()
+        .success();
+
+    // Export should include the MADR ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["export", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Use PostgreSQL"));
+
+    temp.close().unwrap();
+}
