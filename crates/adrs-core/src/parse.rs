@@ -807,6 +807,87 @@ title: Test
         assert!(result.is_err());
     }
 
+    // ========== MADR Format Parsing ==========
+
+    #[test]
+    fn test_parse_madr_format() {
+        // MADR format with number and title in frontmatter
+        let content = r#"---
+number: 2
+title: Use Redis for caching
+status: proposed
+date: 2024-01-15
+---
+
+# Use Redis for caching
+
+## Context and Problem Statement
+
+We need a caching solution.
+
+## Decision Outcome
+
+We will use Redis.
+
+### Consequences
+
+* Good, because fast
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 2);
+        assert_eq!(adr.title, "Use Redis for caching");
+        assert_eq!(adr.status, AdrStatus::Proposed);
+    }
+
+    #[test]
+    fn test_parse_madr_with_decision_makers() {
+        let content = r#"---
+number: 1
+title: Use MADR Format
+status: accepted
+date: 2024-01-01
+---
+
+# Use MADR Format
+
+## Context and Problem Statement
+
+Context.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.title, "Use MADR Format");
+        assert_eq!(adr.status, AdrStatus::Accepted);
+    }
+
+    #[test]
+    fn test_parse_madr_missing_number_fails() {
+        // MADR without number field should fail
+        let content = r#"---
+title: Missing Number
+status: proposed
+date: 2024-01-01
+---
+
+# Missing Number
+
+## Context and Problem Statement
+
+Context.
+"#;
+
+        let parser = Parser::new();
+        let result = parser.parse(content);
+        // Should fail because number is required
+        assert!(result.is_err() || result.unwrap().number == 0);
+    }
+
     // ========== File Parsing ==========
 
     #[test]

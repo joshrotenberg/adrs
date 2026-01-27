@@ -314,6 +314,8 @@ Date: {{ date }}
 
 /// MADR (Markdown Any Decision Records) 4.0.0 template.
 const MADR_TEMPLATE: &str = r#"---
+number: {{ number }}
+title: {{ title }}
 status: {{ status | lower }}
 date: {{ date }}
 {% if decision_makers %}decision-makers:
@@ -491,6 +493,8 @@ const MADR_MINIMAL_TEMPLATE: &str = r#"# {{ title }}
 /// MADR bare template - all sections with empty placeholders.
 /// Matches official MADR adr-template-bare.md
 const MADR_BARE_TEMPLATE: &str = r#"---
+number: {{ number }}
+title: {{ title }}
 status: {{ status | lower }}
 date: {{ date }}
 decision-makers:
@@ -876,8 +880,10 @@ mod tests {
         let config = Config::default();
         let output = template.render(&adr, &config).unwrap();
 
-        // Check frontmatter structure
-        assert!(output.starts_with("---\nstatus: accepted\ndate:"));
+        // Check frontmatter structure - now includes number and title
+        assert!(
+            output.starts_with("---\nnumber: 1\ntitle: Use MADR Format\nstatus: accepted\ndate:")
+        );
         assert!(output.contains("decision-makers:\n  - Alice\n  - Bob"));
         assert!(output.contains("consulted:\n  - Carol"));
         assert!(output.contains("informed:\n  - Dave"));
