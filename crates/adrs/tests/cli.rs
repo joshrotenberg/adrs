@@ -1297,27 +1297,53 @@ fn test_smoke_nextgen_workflow() {
         .assert()
         .success();
 
-    // Create ADR in NextGen mode
+    // Create ADR with tags in NextGen mode
     adrs()
         .current_dir(temp.path())
-        .args(["--ng", "new", "--no-edit", "Use PostgreSQL"])
+        .args([
+            "--ng",
+            "new",
+            "--no-edit",
+            "-t",
+            "database,infrastructure",
+            "Use PostgreSQL",
+        ])
         .assert()
         .success();
 
-    // Verify YAML frontmatter was created
+    // Verify YAML frontmatter was created with tags
     let content = fs::read_to_string(temp.path().join("doc/adr/0002-use-postgresql.md")).unwrap();
     assert!(content.starts_with("---"));
     assert!(content.contains("number: 2"));
     assert!(content.contains("title: Use PostgreSQL"));
     assert!(content.contains("status: proposed"));
+    assert!(content.contains("tags:"));
+    assert!(content.contains("database"));
+    assert!(content.contains("infrastructure"));
 
-    // List works in NextGen mode
+    // List by tag works
     adrs()
         .current_dir(temp.path())
-        .args(["--ng", "list"])
+        .args(["--ng", "list", "--tag", "database"])
         .assert()
         .success()
         .stdout(predicate::str::contains("0002-use-postgresql.md"));
+
+    // Create another ADR without tags - should not appear in tag filter
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "--no-edit", "Use Redis"])
+        .assert()
+        .success();
+
+    // Tag filter should only show the tagged ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "list", "--tag", "database"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-use-postgresql.md"))
+        .stdout(predicate::str::contains("0003-use-redis.md").not());
 
     temp.close().unwrap();
 }

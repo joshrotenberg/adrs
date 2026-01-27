@@ -200,6 +200,7 @@ impl Template {
                 decision => &adr.decision,
                 consequences => &adr.consequences,
                 links => links,
+                tags => &adr.tags,
                 is_ng => config.is_next_gen(),
                 // MADR 4.0.0 fields
                 decision_makers => &adr.decision_makers,
@@ -287,6 +288,8 @@ status: {{ status | lower }}
 {% if links %}links:
 {% for link in links %}  - target: {{ link.target }}
     kind: {{ link.kind | lower }}
+{% endfor %}{% endif %}{% if tags %}tags:
+{% for tag in tags %}  - {{ tag }}
 {% endfor %}{% endif %}---
 
 {% endif %}# {{ number }}. {{ title }}
@@ -324,6 +327,8 @@ date: {{ date }}
 {% for c in consulted %}  - {{ c }}
 {% endfor %}{% endif %}{% if informed %}informed:
 {% for i in informed %}  - {{ i }}
+{% endfor %}{% endif %}{% if tags %}tags:
+{% for tag in tags %}  - {{ tag }}
 {% endfor %}{% endif %}---
 
 # {{ title }}
@@ -400,6 +405,8 @@ status: {{ status | lower }}
 {% if links %}links:
 {% for link in links %}  - target: {{ link.target }}
     kind: {{ link.kind | lower }}
+{% endfor %}{% endif %}{% if tags %}tags:
+{% for tag in tags %}  - {{ tag }}
 {% endfor %}{% endif %}---
 
 {% endif %}# {{ number }}. {{ title }}
@@ -500,7 +507,10 @@ date: {{ date }}
 decision-makers:
 consulted:
 informed:
----
+{% if tags %}tags:
+{% for tag in tags %}  - {{ tag }}
+{% endfor %}{% else %}tags:
+{% endif %}---
 
 # {{ title }}
 
@@ -1241,5 +1251,55 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
 
         // Link should use 4-digit padding
         assert!(output.contains("0001-"));
+    }
+
+    // ========== Tags Rendering ==========
+
+    #[test]
+    fn test_render_tags_in_nextgen_mode() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(1, "Test ADR");
+        adr.tags = vec!["database".to_string(), "infrastructure".to_string()];
+
+        let config = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+        let output = template.render(&adr, &config).unwrap();
+
+        // Tags should appear in YAML frontmatter
+        assert!(output.contains("tags:"));
+        assert!(output.contains("- database"));
+        assert!(output.contains("- infrastructure"));
+    }
+
+    #[test]
+    fn test_render_tags_in_madr_format() {
+        let template = Template::builtin(TemplateFormat::Madr);
+        let mut adr = Adr::new(1, "Test ADR");
+        adr.tags = vec!["api".to_string(), "security".to_string()];
+
+        let config = Config::default();
+        let output = template.render(&adr, &config).unwrap();
+
+        // Tags should appear in YAML frontmatter
+        assert!(output.contains("tags:"));
+        assert!(output.contains("- api"));
+        assert!(output.contains("- security"));
+    }
+
+    #[test]
+    fn test_render_no_tags_section_when_empty() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let adr = Adr::new(1, "Test ADR");
+
+        let config = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+        let output = template.render(&adr, &config).unwrap();
+
+        // No tags section when tags are empty
+        assert!(!output.contains("tags:"));
     }
 }
