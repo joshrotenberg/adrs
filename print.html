@@ -538,6 +538,114 @@ format = "madr"
 <pre><code class="language-sh">adrs new --format madr --variant minimal "Use PostgreSQL"
 </code></pre>
 <p>See <a href="./templates.html">Templates</a> for more details.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="compatibility"><a class="header" href="#compatibility">Compatibility</a></h1>
+<p>This page explains the differences between compatible mode (default) and NextGen mode (<code>--ng</code>), including what breaks adr-tools compatibility.</p>
+<h2 id="mode-comparison"><a class="header" href="#mode-comparison">Mode Comparison</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Aspect</th><th>Compatible (default)</th><th>NextGen (--ng)</th><th>Breaks adr-tools?</th></tr></thead><tbody>
+<tr><td><strong>Config file</strong></td><td><code>.adr-dir</code></td><td><code>adrs.toml</code></td><td>Yes</td></tr>
+<tr><td><strong>File format</strong></td><td>Plain markdown</td><td>YAML frontmatter</td><td>Yes</td></tr>
+<tr><td><strong>Status storage</strong></td><td><code>## Status</code> section</td><td><code>status:</code> in YAML</td><td>Yes</td></tr>
+<tr><td><strong>Link storage</strong></td><td>Markdown links in Status</td><td><code>links:</code> YAML array</td><td>Yes</td></tr>
+<tr><td><strong>Date storage</strong></td><td><code>Date: YYYY-MM-DD</code> inline</td><td><code>date:</code> in YAML</td><td>Yes</td></tr>
+<tr><td><strong>MADR fields</strong></td><td>Not available</td><td><code>decision-makers</code>, <code>consulted</code>, <code>informed</code></td><td>N/A</td></tr>
+</tbody></table>
+</div>
+<h2 id="key-incompatibilities-with-adr-tools"><a class="header" href="#key-incompatibilities-with-adr-tools">Key Incompatibilities with adr-tools</a></h2>
+<ol>
+<li><strong>adr-tools cannot read --ng files</strong> - YAML frontmatter breaks bash parsing</li>
+<li><strong>adr-tools cannot write to --ng repos</strong> - Creates files without frontmatter</li>
+<li><strong>Mixed repos don't work</strong> - adr-tools would create incompatible files</li>
+<li><strong>Scripts break</strong> - Anything grep'ing for <code>## Status\n\nAccepted</code> fails</li>
+</ol>
+<h2 id="what-still-works"><a class="header" href="#what-still-works">What Still Works</a></h2>
+<ul>
+<li><code>adrs</code> can <strong>read both formats</strong> regardless of mode (parser auto-detects)</li>
+<li>Filename format is the same (<code>NNNN-slug.md</code>)</li>
+<li>JSON-ADR export works from either format</li>
+</ul>
+<h2 id="file-format-examples"><a class="header" href="#file-format-examples">File Format Examples</a></h2>
+<h3 id="compatible-mode"><a class="header" href="#compatible-mode">Compatible Mode</a></h3>
+<pre><code class="language-markdown"># 1. Use PostgreSQL
+
+Date: 2024-01-15
+
+## Status
+
+Accepted
+
+Supersedes [2. Use MySQL](0002-use-mysql.md)
+
+## Context
+
+We need a database for our application.
+
+## Decision
+
+We will use PostgreSQL.
+
+## Consequences
+
+We need to learn PostgreSQL administration.
+</code></pre>
+<h3 id="nextgen-mode-1"><a class="header" href="#nextgen-mode-1">NextGen Mode</a></h3>
+<pre><code class="language-markdown">---
+number: 1
+title: Use PostgreSQL
+date: 2024-01-15
+status: accepted
+links:
+  - target: 2
+    kind: supersedes
+---
+
+# 1. Use PostgreSQL
+
+## Context
+
+We need a database for our application.
+
+## Decision
+
+We will use PostgreSQL.
+
+## Consequences
+
+We need to learn PostgreSQL administration.
+</code></pre>
+<h2 id="when-to-use-each-mode"><a class="header" href="#when-to-use-each-mode">When to Use Each Mode</a></h2>
+<h3 id="use-compatible-mode-when"><a class="header" href="#use-compatible-mode-when">Use Compatible Mode when:</a></h3>
+<ul>
+<li>Working with teams using adr-tools</li>
+<li>Need shell scripts to parse ADRs</li>
+<li>Want maximum simplicity</li>
+<li>Migrating from an existing adr-tools repository</li>
+</ul>
+<h3 id="use-nextgen-mode-when"><a class="header" href="#use-nextgen-mode-when">Use NextGen Mode when:</a></h3>
+<ul>
+<li>Want MADR 4.0.0 metadata (decision-makers, consulted, informed)</li>
+<li>Need machine-readable structured metadata</li>
+<li>Building tooling that consumes ADRs programmatically</li>
+<li>Starting a new project without adr-tools dependency</li>
+</ul>
+<h2 id="migration-notes"><a class="header" href="#migration-notes">Migration Notes</a></h2>
+<ul>
+<li>Switching to <code>--ng</code> does NOT auto-migrate existing files</li>
+<li>The parser reads both formats, so mixed repos work for reading</li>
+<li>Writing/updating ADRs uses the configured mode</li>
+<li>No automated migration tool yet (potential future feature)</li>
+</ul>
+<h2 id="enabling-nextgen-mode"><a class="header" href="#enabling-nextgen-mode">Enabling NextGen Mode</a></h2>
+<h3 id="for-a-new-repository"><a class="header" href="#for-a-new-repository">For a new repository</a></h3>
+<pre><code class="language-bash">adrs init --ng
+</code></pre>
+<h3 id="for-individual-commands"><a class="header" href="#for-individual-commands">For individual commands</a></h3>
+<pre><code class="language-bash">adrs --ng new "My Decision"
+</code></pre>
+<h3 id="via-configuration"><a class="header" href="#via-configuration">Via configuration</a></h3>
+<p>Create <code>adrs.toml</code> in your repository root:</p>
+<pre><code class="language-toml">adr_dir = "doc/adr"
+mode = "nextgen"
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="templates"><a class="header" href="#templates">Templates</a></h1>
 <p><code>adrs</code> uses templates to generate new ADR documents. You can use built-in templates or create custom ones.</p>
 <h2 id="built-in-templates"><a class="header" href="#built-in-templates">Built-in Templates</a></h2>
@@ -724,11 +832,18 @@ links:
 <tr><td><a href="commands/./init.html">init</a></td><td>Initialize a new ADR repository</td></tr>
 <tr><td><a href="commands/./new.html">new</a></td><td>Create a new ADR</td></tr>
 <tr><td><a href="commands/./edit.html">edit</a></td><td>Edit an existing ADR</td></tr>
-<tr><td><a href="commands/./link.html">link</a></td><td>Link two ADRs together</td></tr>
 <tr><td><a href="commands/./list.html">list</a></td><td>List all ADRs</td></tr>
+<tr><td><a href="commands/./search.html">search</a></td><td>Search ADRs for matching content</td></tr>
+<tr><td><a href="commands/./status.html">status</a></td><td>Change an ADR's status</td></tr>
+<tr><td><a href="commands/./link.html">link</a></td><td>Link two ADRs together</td></tr>
+<tr><td><a href="commands/./export.html">export</a></td><td>Export ADRs to different formats</td></tr>
+<tr><td><a href="commands/./import.html">import</a></td><td>Import ADRs from different formats</td></tr>
+<tr><td><a href="commands/./generate.html">generate</a></td><td>Generate documentation</td></tr>
+<tr><td><a href="commands/./template.html">template</a></td><td>Manage ADR templates</td></tr>
 <tr><td><a href="commands/./config.html">config</a></td><td>Show configuration</td></tr>
 <tr><td><a href="commands/./doctor.html">doctor</a></td><td>Check repository health</td></tr>
-<tr><td><a href="commands/./generate.html">generate</a></td><td>Generate documentation</td></tr>
+<tr><td><a href="commands/./completions.html">completions</a></td><td>Generate shell completions</td></tr>
+<tr><td><a href="commands/./cheatsheet.html">cheatsheet</a></td><td>Show quick reference</td></tr>
 </tbody></table>
 </div>
 <h2 id="global-options"><a class="header" href="#global-options">Global Options</a></h2>
@@ -744,15 +859,22 @@ links:
 <pre><code>adrs [OPTIONS] &lt;COMMAND&gt;
 
 Commands:
-  init      Initialize a new ADR repository
-  new       Create a new ADR
-  edit      Edit an existing ADR
-  list      List all ADRs
-  link      Link two ADRs together
-  config    Show configuration
-  doctor    Check repository health
-  generate  Generate documentation
-  help      Print this message or the help of the given subcommand(s)
+  init         Initialize a new ADR repository
+  new          Create a new ADR
+  edit         Edit an existing ADR
+  list         List all ADRs
+  search       Search ADRs for matching content
+  link         Link two ADRs together
+  status       Change an ADR's status
+  config       Show configuration
+  doctor       Check repository health
+  generate     Generate documentation
+  export       Export ADRs to different formats
+  import       Import ADRs from different formats
+  template     Manage ADR templates
+  completions  Generate shell completions
+  cheatsheet   Show quick reference for common workflows
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
       --ng                 Use next-gen mode (YAML frontmatter, enhanced features)
@@ -806,7 +928,7 @@ decisions/
 <pre><code class="language-sh">adrs init docs/architecture/decisions
 </code></pre>
 <p>Creates the full directory path.</p>
-<h3 id="nextgen-mode-1"><a class="header" href="#nextgen-mode-1">NextGen Mode</a></h3>
+<h3 id="nextgen-mode-2"><a class="header" href="#nextgen-mode-2">NextGen Mode</a></h3>
 <pre><code class="language-sh">adrs init --ng
 </code></pre>
 <p>Creates the initial ADR with YAML frontmatter:</p>
@@ -988,12 +1110,188 @@ export EDITOR="vim"          # Vim
 <li><a href="commands/./new.html">new</a> - Create a new ADR</li>
 <li><a href="commands/./list.html">list</a> - List ADRs to find the one to edit</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="link"><a class="header" href="#link">link</a></h1>
-<p>Link two Architecture Decision Records together.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="list"><a class="header" href="#list">list</a></h1>
+<p>List Architecture Decision Records with optional filtering.</p>
 <h2 id="usage-4"><a class="header" href="#usage-4">Usage</a></h2>
-<pre><code>adrs link [OPTIONS] &lt;SOURCE&gt; &lt;LINK&gt; &lt;TARGET&gt; &lt;REVERSE_LINK&gt;
+<pre><code class="language-bash">adrs list [OPTIONS]
+</code></pre>
+<h2 id="options-3"><a class="header" href="#options-3">Options</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>-l, --long</code></td><td>Show detailed output (number, status, date, title)</td></tr>
+<tr><td><code>-s, --status &lt;STATUS&gt;</code></td><td>Filter by status (e.g., proposed, accepted, deprecated, superseded)</td></tr>
+<tr><td><code>--since &lt;DATE&gt;</code></td><td>Show ADRs from this date onwards (YYYY-MM-DD)</td></tr>
+<tr><td><code>--until &lt;DATE&gt;</code></td><td>Show ADRs up to this date (YYYY-MM-DD)</td></tr>
+<tr><td><code>--decider &lt;NAME&gt;</code></td><td>Filter by decision maker (MADR format)</td></tr>
+<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
+<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
+</tbody></table>
+</div>
+<h2 id="examples-3"><a class="header" href="#examples-3">Examples</a></h2>
+<h3 id="basic-usage-1"><a class="header" href="#basic-usage-1">Basic Usage</a></h3>
+<pre><code class="language-bash">adrs list
+</code></pre>
+<p>Output (paths):</p>
+<pre><code>doc/adr/0001-record-architecture-decisions.md
+doc/adr/0002-use-postgresql.md
+doc/adr/0003-api-versioning.md
+</code></pre>
+<h3 id="detailed-output"><a class="header" href="#detailed-output">Detailed Output</a></h3>
+<pre><code class="language-bash">adrs list -l
+</code></pre>
+<p>Output:</p>
+<pre><code>   1  Accepted    2024-01-15  Record architecture decisions
+   2  Accepted    2024-01-20  Use PostgreSQL for persistence
+   3  Proposed    2024-02-01  API versioning strategy
+   4  Superseded  2024-01-10  Use MySQL for persistence
+</code></pre>
+<h3 id="filter-by-status"><a class="header" href="#filter-by-status">Filter by Status</a></h3>
+<pre><code class="language-bash"># Show accepted ADRs
+adrs list --status accepted -l
+
+# Show ADRs needing review
+adrs list --status proposed -l
+
+# Show superseded ADRs
+adrs list --status superseded -l
+</code></pre>
+<h3 id="filter-by-date"><a class="header" href="#filter-by-date">Filter by Date</a></h3>
+<pre><code class="language-bash"># ADRs from 2024 onwards
+adrs list --since 2024-01-01 -l
+
+# ADRs before 2024
+adrs list --until 2023-12-31 -l
+
+# ADRs in a date range
+adrs list --since 2024-01-01 --until 2024-06-30 -l
+</code></pre>
+<h3 id="filter-by-decision-maker"><a class="header" href="#filter-by-decision-maker">Filter by Decision Maker</a></h3>
+<p>For ADRs using MADR format with decision-makers metadata:</p>
+<pre><code class="language-bash"># Find ADRs decided by Alice (case-insensitive substring match)
+adrs list --decider alice -l
+
+# Find ADRs by team
+adrs list --decider "Security Team" -l
+</code></pre>
+<h3 id="combined-filters"><a class="header" href="#combined-filters">Combined Filters</a></h3>
+<p>Multiple filters are AND'd together:</p>
+<pre><code class="language-bash"># Accepted ADRs from 2024 decided by Alice
+adrs list --status accepted --since 2024-01-01 --decider alice -l
+</code></pre>
+<h2 id="output-format"><a class="header" href="#output-format">Output Format</a></h2>
+<p><strong>Default</strong>: File paths, one per line</p>
+<p><strong>Long format (<code>-l</code>)</strong>: Columns showing:</p>
+<ul>
+<li>ADR number (4 chars)</li>
+<li>Status (12 chars)</li>
+<li>Date (YYYY-MM-DD)</li>
+<li>Title</li>
+</ul>
+<p>ADRs are sorted by number.</p>
+<h2 id="related-3"><a class="header" href="#related-3">Related</a></h2>
+<ul>
+<li><a href="commands/./new.html">new</a> - Create a new ADR</li>
+<li><a href="commands/./edit.html">edit</a> - Edit an ADR from the list</li>
+<li><a href="commands/./status.html">status</a> - Change an ADR's status</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="search"><a class="header" href="#search">search</a></h1>
+<p>Search ADRs for matching content.</p>
+<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
+<pre><code>adrs search [OPTIONS] &lt;QUERY&gt;
 </code></pre>
 <h2 id="arguments-3"><a class="header" href="#arguments-3">Arguments</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>&lt;QUERY&gt;</code></td><td>Search query text</td></tr>
+</tbody></table>
+</div>
+<h2 id="options-4"><a class="header" href="#options-4">Options</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>-t, --title</code></td><td>Search titles only</td></tr>
+<tr><td><code>-s, --status &lt;STATUS&gt;</code></td><td>Filter by status</td></tr>
+<tr><td><code>-c, --case-sensitive</code></td><td>Case-sensitive search</td></tr>
+</tbody></table>
+</div>
+<h2 id="examples-4"><a class="header" href="#examples-4">Examples</a></h2>
+<pre><code class="language-sh"># Search all content for 'postgres'
+adrs search postgres
+
+# Search titles only
+adrs search -t database
+
+# Search accepted ADRs for 'auth'
+adrs search --status accepted auth
+
+# Case-sensitive search
+adrs search -c PostgreSQL
+</code></pre>
+<h2 id="output"><a class="header" href="#output">Output</a></h2>
+<p>Returns matching ADRs with their number, title, and status.</p>
+<pre><code>$ adrs search database
+1: Use PostgreSQL for persistence (accepted)
+5: Add Redis for caching (proposed)
+</code></pre>
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
+<ul>
+<li>Search is case-insensitive by default</li>
+<li>Searches both title and full content unless <code>-t</code> is used</li>
+<li>Combine with <code>--status</code> to narrow results</li>
+<li>Use quotes for multi-word searches: <code>adrs search "event sourcing"</code></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="status"><a class="header" href="#status">status</a></h1>
+<p>Change an ADR's status.</p>
+<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
+<pre><code class="language-bash">adrs status &lt;NUMBER&gt; &lt;STATUS&gt;
+adrs status &lt;NUMBER&gt; superseded --by &lt;NUMBER&gt;
+</code></pre>
+<h2 id="arguments-4"><a class="header" href="#arguments-4">Arguments</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>NUMBER</code></td><td>The ADR number to update</td></tr>
+<tr><td><code>STATUS</code></td><td>New status value</td></tr>
+</tbody></table>
+</div>
+<h2 id="options-5"><a class="header" href="#options-5">Options</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>--by &lt;NUMBER&gt;</code></td><td>For 'superseded' status: the ADR number that supersedes this one</td></tr>
+</tbody></table>
+</div>
+<h2 id="standard-statuses"><a class="header" href="#standard-statuses">Standard Statuses</a></h2>
+<ul>
+<li><code>proposed</code> - Decision is proposed but not yet accepted</li>
+<li><code>accepted</code> - Decision has been accepted</li>
+<li><code>deprecated</code> - Decision is deprecated but not replaced</li>
+<li><code>superseded</code> - Decision has been replaced by another ADR</li>
+</ul>
+<p>You can also use custom status values for your workflow (e.g., <code>draft</code>, <code>rejected</code>, <code>on-hold</code>).</p>
+<h2 id="examples-5"><a class="header" href="#examples-5">Examples</a></h2>
+<h3 id="accept-a-proposed-adr"><a class="header" href="#accept-a-proposed-adr">Accept a proposed ADR</a></h3>
+<pre><code class="language-bash">adrs status 5 accepted
+</code></pre>
+<h3 id="deprecate-an-adr"><a class="header" href="#deprecate-an-adr">Deprecate an ADR</a></h3>
+<pre><code class="language-bash">adrs status 3 deprecated
+</code></pre>
+<h3 id="supersede-an-adr"><a class="header" href="#supersede-an-adr">Supersede an ADR</a></h3>
+<p>When superseding, use <code>--by</code> to create a bidirectional link:</p>
+<pre><code class="language-bash">adrs status 2 superseded --by 5
+</code></pre>
+<p>This updates ADR 2's status and creates links:</p>
+<ul>
+<li>ADR 2: "Superseded by <a href="commands/0005-new-approach.html">5. New Approach</a>"</li>
+<li>ADR 5: "Supersedes <a href="commands/0002-old-approach.html">2. Old Approach</a>"</li>
+</ul>
+<h3 id="custom-status"><a class="header" href="#custom-status">Custom status</a></h3>
+<pre><code class="language-bash">adrs status 4 "on-hold"
+</code></pre>
+<h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
+<ul>
+<li>The status command updates the ADR file in place</li>
+<li>For superseded status, using <code>--by</code> is recommended to maintain traceability</li>
+<li>Status values are case-insensitive when parsing but preserved as written</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="link"><a class="header" href="#link">link</a></h1>
+<p>Link two Architecture Decision Records together.</p>
+<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
+<pre><code>adrs link [OPTIONS] &lt;SOURCE&gt; &lt;LINK&gt; &lt;TARGET&gt; &lt;REVERSE_LINK&gt;
+</code></pre>
+<h2 id="arguments-5"><a class="header" href="#arguments-5">Arguments</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>&lt;SOURCE&gt;</code></td><td>Source ADR number</td></tr>
 <tr><td><code>&lt;LINK&gt;</code></td><td>Link description from source to target</td></tr>
@@ -1001,7 +1299,7 @@ export EDITOR="vim"          # Vim
 <tr><td><code>&lt;REVERSE_LINK&gt;</code></td><td>Reverse link description from target to source</td></tr>
 </tbody></table>
 </div>
-<h2 id="options-3"><a class="header" href="#options-3">Options</a></h2>
+<h2 id="options-6"><a class="header" href="#options-6">Options</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
@@ -1010,7 +1308,7 @@ export EDITOR="vim"          # Vim
 </div>
 <h2 id="description-3"><a class="header" href="#description-3">Description</a></h2>
 <p>Creates bidirectional links between two ADRs. The link is added to the status section of both ADRs.</p>
-<h2 id="examples-3"><a class="header" href="#examples-3">Examples</a></h2>
+<h2 id="examples-6"><a class="header" href="#examples-6">Examples</a></h2>
 <h3 id="amends-relationship"><a class="header" href="#amends-relationship">Amends Relationship</a></h3>
 <pre><code class="language-sh">adrs link 3 "Amends" 1 "Amended by"
 </code></pre>
@@ -1053,7 +1351,7 @@ adrs link 3 "Supersedes" 2 "Superseded by"
 adrs new --supersedes 2 "New approach"
 </code></pre>
 <p>The <code>--supersedes</code> option also updates the target ADR's status to "Superseded".</p>
-<h2 id="nextgen-mode-2"><a class="header" href="#nextgen-mode-2">NextGen Mode</a></h2>
+<h2 id="nextgen-mode-3"><a class="header" href="#nextgen-mode-3">NextGen Mode</a></h2>
 <p>In NextGen mode (<code>--ng</code>), links are stored in YAML frontmatter:</p>
 <pre><code class="language-yaml">---
 status: proposed
@@ -1063,179 +1361,163 @@ links:
     target: 1
 ---
 </code></pre>
-<h2 id="related-3"><a class="header" href="#related-3">Related</a></h2>
+<h2 id="related-4"><a class="header" href="#related-4">Related</a></h2>
 <ul>
 <li><a href="commands/./new.html">new</a> - Create ADRs with links</li>
 <li><a href="commands/./list.html">list</a> - Find ADR numbers</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="list"><a class="header" href="#list">list</a></h1>
-<p>List all Architecture Decision Records.</p>
-<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
-<pre><code>adrs list [OPTIONS]
+<div style="break-before: page; page-break-before: always;"></div><h1 id="export"><a class="header" href="#export">export</a></h1>
+<p>Export ADRs to different formats for integration with other tools.</p>
+<h2 id="json-export"><a class="header" href="#json-export">JSON Export</a></h2>
+<p>Export ADRs to JSON-ADR format, a machine-readable interchange format.</p>
+<pre><code class="language-bash">adrs export json                  # All ADRs as JSON
+adrs export json --pretty         # Pretty-printed output
+adrs export json 5                # Single ADR by number
+adrs export json -d path/to/adrs  # Export from directory (no repo needed)
 </code></pre>
-<h2 id="options-4"><a class="header" href="#options-4">Options</a></h2>
+<h3 id="options-7"><a class="header" href="#options-7">Options</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
-<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
-<tr><td><code>-h, --help</code></td><td>Print help</td></tr>
+<tr><td><code>--pretty</code>, <code>-p</code></td><td>Pretty-print the JSON output</td></tr>
+<tr><td><code>--dir</code>, <code>-d</code></td><td>Export from a directory without requiring an initialized repository</td></tr>
+<tr><td><code>--metadata-only</code></td><td>Export metadata without content fields (context, decision, consequences)</td></tr>
+<tr><td><code>--base-url &lt;URL&gt;</code></td><td>Set base URL for <code>source_uri</code> field (for federation)</td></tr>
 </tbody></table>
 </div>
-<h2 id="description-4"><a class="header" href="#description-4">Description</a></h2>
-<p>Lists all ADRs in the repository, showing their number, title, and status.</p>
-<h2 id="examples-4"><a class="header" href="#examples-4">Examples</a></h2>
-<h3 id="basic-usage-1"><a class="header" href="#basic-usage-1">Basic Usage</a></h3>
-<pre><code class="language-sh">adrs list
+<h3 id="output-format-1"><a class="header" href="#output-format-1">Output Format</a></h3>
+<pre><code class="language-json">{
+  "$schema": "https://raw.githubusercontent.com/joshrotenberg/adrs/main/schema/json-adr/v1.json",
+  "version": "1.0.0",
+  "generated_at": "2024-01-15T10:30:00Z",
+  "tool": {
+    "name": "adrs",
+    "version": "0.5.0"
+  },
+  "repository": {
+    "adr_directory": "doc/adr"
+  },
+  "adrs": [
+    {
+      "number": 1,
+      "title": "Record architecture decisions",
+      "status": "Accepted",
+      "date": "2024-01-15",
+      "context": "We need to record architectural decisions...",
+      "decision": "We will use ADRs...",
+      "consequences": "See Michael Nygard's article...",
+      "links": [],
+      "path": "doc/adr/0001-record-architecture-decisions.md"
+    }
+  ]
+}
 </code></pre>
-<p>Output:</p>
-<pre><code>1. Record architecture decisions [Accepted]
-2. Use PostgreSQL for persistence [Proposed]
-3. API versioning strategy [Accepted]
-4. Use Redis for caching [Superseded]
+<h3 id="federation-support"><a class="header" href="#federation-support">Federation Support</a></h3>
+<p>Use <code>--base-url</code> to add <code>source_uri</code> fields for referencing ADRs across repositories:</p>
+<pre><code class="language-bash">adrs export json --metadata-only --base-url "https://github.com/org/repo/blob/main/doc/adr"
 </code></pre>
-<h3 id="from-a-subdirectory"><a class="header" href="#from-a-subdirectory">From a Subdirectory</a></h3>
-<pre><code class="language-sh">cd src/
-adrs list
+<p>This produces lightweight exports that reference the source files:</p>
+<pre><code class="language-json">{
+  "number": 1,
+  "title": "Use PostgreSQL",
+  "status": "Accepted",
+  "date": "2024-01-15",
+  "source_uri": "https://github.com/org/repo/blob/main/doc/adr/0001-use-postgresql.md"
+}
 </code></pre>
-<p><code>adrs</code> automatically finds the project root.</p>
-<h3 id="specify-working-directory"><a class="header" href="#specify-working-directory">Specify Working Directory</a></h3>
-<pre><code class="language-sh">adrs list -C /path/to/project
-</code></pre>
-<h2 id="output-format"><a class="header" href="#output-format">Output Format</a></h2>
-<p>Each line shows:</p>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
 <ul>
-<li>ADR number</li>
-<li>Title</li>
-<li>Status in brackets</li>
+<li><strong>Integration</strong>: Feed ADRs into documentation systems or dashboards</li>
+<li><strong>Backup/Migration</strong>: Export ADRs for archival or moving between projects</li>
+<li><strong>CI/CD</strong>: Validate ADRs exist for certain features in pipelines</li>
+<li><strong>AI Context</strong>: Provide codebase context to LLMs</li>
+<li><strong>Federation</strong>: Create organization-wide ADR indexes across repositories</li>
 </ul>
-<p>ADRs are sorted by number.</p>
-<h2 id="related-4"><a class="header" href="#related-4">Related</a></h2>
-<ul>
-<li><a href="commands/./new.html">new</a> - Create a new ADR</li>
-<li><a href="commands/./edit.html">edit</a> - Edit an ADR from the list</li>
-</ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="config"><a class="header" href="#config">config</a></h1>
-<p>Show the current configuration.</p>
-<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
-<pre><code>adrs config [OPTIONS]
+<div style="break-before: page; page-break-before: always;"></div><h1 id="import"><a class="header" href="#import">import</a></h1>
+<p>Import ADRs from different formats into your repository.</p>
+<h2 id="json-import"><a class="header" href="#json-import">JSON Import</a></h2>
+<p>Import ADRs from JSON-ADR format files.</p>
+<pre><code class="language-bash">adrs import json exported.json              # Import to repository
+adrs import json exported.json --dry-run    # Preview without writing
+adrs import json - &lt; exported.json          # Read from stdin
 </code></pre>
-<h2 id="options-5"><a class="header" href="#options-5">Options</a></h2>
+<h3 id="options-8"><a class="header" href="#options-8">Options</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
-<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
-<tr><td><code>-h, --help</code></td><td>Print help</td></tr>
+<tr><td><code>--dir</code>, <code>-d</code></td><td>Import to a directory without requiring an initialized repository</td></tr>
+<tr><td><code>--overwrite</code>, <code>-o</code></td><td>Overwrite existing files with the same number</td></tr>
+<tr><td><code>--renumber</code>, <code>-r</code></td><td>Renumber ADRs starting from next available number</td></tr>
+<tr><td><code>--append</code></td><td>Alias for <code>--renumber</code></td></tr>
+<tr><td><code>--dry-run</code></td><td>Preview import without writing files</td></tr>
+<tr><td><code>--ng</code></td><td>Use NextGen mode with YAML frontmatter</td></tr>
 </tbody></table>
 </div>
-<h2 id="description-5"><a class="header" href="#description-5">Description</a></h2>
-<p>Displays the current configuration, including where it was loaded from.</p>
-<h2 id="examples-5"><a class="header" href="#examples-5">Examples</a></h2>
-<h3 id="basic-usage-2"><a class="header" href="#basic-usage-2">Basic Usage</a></h3>
-<pre><code class="language-sh">adrs config
+<h2 id="merging-adr-sets-with---renumber--append"><a class="header" href="#merging-adr-sets-with---renumber--append">Merging ADR Sets with --renumber/--append</a></h2>
+<p>The <code>--renumber</code> option (also available as <code>--append</code>) enables merging ADRs from different sources without number conflicts. It automatically:</p>
+<ol>
+<li>Finds the next available number in the target directory</li>
+<li>Renumbers all imported ADRs sequentially from that number</li>
+<li>Updates cross-references between imported ADRs</li>
+</ol>
+<h3 id="example-merging-projects"><a class="header" href="#example-merging-projects">Example: Merging Projects</a></h3>
+<p>If your target repository has ADRs 1-5:</p>
+<pre><code class="language-bash"># Imported ADRs become 6, 7, 8...
+adrs import json external-adrs.json --renumber
+
+# Or use the --append alias for clarity
+adrs import json external-adrs.json --append
 </code></pre>
-<p>Output:</p>
-<pre><code>Project root: /home/user/myproject
-Config source: adrs.toml
-ADR directory: doc/adr
-Full path: /home/user/myproject/doc/adr
-Mode: Compatible
+<h3 id="example-migration-scenario"><a class="header" href="#example-migration-scenario">Example: Migration Scenario</a></h3>
+<p>Combine with <code>--dir</code> for migrating ADRs:</p>
+<pre><code class="language-bash">adrs import json acquired-project.json --dir doc/adr --append
 </code></pre>
-<h3 id="without-initialization"><a class="header" href="#without-initialization">Without Initialization</a></h3>
-<pre><code class="language-sh">adrs config
+<h3 id="preview-before-importing"><a class="header" href="#preview-before-importing">Preview Before Importing</a></h3>
+<p>Use <code>--dry-run</code> to see what would happen:</p>
+<pre><code class="language-bash">adrs import json external.json --append --dry-run
 </code></pre>
-<p>Output when no ADR repository is found:</p>
-<pre><code>Project root: /home/user/myproject
-Config source: defaults
-ADR directory: doc/adr
-Full path: /home/user/myproject/doc/adr
-Mode: Compatible
+<p>Output shows the renumber mapping:</p>
+<pre><code>Would import 3 ADRs:
+  ADR 1 -&gt; ADR 6 (0006-use-postgresql.md)
+  ADR 2 -&gt; ADR 7 (0007-use-redis.md)
+  ADR 3 -&gt; ADR 8 (0008-api-design.md)
+
+Cross-references updated:
+  ADR 7 link to ADR 1 -&gt; ADR 6
 </code></pre>
-<h2 id="config-sources"><a class="header" href="#config-sources">Config Sources</a></h2>
-<div class="table-wrapper"><table><thead><tr><th>Source</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>adrs.toml</code></td><td>TOML configuration file</td></tr>
-<tr><td><code>.adr-dir</code></td><td>Legacy adr-tools configuration</td></tr>
-<tr><td><code>global (~/.config/adrs/config.toml)</code></td><td>User-wide configuration</td></tr>
-<tr><td><code>environment</code></td><td>Environment variable override</td></tr>
-<tr><td><code>defaults</code></td><td>Built-in defaults</td></tr>
-</tbody></table>
-</div>
-<h2 id="related-5"><a class="header" href="#related-5">Related</a></h2>
+<h3 id="link-handling"><a class="header" href="#link-handling">Link Handling</a></h3>
+<p>When renumbering, internal links between imported ADRs are automatically updated. For example:</p>
 <ul>
-<li><a href="commands/../configuration.html">Configuration</a> - Configuration options</li>
-<li><a href="commands/./init.html">init</a> - Initialize a repository</li>
+<li>Source ADR 2 links to ADR 1 with "Supersedes"</li>
+<li>After renumbering to 7 and 6, the link now points to ADR 6</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="doctor"><a class="header" href="#doctor">doctor</a></h1>
-<p>Check the health of your ADR repository.</p>
-<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
-<pre><code>adrs doctor [OPTIONS]
+<p>Links to ADRs outside the imported set generate warnings:</p>
+<pre><code>Warning: ADR 7 links to ADR 5 which is not in the import set
 </code></pre>
-<h2 id="options-6"><a class="header" href="#options-6">Options</a></h2>
-<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
-<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
-<tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody></table>
-</div>
-<h2 id="description-6"><a class="header" href="#description-6">Description</a></h2>
-<p>Runs diagnostic checks on your ADR repository and reports any issues found.</p>
-<h2 id="checks-performed"><a class="header" href="#checks-performed">Checks Performed</a></h2>
-<div class="table-wrapper"><table><thead><tr><th>Check</th><th>Description</th></tr></thead><tbody>
-<tr><td>File Naming</td><td>ADR files follow the <code>NNNN-title.md</code> pattern</td></tr>
-<tr><td>Duplicate Numbers</td><td>No two ADRs have the same number</td></tr>
-<tr><td>Numbering Gaps</td><td>Sequential numbering without gaps</td></tr>
-<tr><td>Broken Links</td><td>All referenced ADRs exist</td></tr>
-<tr><td>Superseded Status</td><td>Superseded ADRs have corresponding links</td></tr>
-<tr><td>Parse Errors</td><td>All ADRs can be parsed correctly</td></tr>
-</tbody></table>
-</div>
-<h2 id="examples-6"><a class="header" href="#examples-6">Examples</a></h2>
-<h3 id="healthy-repository"><a class="header" href="#healthy-repository">Healthy Repository</a></h3>
-<pre><code class="language-sh">adrs doctor
+<h2 id="input-formats"><a class="header" href="#input-formats">Input Formats</a></h2>
+<p>The import command accepts multiple JSON-ADR formats:</p>
+<p><strong>Bulk export</strong> (from <code>adrs export json</code>):</p>
+<pre><code class="language-json">{
+  "version": "1.0.0",
+  "adrs": [...]
+}
 </code></pre>
-<p>Output:</p>
-<pre><code>Checking ADR repository health...
-
-[OK] File naming: All 5 ADRs follow naming convention
-[OK] Duplicate numbers: No duplicates found
-[OK] Numbering gaps: Numbers are sequential
-[OK] Broken links: All links are valid
-[OK] Superseded status: All superseded ADRs have links
-[OK] Parse errors: All ADRs parsed successfully
-
-Health check passed!
+<p><strong>Single ADR wrapper</strong>:</p>
+<pre><code class="language-json">{
+  "version": "1.0.0",
+  "adr": { ... }
+}
 </code></pre>
-<h3 id="repository-with-issues"><a class="header" href="#repository-with-issues">Repository with Issues</a></h3>
-<pre><code class="language-sh">adrs doctor
+<p><strong>Bare ADR object</strong>:</p>
+<pre><code class="language-json">{
+  "number": 1,
+  "title": "...",
+  "status": "...",
+  ...
+}
 </code></pre>
-<p>Output:</p>
-<pre><code>Checking ADR repository health...
-
-[OK] File naming: All 5 ADRs follow naming convention
-[WARN] Numbering gaps: Gap after ADR 3 (next is 5)
-[ERROR] Broken links: ADR 4 links to non-existent ADR 99
-[WARN] Superseded status: ADR 2 is superseded but has no "Superseded by" link
-
-Health check found 3 issue(s)
-</code></pre>
-<h2 id="severity-levels"><a class="header" href="#severity-levels">Severity Levels</a></h2>
-<div class="table-wrapper"><table><thead><tr><th>Level</th><th>Description</th></tr></thead><tbody>
-<tr><td>OK</td><td>Check passed</td></tr>
-<tr><td>WARN</td><td>Potential issue, but not critical</td></tr>
-<tr><td>ERROR</td><td>Problem that should be fixed</td></tr>
-</tbody></table>
-</div>
-<h2 id="exit-codes"><a class="header" href="#exit-codes">Exit Codes</a></h2>
-<div class="table-wrapper"><table><thead><tr><th>Code</th><th>Description</th></tr></thead><tbody>
-<tr><td>0</td><td>All checks passed</td></tr>
-<tr><td>1</td><td>One or more checks failed</td></tr>
-</tbody></table>
-</div>
-<p>This allows using <code>doctor</code> in CI pipelines:</p>
-<pre><code class="language-yaml">- name: Check ADR health
-  run: adrs doctor
-</code></pre>
-<h2 id="related-6"><a class="header" href="#related-6">Related</a></h2>
+<h2 id="use-cases-1"><a class="header" href="#use-cases-1">Use Cases</a></h2>
 <ul>
-<li><a href="commands/./list.html">list</a> - List ADRs</li>
-<li><a href="commands/./link.html">link</a> - Fix broken links</li>
+<li><strong>Project mergers</strong>: Combine ADRs when acquiring or merging codebases</li>
+<li><strong>Migration</strong>: Move ADRs between repositories</li>
+<li><strong>Backup restoration</strong>: Restore from JSON exports</li>
+<li><strong>Cross-team sharing</strong>: Import relevant decisions from other teams</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="generate"><a class="header" href="#generate">generate</a></h1>
 <p>Generate documentation from ADRs.</p>
@@ -1255,7 +1537,7 @@ Health check found 3 issue(s)
 <h3 id="usage-9"><a class="header" href="#usage-9">Usage</a></h3>
 <pre><code>adrs generate toc [OPTIONS]
 </code></pre>
-<h3 id="options-7"><a class="header" href="#options-7">Options</a></h3>
+<h3 id="options-9"><a class="header" href="#options-9">Options</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-o, --ordered</code></td><td>Use ordered list (1. 2. 3.) instead of bullets</td></tr>
 <tr><td><code>-i, --intro &lt;FILE&gt;</code></td><td>Prepend content from file</td></tr>
@@ -1298,7 +1580,7 @@ Health check found 3 issue(s)
 <h3 id="usage-10"><a class="header" href="#usage-10">Usage</a></h3>
 <pre><code>adrs generate graph [OPTIONS]
 </code></pre>
-<h3 id="options-8"><a class="header" href="#options-8">Options</a></h3>
+<h3 id="options-10"><a class="header" href="#options-10">Options</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-p, --prefix &lt;PREFIX&gt;</code></td><td>Prefix for node URLs</td></tr>
 <tr><td><code>-e, --extension &lt;EXT&gt;</code></td><td>File extension for links (default: md)</td></tr>
@@ -1350,7 +1632,7 @@ Health check found 3 issue(s)
 <h3 id="usage-11"><a class="header" href="#usage-11">Usage</a></h3>
 <pre><code>adrs generate book [OPTIONS]
 </code></pre>
-<h3 id="options-9"><a class="header" href="#options-9">Options</a></h3>
+<h3 id="options-11"><a class="header" href="#options-11">Options</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-o, --output &lt;DIR&gt;</code></td><td>Output directory (default: book)</td></tr>
 <tr><td><code>-t, --title &lt;TITLE&gt;</code></td><td>Book title</td></tr>
@@ -1395,14 +1677,556 @@ mdbook serve
     github_token: ${{ secrets.GITHUB_TOKEN }}
     publish_dir: ./book/book
 </code></pre>
-<h2 id="related-7"><a class="header" href="#related-7">Related</a></h2>
+<h2 id="related-5"><a class="header" href="#related-5">Related</a></h2>
 <ul>
 <li><a href="commands/./list.html">list</a> - List ADRs</li>
 <li><a href="commands/./doctor.html">doctor</a> - Check repository health</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="template"><a class="header" href="#template">template</a></h1>
+<p>Manage ADR templates.</p>
+<h2 id="usage-12"><a class="header" href="#usage-12">Usage</a></h2>
+<pre><code>adrs template &lt;COMMAND&gt;
+</code></pre>
+<h2 id="subcommands-1"><a class="header" href="#subcommands-1">Subcommands</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Command</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>list</code></td><td>List available templates</td></tr>
+<tr><td><code>show</code></td><td>Show a template's content</td></tr>
+</tbody></table>
+</div>
+<h2 id="list-1"><a class="header" href="#list-1">list</a></h2>
+<p>List all available template formats and variants.</p>
+<pre><code class="language-sh">adrs template list
+</code></pre>
+<p>Output:</p>
+<pre><code>Available templates:
+
+nygard (default)
+  Variants: full (default), minimal, bare
+
+madr
+  Variants: full (default), minimal, bare
+</code></pre>
+<h2 id="show"><a class="header" href="#show">show</a></h2>
+<p>Display the content of a specific template.</p>
+<pre><code class="language-sh">adrs template show &lt;FORMAT&gt; [--variant &lt;VARIANT&gt;]
+</code></pre>
+<h3 id="options-12"><a class="header" href="#options-12">Options</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: full, minimal, bare</td></tr>
+</tbody></table>
+</div>
+<h3 id="examples-10"><a class="header" href="#examples-10">Examples</a></h3>
+<pre><code class="language-sh"># Show default Nygard template (full variant)
+adrs template show nygard
+
+# Show minimal MADR template
+adrs template show madr --variant minimal
+
+# Show bare template
+adrs template show nygard --variant bare
+</code></pre>
+<h2 id="template-formats"><a class="header" href="#template-formats">Template Formats</a></h2>
+<h3 id="nygard-classic"><a class="header" href="#nygard-classic">Nygard (Classic)</a></h3>
+<p>The original ADR format by Michael Nygard with sections:</p>
+<ul>
+<li>Status</li>
+<li>Context</li>
+<li>Decision</li>
+<li>Consequences</li>
+</ul>
+<h3 id="madr-400"><a class="header" href="#madr-400">MADR 4.0.0</a></h3>
+<p>Markdown Any Decision Record format with additional sections:</p>
+<ul>
+<li>Status</li>
+<li>Deciders</li>
+<li>Date</li>
+<li>Context and Problem Statement</li>
+<li>Decision Drivers</li>
+<li>Considered Options</li>
+<li>Decision Outcome</li>
+<li>Consequences</li>
+</ul>
+<h2 id="template-variants-1"><a class="header" href="#template-variants-1">Template Variants</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>full</code></td><td>Complete template with all sections and guidance</td></tr>
+<tr><td><code>minimal</code></td><td>Essential sections only</td></tr>
+<tr><td><code>bare</code></td><td>Minimal structure, just headings</td></tr>
+</tbody></table>
+</div>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="commands/./new.html">new</a> - Create ADRs using templates</li>
+<li><a href="commands/../templates.html">Templates</a> - Template customization guide</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="config"><a class="header" href="#config">config</a></h1>
+<p>Show the current configuration.</p>
+<h2 id="usage-13"><a class="header" href="#usage-13">Usage</a></h2>
+<pre><code>adrs config [OPTIONS]
+</code></pre>
+<h2 id="options-13"><a class="header" href="#options-13">Options</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
+<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
+<tr><td><code>-h, --help</code></td><td>Print help</td></tr>
+</tbody></table>
+</div>
+<h2 id="description-4"><a class="header" href="#description-4">Description</a></h2>
+<p>Displays the current configuration, including where it was loaded from.</p>
+<h2 id="examples-11"><a class="header" href="#examples-11">Examples</a></h2>
+<h3 id="basic-usage-2"><a class="header" href="#basic-usage-2">Basic Usage</a></h3>
+<pre><code class="language-sh">adrs config
+</code></pre>
+<p>Output:</p>
+<pre><code>Project root: /home/user/myproject
+Config source: adrs.toml
+ADR directory: doc/adr
+Full path: /home/user/myproject/doc/adr
+Mode: Compatible
+</code></pre>
+<h3 id="without-initialization"><a class="header" href="#without-initialization">Without Initialization</a></h3>
+<pre><code class="language-sh">adrs config
+</code></pre>
+<p>Output when no ADR repository is found:</p>
+<pre><code>Project root: /home/user/myproject
+Config source: defaults
+ADR directory: doc/adr
+Full path: /home/user/myproject/doc/adr
+Mode: Compatible
+</code></pre>
+<h2 id="config-sources"><a class="header" href="#config-sources">Config Sources</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Source</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>adrs.toml</code></td><td>TOML configuration file</td></tr>
+<tr><td><code>.adr-dir</code></td><td>Legacy adr-tools configuration</td></tr>
+<tr><td><code>global (~/.config/adrs/config.toml)</code></td><td>User-wide configuration</td></tr>
+<tr><td><code>environment</code></td><td>Environment variable override</td></tr>
+<tr><td><code>defaults</code></td><td>Built-in defaults</td></tr>
+</tbody></table>
+</div>
+<h2 id="related-6"><a class="header" href="#related-6">Related</a></h2>
+<ul>
+<li><a href="commands/../configuration.html">Configuration</a> - Configuration options</li>
+<li><a href="commands/./init.html">init</a> - Initialize a repository</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="doctor"><a class="header" href="#doctor">doctor</a></h1>
+<p>Check the health of your ADR repository.</p>
+<h2 id="usage-14"><a class="header" href="#usage-14">Usage</a></h2>
+<pre><code>adrs doctor [OPTIONS]
+</code></pre>
+<h2 id="options-14"><a class="header" href="#options-14">Options</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
+<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
+<tr><td><code>-h, --help</code></td><td>Print help</td></tr>
+</tbody></table>
+</div>
+<h2 id="description-5"><a class="header" href="#description-5">Description</a></h2>
+<p>Runs diagnostic checks on your ADR repository and reports any issues found.</p>
+<h2 id="checks-performed"><a class="header" href="#checks-performed">Checks Performed</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Check</th><th>Description</th></tr></thead><tbody>
+<tr><td>File Naming</td><td>ADR files follow the <code>NNNN-title.md</code> pattern</td></tr>
+<tr><td>Duplicate Numbers</td><td>No two ADRs have the same number</td></tr>
+<tr><td>Numbering Gaps</td><td>Sequential numbering without gaps</td></tr>
+<tr><td>Broken Links</td><td>All referenced ADRs exist</td></tr>
+<tr><td>Superseded Status</td><td>Superseded ADRs have corresponding links</td></tr>
+<tr><td>Parse Errors</td><td>All ADRs can be parsed correctly</td></tr>
+</tbody></table>
+</div>
+<h2 id="examples-12"><a class="header" href="#examples-12">Examples</a></h2>
+<h3 id="healthy-repository"><a class="header" href="#healthy-repository">Healthy Repository</a></h3>
+<pre><code class="language-sh">adrs doctor
+</code></pre>
+<p>Output:</p>
+<pre><code>Checking ADR repository health...
+
+[OK] File naming: All 5 ADRs follow naming convention
+[OK] Duplicate numbers: No duplicates found
+[OK] Numbering gaps: Numbers are sequential
+[OK] Broken links: All links are valid
+[OK] Superseded status: All superseded ADRs have links
+[OK] Parse errors: All ADRs parsed successfully
+
+Health check passed!
+</code></pre>
+<h3 id="repository-with-issues"><a class="header" href="#repository-with-issues">Repository with Issues</a></h3>
+<pre><code class="language-sh">adrs doctor
+</code></pre>
+<p>Output:</p>
+<pre><code>Checking ADR repository health...
+
+[OK] File naming: All 5 ADRs follow naming convention
+[WARN] Numbering gaps: Gap after ADR 3 (next is 5)
+[ERROR] Broken links: ADR 4 links to non-existent ADR 99
+[WARN] Superseded status: ADR 2 is superseded but has no "Superseded by" link
+
+Health check found 3 issue(s)
+</code></pre>
+<h2 id="severity-levels"><a class="header" href="#severity-levels">Severity Levels</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Level</th><th>Description</th></tr></thead><tbody>
+<tr><td>OK</td><td>Check passed</td></tr>
+<tr><td>WARN</td><td>Potential issue, but not critical</td></tr>
+<tr><td>ERROR</td><td>Problem that should be fixed</td></tr>
+</tbody></table>
+</div>
+<h2 id="exit-codes"><a class="header" href="#exit-codes">Exit Codes</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Code</th><th>Description</th></tr></thead><tbody>
+<tr><td>0</td><td>All checks passed</td></tr>
+<tr><td>1</td><td>One or more checks failed</td></tr>
+</tbody></table>
+</div>
+<p>This allows using <code>doctor</code> in CI pipelines:</p>
+<pre><code class="language-yaml">- name: Check ADR health
+  run: adrs doctor
+</code></pre>
+<h2 id="related-7"><a class="header" href="#related-7">Related</a></h2>
+<ul>
+<li><a href="commands/./list.html">list</a> - List ADRs</li>
+<li><a href="commands/./link.html">link</a> - Fix broken links</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="completions"><a class="header" href="#completions">completions</a></h1>
+<p>Generate shell completions for tab-completion support.</p>
+<h2 id="usage-15"><a class="header" href="#usage-15">Usage</a></h2>
+<pre><code>adrs completions &lt;SHELL&gt;
+</code></pre>
+<h2 id="arguments-6"><a class="header" href="#arguments-6">Arguments</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>&lt;SHELL&gt;</code></td><td>Shell to generate completions for</td></tr>
+</tbody></table>
+</div>
+<h2 id="supported-shells"><a class="header" href="#supported-shells">Supported Shells</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Shell</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>bash</code></td><td>Bourne Again Shell</td></tr>
+<tr><td><code>zsh</code></td><td>Z Shell</td></tr>
+<tr><td><code>fish</code></td><td>Fish Shell</td></tr>
+<tr><td><code>powershell</code></td><td>PowerShell</td></tr>
+<tr><td><code>elvish</code></td><td>Elvish Shell</td></tr>
+</tbody></table>
+</div>
+<h2 id="installation-2"><a class="header" href="#installation-2">Installation</a></h2>
+<h3 id="bash"><a class="header" href="#bash">Bash</a></h3>
+<pre><code class="language-sh"># Generate completions
+adrs completions bash &gt; ~/.bash_completion.d/adrs
+
+# Add to ~/.bashrc
+source ~/.bash_completion.d/adrs
+</code></pre>
+<h3 id="zsh"><a class="header" href="#zsh">Zsh</a></h3>
+<pre><code class="language-sh"># Generate completions
+adrs completions zsh &gt; ~/.zfunc/_adrs
+
+# Add to ~/.zshrc (before compinit)
+fpath=(~/.zfunc $fpath)
+autoload -Uz compinit &amp;&amp; compinit
+</code></pre>
+<h3 id="fish"><a class="header" href="#fish">Fish</a></h3>
+<pre><code class="language-sh"># Generate completions (loaded automatically)
+adrs completions fish &gt; ~/.config/fish/completions/adrs.fish
+</code></pre>
+<h3 id="powershell"><a class="header" href="#powershell">PowerShell</a></h3>
+<pre><code class="language-powershell"># Generate completions
+adrs completions powershell &gt; _adrs.ps1
+
+# Add to your PowerShell profile
+. _adrs.ps1
+</code></pre>
+<h3 id="elvish"><a class="header" href="#elvish">Elvish</a></h3>
+<pre><code class="language-sh"># Generate completions
+adrs completions elvish &gt; ~/.elvish/lib/adrs.elv
+
+# Add to ~/.elvish/rc.elv
+use adrs
+</code></pre>
+<h2 id="examples-13"><a class="header" href="#examples-13">Examples</a></h2>
+<p>After installation, you can use tab completion:</p>
+<pre><code class="language-sh"># Complete commands
+adrs &lt;TAB&gt;
+init  new  edit  list  search  link  status  ...
+
+# Complete options
+adrs new --&lt;TAB&gt;
+--format  --variant  --tags  --supersedes  --no-edit  ...
+
+# Complete formats
+adrs new --format &lt;TAB&gt;
+nygard  madr
+</code></pre>
+<h2 id="homebrew-users"><a class="header" href="#homebrew-users">Homebrew Users</a></h2>
+<p>If you installed via Homebrew, completions may already be configured. Check with:</p>
+<pre><code class="language-sh"># Bash (Homebrew)
+$(brew --prefix)/etc/bash_completion.d/adrs
+
+# Zsh (Homebrew)
+$(brew --prefix)/share/zsh/site-functions/_adrs
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="cheatsheet"><a class="header" href="#cheatsheet">cheatsheet</a></h1>
+<p>Show a quick reference for common ADR workflows.</p>
+<h2 id="usage-16"><a class="header" href="#usage-16">Usage</a></h2>
+<pre><code>adrs cheatsheet
+</code></pre>
+<p>Alias: <code>adrs qr</code></p>
+<h2 id="output-1"><a class="header" href="#output-1">Output</a></h2>
+<p>Displays a comprehensive quick reference covering:</p>
+<ul>
+<li>Getting started</li>
+<li>Creating ADRs</li>
+<li>Superseding and linking</li>
+<li>Managing status</li>
+<li>Viewing and searching</li>
+<li>Generating documentation</li>
+<li>Import/export</li>
+<li>Configuration</li>
+</ul>
+<h2 id="example-output"><a class="header" href="#example-output">Example Output</a></h2>
+<pre><code>ADR Quick Reference
+===================
+
+GETTING STARTED
+  adrs init                    Initialize ADR repository
+  adrs --ng init               Initialize with NextGen mode (YAML frontmatter)
+
+CREATING ADRS
+  adrs new "Title"             Create new ADR
+  adrs new --format madr       Use MADR 4.0.0 format
+  adrs new --variant minimal   Use minimal template
+  adrs new -t tag1,tag2        Add tags (NextGen mode)
+  adrs new --no-edit           Create without opening editor
+
+SUPERSEDING AND LINKING
+  adrs new -s 2 "New title"    Supersede ADR #2
+  adrs link 3 Amends 1         Link ADR #3 amends #1
+
+MANAGING STATUS
+  adrs status 1 accepted       Accept ADR #1
+  adrs status 2 deprecated     Deprecate ADR #2
+  adrs status 3 superseded 4   Mark #3 superseded by #4
+
+VIEWING AND SEARCHING
+  adrs list                    List all ADRs
+  adrs list --status accepted  Filter by status
+  adrs search postgres         Search content
+  adrs search -t database      Search titles only
+
+DOCUMENTATION
+  adrs generate toc            Generate table of contents
+  adrs generate graph          Generate Graphviz diagram
+  adrs generate book           Generate mdbook
+
+IMPORT/EXPORT
+  adrs export json             Export to JSON-ADR
+  adrs import file.json        Import from JSON-ADR
+
+CONFIGURATION
+  adrs config                  Show current config
+  adrs doctor                  Check repository health
+
+More: adrs --help, adrs &lt;command&gt; --help
+</code></pre>
+<h2 id="tips-1"><a class="header" href="#tips-1">Tips</a></h2>
+<ul>
+<li>Run <code>adrs cheatsheet</code> whenever you need a quick reminder</li>
+<li>Use <code>adrs &lt;command&gt; --help</code> for detailed command documentation</li>
+<li>Full documentation at <a href="https://joshrotenberg.github.io/adrs-book/">joshrotenberg.github.io/adrs-book</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="mcp-server"><a class="header" href="#mcp-server">MCP Server</a></h1>
+<p><code>adrs</code> includes an MCP (Model Context Protocol) server for AI agent integration. This allows AI assistants like Claude to read, search, create, and manage ADRs directly.</p>
+<h2 id="installation-3"><a class="header" href="#installation-3">Installation</a></h2>
+<p>The MCP server is an optional feature. Install with:</p>
+<pre><code class="language-sh">cargo install adrs --features mcp
+</code></pre>
+<p>Or build from source:</p>
+<pre><code class="language-sh">cargo build --release --features mcp
+</code></pre>
+<p>For HTTP transport support (independent server mode):</p>
+<pre><code class="language-sh">cargo install adrs --features mcp-http
+</code></pre>
+<h2 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h2>
+<h3 id="claude-desktop"><a class="header" href="#claude-desktop">Claude Desktop</a></h3>
+<p>Add to your <code>claude_desktop_config.json</code>:</p>
+<pre><code class="language-json">{
+  "mcpServers": {
+    "adrs": {
+      "command": "adrs",
+      "args": ["mcp", "serve"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+</code></pre>
+<h3 id="http-mode"><a class="header" href="#http-mode">HTTP Mode</a></h3>
+<p>For independent server operation:</p>
+<pre><code class="language-sh">adrs mcp serve --http 127.0.0.1:3000
+</code></pre>
+<p>Then configure Claude with:</p>
+<pre><code class="language-json">{
+  "mcpServers": {
+    "adrs": {
+      "url": "http://127.0.0.1:3000/mcp"
+    }
+  }
+}
+</code></pre>
+<h2 id="available-tools"><a class="header" href="#available-tools">Available Tools</a></h2>
+<p>The MCP server provides 15 tools organized by function:</p>
+<h3 id="read-operations"><a class="header" href="#read-operations">Read Operations</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>list_adrs</code></td><td>List all ADRs with optional status/tag filters</td></tr>
+<tr><td><code>get_adr</code></td><td>Get full content of an ADR by number</td></tr>
+<tr><td><code>search_adrs</code></td><td>Search ADR titles and content</td></tr>
+<tr><td><code>get_adr_sections</code></td><td>Get ADR with parsed sections (context, decision, consequences)</td></tr>
+<tr><td><code>get_related_adrs</code></td><td>Get all ADRs linked to/from a specific ADR</td></tr>
+<tr><td><code>get_repository_info</code></td><td>Get repository mode, ADR count, and configuration</td></tr>
+</tbody></table>
+</div>
+<h3 id="write-operations"><a class="header" href="#write-operations">Write Operations</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>create_adr</code></td><td>Create a new ADR (always 'proposed' status)</td></tr>
+<tr><td><code>update_status</code></td><td>Change an ADR's status</td></tr>
+<tr><td><code>link_adrs</code></td><td>Create bidirectional links between ADRs</td></tr>
+<tr><td><code>update_content</code></td><td>Update ADR sections (context, decision, consequences)</td></tr>
+<tr><td><code>update_tags</code></td><td>Add or replace tags (NextGen mode only)</td></tr>
+<tr><td><code>bulk_update_status</code></td><td>Update multiple ADR statuses at once</td></tr>
+</tbody></table>
+</div>
+<h3 id="analysis-tools"><a class="header" href="#analysis-tools">Analysis Tools</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>validate_adr</code></td><td>Check ADR structure and report issues</td></tr>
+<tr><td><code>compare_adrs</code></td><td>Compare two ADRs and show differences</td></tr>
+<tr><td><code>suggest_tags</code></td><td>Analyze content and suggest relevant tags</td></tr>
+</tbody></table>
+</div>
+<h2 id="tool-details"><a class="header" href="#tool-details">Tool Details</a></h2>
+<h3 id="list_adrs"><a class="header" href="#list_adrs">list_adrs</a></h3>
+<p>List all ADRs with optional filtering.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>status</code> (optional): Filter by status (proposed, accepted, deprecated, superseded)</li>
+<li><code>tag</code> (optional): Filter by tag (NextGen mode)</li>
+</ul>
+<p><strong>Example response:</strong></p>
+<pre><code class="language-json">[
+  {
+    "number": 1,
+    "title": "Use PostgreSQL for persistence",
+    "status": "accepted",
+    "date": "2026-01-15",
+    "tags": ["database", "infrastructure"]
+  }
+]
+</code></pre>
+<h3 id="get_adr"><a class="header" href="#get_adr">get_adr</a></h3>
+<p>Get the full content of a specific ADR.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>number</code> (required): The ADR number</li>
+</ul>
+<p><strong>Returns:</strong> Complete ADR including title, status, content, and links.</p>
+<h3 id="search_adrs"><a class="header" href="#search_adrs">search_adrs</a></h3>
+<p>Search ADRs for matching text.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>query</code> (required): Search text</li>
+<li><code>title_only</code> (optional): Only search titles (default: false)</li>
+</ul>
+<h3 id="create_adr"><a class="header" href="#create_adr">create_adr</a></h3>
+<p>Create a new ADR. Always creates with 'proposed' status for human review.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>title</code> (required): ADR title</li>
+<li><code>context</code> (optional): Context section content</li>
+<li><code>decision</code> (optional): Decision section content</li>
+<li><code>consequences</code> (optional): Consequences section content</li>
+<li><code>supersedes</code> (optional): ADR number this supersedes</li>
+</ul>
+<h3 id="update_status"><a class="header" href="#update_status">update_status</a></h3>
+<p>Change an ADR's status.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>number</code> (required): ADR number</li>
+<li><code>status</code> (required): New status (proposed, accepted, deprecated, superseded, rejected)</li>
+<li><code>superseded_by</code> (optional): Required when status is 'superseded'</li>
+</ul>
+<h3 id="link_adrs"><a class="header" href="#link_adrs">link_adrs</a></h3>
+<p>Create bidirectional links between ADRs.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>source</code> (required): Source ADR number</li>
+<li><code>target</code> (required): Target ADR number</li>
+<li><code>link_type</code> (required): Link type (Supersedes, Amends, "Relates to")</li>
+</ul>
+<h3 id="validate_adr"><a class="header" href="#validate_adr">validate_adr</a></h3>
+<p>Validate an ADR's structure and content.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>number</code> (required): ADR number to validate</li>
+</ul>
+<p><strong>Returns:</strong> Validation results with severity levels (error/warning).</p>
+<h3 id="compare_adrs"><a class="header" href="#compare_adrs">compare_adrs</a></h3>
+<p>Compare two ADRs side by side.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>adr1</code> (required): First ADR number</li>
+<li><code>adr2</code> (required): Second ADR number</li>
+</ul>
+<p><strong>Returns:</strong> Structural comparison of title, status, and content sections.</p>
+<h3 id="suggest_tags"><a class="header" href="#suggest_tags">suggest_tags</a></h3>
+<p>Analyze ADR content and suggest relevant tags.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>number</code> (required): ADR number to analyze</li>
+</ul>
+<p><strong>Returns:</strong> Suggested tags with confidence scores and reasons.</p>
+<h2 id="usage-examples"><a class="header" href="#usage-examples">Usage Examples</a></h2>
+<h3 id="ask-claude-to-list-your-adrs"><a class="header" href="#ask-claude-to-list-your-adrs">Ask Claude to list your ADRs</a></h3>
+<blockquote>
+<p>"What architectural decisions have been made in this project?"</p>
+</blockquote>
+<p>Claude will use <code>list_adrs</code> to retrieve and summarize your ADRs.</p>
+<h3 id="search-for-specific-topics"><a class="header" href="#search-for-specific-topics">Search for specific topics</a></h3>
+<blockquote>
+<p>"Are there any decisions about authentication?"</p>
+</blockquote>
+<p>Claude will use <code>search_adrs</code> with "authentication" to find relevant ADRs.</p>
+<h3 id="create-a-new-adr-1"><a class="header" href="#create-a-new-adr-1">Create a new ADR</a></h3>
+<blockquote>
+<p>"Create an ADR for using Redis as our caching layer"</p>
+</blockquote>
+<p>Claude will use <code>create_adr</code> with the title and may populate initial content based on your discussion.</p>
+<h3 id="review-and-accept-adrs"><a class="header" href="#review-and-accept-adrs">Review and accept ADRs</a></h3>
+<blockquote>
+<p>"Accept ADRs 5, 6, and 7"</p>
+</blockquote>
+<p>Claude will use <code>bulk_update_status</code> to accept multiple ADRs.</p>
+<h3 id="analyze-decisions"><a class="header" href="#analyze-decisions">Analyze decisions</a></h3>
+<blockquote>
+<p>"Compare ADR 2 with ADR 8 to see how our database choice evolved"</p>
+</blockquote>
+<p>Claude will use <code>compare_adrs</code> to show the differences.</p>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<ol>
+<li>
+<p><strong>Human Review</strong>: All ADRs created by AI are set to 'proposed' status. Review before accepting.</p>
+</li>
+<li>
+<p><strong>Provide Context</strong>: Give Claude context about your architecture when asking it to create ADRs.</p>
+</li>
+<li>
+<p><strong>Use Tags</strong>: In NextGen mode, use <code>suggest_tags</code> to maintain consistent categorization.</p>
+</li>
+<li>
+<p><strong>Validate Often</strong>: Use <code>validate_adr</code> to ensure ADRs have complete content.</p>
+</li>
+<li>
+<p><strong>Link Related Decisions</strong>: Use <code>link_adrs</code> to maintain decision traceability.</p>
+</li>
+</ol>
+<h2 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h2>
+<ul>
+<li><a href="./configuration.html">Configuration</a> - Repository configuration</li>
+<li><a href="./formats.html">Formats</a> - ADR format options</li>
+<li><a href="./compatibility.html">Compatibility</a> - NextGen vs Compatible mode</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="library-usage"><a class="header" href="#library-usage">Library Usage</a></h1>
 <p>The <code>adrs-core</code> crate provides a Rust library for working with ADRs programmatically.</p>
-<h2 id="installation-2"><a class="header" href="#installation-2">Installation</a></h2>
+<h2 id="installation-4"><a class="header" href="#installation-4">Installation</a></h2>
 <p>Add to your <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
 adrs-core = "0.4"
@@ -1478,7 +2302,7 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     
     Ok(())
 }</code></pre></pre>
-<h2 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h2>
+<h2 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h2>
 <h3 id="loading-configuration"><a class="header" href="#loading-configuration">Loading Configuration</a></h3>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::{Config, discover};
 use std::path::Path;
@@ -1698,7 +2522,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features
 </code></pre>
 <h2 id="guidelines"><a class="header" href="#guidelines">Guidelines</a></h2>
-<h3 id="compatibility"><a class="header" href="#compatibility">Compatibility</a></h3>
+<h3 id="compatibility-1"><a class="header" href="#compatibility-1">Compatibility</a></h3>
 <p>The v2 rewrite maintains compatibility with <a href="https://github.com/npryce/adr-tools">adr-tools</a> repositories. Changes should not break existing ADR directories.</p>
 <p>New features that extend beyond adr-tools compatibility should:</p>
 <ul>

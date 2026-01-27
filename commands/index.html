@@ -188,11 +188,18 @@
 <tr><td><a href="./init.html">init</a></td><td>Initialize a new ADR repository</td></tr>
 <tr><td><a href="./new.html">new</a></td><td>Create a new ADR</td></tr>
 <tr><td><a href="./edit.html">edit</a></td><td>Edit an existing ADR</td></tr>
-<tr><td><a href="./link.html">link</a></td><td>Link two ADRs together</td></tr>
 <tr><td><a href="./list.html">list</a></td><td>List all ADRs</td></tr>
+<tr><td><a href="./search.html">search</a></td><td>Search ADRs for matching content</td></tr>
+<tr><td><a href="./status.html">status</a></td><td>Change an ADR's status</td></tr>
+<tr><td><a href="./link.html">link</a></td><td>Link two ADRs together</td></tr>
+<tr><td><a href="./export.html">export</a></td><td>Export ADRs to different formats</td></tr>
+<tr><td><a href="./import.html">import</a></td><td>Import ADRs from different formats</td></tr>
+<tr><td><a href="./generate.html">generate</a></td><td>Generate documentation</td></tr>
+<tr><td><a href="./template.html">template</a></td><td>Manage ADR templates</td></tr>
 <tr><td><a href="./config.html">config</a></td><td>Show configuration</td></tr>
 <tr><td><a href="./doctor.html">doctor</a></td><td>Check repository health</td></tr>
-<tr><td><a href="./generate.html">generate</a></td><td>Generate documentation</td></tr>
+<tr><td><a href="./completions.html">completions</a></td><td>Generate shell completions</td></tr>
+<tr><td><a href="./cheatsheet.html">cheatsheet</a></td><td>Show quick reference</td></tr>
 </tbody></table>
 </div>
 <h2 id="global-options"><a class="header" href="#global-options">Global Options</a></h2>
@@ -208,15 +215,22 @@
 <pre><code>adrs [OPTIONS] &lt;COMMAND&gt;
 
 Commands:
-  init      Initialize a new ADR repository
-  new       Create a new ADR
-  edit      Edit an existing ADR
-  list      List all ADRs
-  link      Link two ADRs together
-  config    Show configuration
-  doctor    Check repository health
-  generate  Generate documentation
-  help      Print this message or the help of the given subcommand(s)
+  init         Initialize a new ADR repository
+  new          Create a new ADR
+  edit         Edit an existing ADR
+  list         List all ADRs
+  search       Search ADRs for matching content
+  link         Link two ADRs together
+  status       Change an ADR's status
+  config       Show configuration
+  doctor       Check repository health
+  generate     Generate documentation
+  export       Export ADRs to different formats
+  import       Import ADRs from different formats
+  template     Manage ADR templates
+  completions  Generate shell completions
+  cheatsheet   Show quick reference for common workflows
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
       --ng                 Use next-gen mode (YAML frontmatter, enhanced features)

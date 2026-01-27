@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>list - adrs documentation</title>
+        <title>Compatibility - adrs documentation</title>
 
 
         <!-- Custom HTML head -->
@@ -12,34 +12,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="../favicon.svg">
-        <link rel="shortcut icon" href="../favicon.png">
-        <link rel="stylesheet" href="../css/variables.css">
-        <link rel="stylesheet" href="../css/general.css">
-        <link rel="stylesheet" href="../css/chrome.css">
-        <link rel="stylesheet" href="../css/print.css" media="print">
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="../fonts/fonts.css">
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "../";
+            const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex.js";
+            window.path_to_searchindex_js = "searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc.js"></script>
+        <script src="toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -106,7 +106,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -141,13 +141,13 @@
                     <h1 class="menu-title">adrs documentation</h1>
 
                     <div class="right-buttons">
-                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/joshrotenberg/adrs/tree/main/book" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/joshrotenberg/adrs/edit/main/book/src/commands/list.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                        <a href="https://github.com/joshrotenberg/adrs/edit/main/book/src/compatibility.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -181,99 +181,124 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="list"><a class="header" href="#list">list</a></h1>
-<p>List Architecture Decision Records with optional filtering.</p>
-<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
-<pre><code class="language-bash">adrs list [OPTIONS]
-</code></pre>
-<h2 id="options"><a class="header" href="#options">Options</a></h2>
-<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>-l, --long</code></td><td>Show detailed output (number, status, date, title)</td></tr>
-<tr><td><code>-s, --status &lt;STATUS&gt;</code></td><td>Filter by status (e.g., proposed, accepted, deprecated, superseded)</td></tr>
-<tr><td><code>--since &lt;DATE&gt;</code></td><td>Show ADRs from this date onwards (YYYY-MM-DD)</td></tr>
-<tr><td><code>--until &lt;DATE&gt;</code></td><td>Show ADRs up to this date (YYYY-MM-DD)</td></tr>
-<tr><td><code>--decider &lt;NAME&gt;</code></td><td>Filter by decision maker (MADR format)</td></tr>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
-<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
+                        <h1 id="compatibility"><a class="header" href="#compatibility">Compatibility</a></h1>
+<p>This page explains the differences between compatible mode (default) and NextGen mode (<code>--ng</code>), including what breaks adr-tools compatibility.</p>
+<h2 id="mode-comparison"><a class="header" href="#mode-comparison">Mode Comparison</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Aspect</th><th>Compatible (default)</th><th>NextGen (--ng)</th><th>Breaks adr-tools?</th></tr></thead><tbody>
+<tr><td><strong>Config file</strong></td><td><code>.adr-dir</code></td><td><code>adrs.toml</code></td><td>Yes</td></tr>
+<tr><td><strong>File format</strong></td><td>Plain markdown</td><td>YAML frontmatter</td><td>Yes</td></tr>
+<tr><td><strong>Status storage</strong></td><td><code>## Status</code> section</td><td><code>status:</code> in YAML</td><td>Yes</td></tr>
+<tr><td><strong>Link storage</strong></td><td>Markdown links in Status</td><td><code>links:</code> YAML array</td><td>Yes</td></tr>
+<tr><td><strong>Date storage</strong></td><td><code>Date: YYYY-MM-DD</code> inline</td><td><code>date:</code> in YAML</td><td>Yes</td></tr>
+<tr><td><strong>MADR fields</strong></td><td>Not available</td><td><code>decision-makers</code>, <code>consulted</code>, <code>informed</code></td><td>N/A</td></tr>
 </tbody></table>
 </div>
-<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
-<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
-<pre><code class="language-bash">adrs list
-</code></pre>
-<p>Output (paths):</p>
-<pre><code>doc/adr/0001-record-architecture-decisions.md
-doc/adr/0002-use-postgresql.md
-doc/adr/0003-api-versioning.md
-</code></pre>
-<h3 id="detailed-output"><a class="header" href="#detailed-output">Detailed Output</a></h3>
-<pre><code class="language-bash">adrs list -l
-</code></pre>
-<p>Output:</p>
-<pre><code>   1  Accepted    2024-01-15  Record architecture decisions
-   2  Accepted    2024-01-20  Use PostgreSQL for persistence
-   3  Proposed    2024-02-01  API versioning strategy
-   4  Superseded  2024-01-10  Use MySQL for persistence
-</code></pre>
-<h3 id="filter-by-status"><a class="header" href="#filter-by-status">Filter by Status</a></h3>
-<pre><code class="language-bash"># Show accepted ADRs
-adrs list --status accepted -l
-
-# Show ADRs needing review
-adrs list --status proposed -l
-
-# Show superseded ADRs
-adrs list --status superseded -l
-</code></pre>
-<h3 id="filter-by-date"><a class="header" href="#filter-by-date">Filter by Date</a></h3>
-<pre><code class="language-bash"># ADRs from 2024 onwards
-adrs list --since 2024-01-01 -l
-
-# ADRs before 2024
-adrs list --until 2023-12-31 -l
-
-# ADRs in a date range
-adrs list --since 2024-01-01 --until 2024-06-30 -l
-</code></pre>
-<h3 id="filter-by-decision-maker"><a class="header" href="#filter-by-decision-maker">Filter by Decision Maker</a></h3>
-<p>For ADRs using MADR format with decision-makers metadata:</p>
-<pre><code class="language-bash"># Find ADRs decided by Alice (case-insensitive substring match)
-adrs list --decider alice -l
-
-# Find ADRs by team
-adrs list --decider "Security Team" -l
-</code></pre>
-<h3 id="combined-filters"><a class="header" href="#combined-filters">Combined Filters</a></h3>
-<p>Multiple filters are AND'd together:</p>
-<pre><code class="language-bash"># Accepted ADRs from 2024 decided by Alice
-adrs list --status accepted --since 2024-01-01 --decider alice -l
-</code></pre>
-<h2 id="output-format"><a class="header" href="#output-format">Output Format</a></h2>
-<p><strong>Default</strong>: File paths, one per line</p>
-<p><strong>Long format (<code>-l</code>)</strong>: Columns showing:</p>
+<h2 id="key-incompatibilities-with-adr-tools"><a class="header" href="#key-incompatibilities-with-adr-tools">Key Incompatibilities with adr-tools</a></h2>
+<ol>
+<li><strong>adr-tools cannot read --ng files</strong> - YAML frontmatter breaks bash parsing</li>
+<li><strong>adr-tools cannot write to --ng repos</strong> - Creates files without frontmatter</li>
+<li><strong>Mixed repos don't work</strong> - adr-tools would create incompatible files</li>
+<li><strong>Scripts break</strong> - Anything grep'ing for <code>## Status\n\nAccepted</code> fails</li>
+</ol>
+<h2 id="what-still-works"><a class="header" href="#what-still-works">What Still Works</a></h2>
 <ul>
-<li>ADR number (4 chars)</li>
-<li>Status (12 chars)</li>
-<li>Date (YYYY-MM-DD)</li>
-<li>Title</li>
+<li><code>adrs</code> can <strong>read both formats</strong> regardless of mode (parser auto-detects)</li>
+<li>Filename format is the same (<code>NNNN-slug.md</code>)</li>
+<li>JSON-ADR export works from either format</li>
 </ul>
-<p>ADRs are sorted by number.</p>
-<h2 id="related"><a class="header" href="#related">Related</a></h2>
+<h2 id="file-format-examples"><a class="header" href="#file-format-examples">File Format Examples</a></h2>
+<h3 id="compatible-mode"><a class="header" href="#compatible-mode">Compatible Mode</a></h3>
+<pre><code class="language-markdown"># 1. Use PostgreSQL
+
+Date: 2024-01-15
+
+## Status
+
+Accepted
+
+Supersedes [2. Use MySQL](0002-use-mysql.md)
+
+## Context
+
+We need a database for our application.
+
+## Decision
+
+We will use PostgreSQL.
+
+## Consequences
+
+We need to learn PostgreSQL administration.
+</code></pre>
+<h3 id="nextgen-mode"><a class="header" href="#nextgen-mode">NextGen Mode</a></h3>
+<pre><code class="language-markdown">---
+number: 1
+title: Use PostgreSQL
+date: 2024-01-15
+status: accepted
+links:
+  - target: 2
+    kind: supersedes
+---
+
+# 1. Use PostgreSQL
+
+## Context
+
+We need a database for our application.
+
+## Decision
+
+We will use PostgreSQL.
+
+## Consequences
+
+We need to learn PostgreSQL administration.
+</code></pre>
+<h2 id="when-to-use-each-mode"><a class="header" href="#when-to-use-each-mode">When to Use Each Mode</a></h2>
+<h3 id="use-compatible-mode-when"><a class="header" href="#use-compatible-mode-when">Use Compatible Mode when:</a></h3>
 <ul>
-<li><a href="./new.html">new</a> - Create a new ADR</li>
-<li><a href="./edit.html">edit</a> - Edit an ADR from the list</li>
-<li><a href="./status.html">status</a> - Change an ADR's status</li>
+<li>Working with teams using adr-tools</li>
+<li>Need shell scripts to parse ADRs</li>
+<li>Want maximum simplicity</li>
+<li>Migrating from an existing adr-tools repository</li>
 </ul>
+<h3 id="use-nextgen-mode-when"><a class="header" href="#use-nextgen-mode-when">Use NextGen Mode when:</a></h3>
+<ul>
+<li>Want MADR 4.0.0 metadata (decision-makers, consulted, informed)</li>
+<li>Need machine-readable structured metadata</li>
+<li>Building tooling that consumes ADRs programmatically</li>
+<li>Starting a new project without adr-tools dependency</li>
+</ul>
+<h2 id="migration-notes"><a class="header" href="#migration-notes">Migration Notes</a></h2>
+<ul>
+<li>Switching to <code>--ng</code> does NOT auto-migrate existing files</li>
+<li>The parser reads both formats, so mixed repos work for reading</li>
+<li>Writing/updating ADRs uses the configured mode</li>
+<li>No automated migration tool yet (potential future feature)</li>
+</ul>
+<h2 id="enabling-nextgen-mode"><a class="header" href="#enabling-nextgen-mode">Enabling NextGen Mode</a></h2>
+<h3 id="for-a-new-repository"><a class="header" href="#for-a-new-repository">For a new repository</a></h3>
+<pre><code class="language-bash">adrs init --ng
+</code></pre>
+<h3 id="for-individual-commands"><a class="header" href="#for-individual-commands">For individual commands</a></h3>
+<pre><code class="language-bash">adrs --ng new "My Decision"
+</code></pre>
+<h3 id="via-configuration"><a class="header" href="#via-configuration">Via configuration</a></h3>
+<p>Create <code>adrs.toml</code> in your repository root:</p>
+<pre><code class="language-toml">adr_dir = "doc/adr"
+mode = "nextgen"
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../commands/edit.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="formats.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../commands/search.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="templates.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -283,11 +308,11 @@ adrs list --status accepted --since 2024-01-01 --decider alice -l
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../commands/edit.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="formats.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../commands/search.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="templates.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -302,13 +327,13 @@ adrs list --status accepted --since 2024-01-01 --decider alice -l
         </script>
 
 
-        <script src="../elasticlunr.min.js"></script>
-        <script src="../mark.min.js"></script>
-        <script src="../searcher.js"></script>
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
 
-        <script src="../clipboard.min.js"></script>
-        <script src="../highlight.js"></script>
-        <script src="../book.js"></script>
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
 
         <!-- Custom JS scripts -->
 

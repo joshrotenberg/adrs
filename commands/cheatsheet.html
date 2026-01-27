@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>generate - adrs documentation</title>
+        <title>cheatsheet - adrs documentation</title>
 
 
         <!-- Custom HTML head -->
@@ -147,7 +147,7 @@
                         <a href="https://github.com/joshrotenberg/adrs/tree/main/book" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/joshrotenberg/adrs/edit/main/book/src/commands/generate.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                        <a href="https://github.com/joshrotenberg/adrs/edit/main/book/src/commands/cheatsheet.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -181,179 +181,85 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="generate"><a class="header" href="#generate">generate</a></h1>
-<p>Generate documentation from ADRs.</p>
+                        <h1 id="cheatsheet"><a class="header" href="#cheatsheet">cheatsheet</a></h1>
+<p>Show a quick reference for common ADR workflows.</p>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
-<pre><code>adrs generate &lt;SUBCOMMAND&gt;
+<pre><code>adrs cheatsheet
 </code></pre>
-<h2 id="subcommands"><a class="header" href="#subcommands">Subcommands</a></h2>
-<div class="table-wrapper"><table><thead><tr><th>Subcommand</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>toc</code></td><td>Generate a table of contents</td></tr>
-<tr><td><code>graph</code></td><td>Generate a Graphviz dependency graph</td></tr>
-<tr><td><code>book</code></td><td>Generate an mdbook</td></tr>
-</tbody></table>
-</div>
-<hr />
-<h2 id="generate-toc"><a class="header" href="#generate-toc">generate toc</a></h2>
-<p>Generate a markdown table of contents to stdout.</p>
-<h3 id="usage-1"><a class="header" href="#usage-1">Usage</a></h3>
-<pre><code>adrs generate toc [OPTIONS]
-</code></pre>
-<h3 id="options"><a class="header" href="#options">Options</a></h3>
-<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>-o, --ordered</code></td><td>Use ordered list (1. 2. 3.) instead of bullets</td></tr>
-<tr><td><code>-i, --intro &lt;FILE&gt;</code></td><td>Prepend content from file</td></tr>
-<tr><td><code>-O, --outro &lt;FILE&gt;</code></td><td>Append content from file</td></tr>
-<tr><td><code>-p, --prefix &lt;PREFIX&gt;</code></td><td>Prefix for ADR links</td></tr>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
-<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
-<tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody></table>
-</div>
-<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
-<h4 id="basic-table-of-contents"><a class="header" href="#basic-table-of-contents">Basic Table of Contents</a></h4>
-<pre><code class="language-sh">adrs generate toc
-</code></pre>
-<p>Output:</p>
-<pre><code class="language-markdown">* [1. Record architecture decisions](0001-record-architecture-decisions.md)
-* [2. Use PostgreSQL for persistence](0002-use-postgresql-for-persistence.md)
-* [3. API versioning strategy](0003-api-versioning-strategy.md)
-</code></pre>
-<h4 id="ordered-list"><a class="header" href="#ordered-list">Ordered List</a></h4>
-<pre><code class="language-sh">adrs generate toc --ordered
-</code></pre>
-<p>Output:</p>
-<pre><code class="language-markdown">1. [1. Record architecture decisions](0001-record-architecture-decisions.md)
-2. [2. Use PostgreSQL for persistence](0002-use-postgresql-for-persistence.md)
-3. [3. API versioning strategy](0003-api-versioning-strategy.md)
-</code></pre>
-<h4 id="save-to-file"><a class="header" href="#save-to-file">Save to File</a></h4>
-<pre><code class="language-sh">adrs generate toc &gt; doc/adr/README.md
-</code></pre>
-<h4 id="with-intro-and-outro-files"><a class="header" href="#with-intro-and-outro-files">With Intro and Outro Files</a></h4>
-<pre><code class="language-sh">adrs generate toc -i intro.md -O outro.md &gt; doc/adr/README.md
-</code></pre>
-<h4 id="link-prefix-for-wikis"><a class="header" href="#link-prefix-for-wikis">Link Prefix for Wikis</a></h4>
-<pre><code class="language-sh">adrs generate toc -p "wiki/adr/"
-</code></pre>
-<hr />
-<h2 id="generate-graph"><a class="header" href="#generate-graph">generate graph</a></h2>
-<p>Generate a Graphviz DOT graph showing ADR relationships.</p>
-<h3 id="usage-2"><a class="header" href="#usage-2">Usage</a></h3>
-<pre><code>adrs generate graph [OPTIONS]
-</code></pre>
-<h3 id="options-1"><a class="header" href="#options-1">Options</a></h3>
-<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>-p, --prefix &lt;PREFIX&gt;</code></td><td>Prefix for node URLs</td></tr>
-<tr><td><code>-e, --extension &lt;EXT&gt;</code></td><td>File extension for links (default: md)</td></tr>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
-<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
-<tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody></table>
-</div>
-<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
-<h4 id="basic-graph"><a class="header" href="#basic-graph">Basic Graph</a></h4>
-<pre><code class="language-sh">adrs generate graph
-</code></pre>
-<p>Output:</p>
-<pre><code class="language-dot">digraph {
-  node [shape=plaintext];
-  _1 [label="1. Record architecture decisions"; URL="0001-record-architecture-decisions.md"];
-  _2 [label="2. Use PostgreSQL"; URL="0002-use-postgresql.md"];
-  _3 [label="3. Use MySQL instead"; URL="0003-use-mysql-instead.md"];
-  edge [style=dotted, weight=10];
-  _1 -&gt; _2;
-  _2 -&gt; _3;
-  edge [style=solid, weight=1];
-  _3 -&gt; _2 [label="Supersedes"];
-}
-</code></pre>
-<h4 id="save-to-file-1"><a class="header" href="#save-to-file-1">Save to File</a></h4>
-<pre><code class="language-sh">adrs generate graph &gt; doc/adr/graph.dot
-</code></pre>
-<h4 id="render-as-png"><a class="header" href="#render-as-png">Render as PNG</a></h4>
-<p>Using Graphviz:</p>
-<pre><code class="language-sh">adrs generate graph | dot -Tpng -o doc/adr/graph.png
-</code></pre>
-<h4 id="render-as-svg"><a class="header" href="#render-as-svg">Render as SVG</a></h4>
-<pre><code class="language-sh">adrs generate graph | dot -Tsvg -o doc/adr/graph.svg
-</code></pre>
-<h4 id="html-links-with-custom-extension"><a class="header" href="#html-links-with-custom-extension">HTML Links with Custom Extension</a></h4>
-<pre><code class="language-sh">adrs generate graph -e html -p "/docs/adr/"
-</code></pre>
-<h3 id="graph-features"><a class="header" href="#graph-features">Graph Features</a></h3>
+<p>Alias: <code>adrs qr</code></p>
+<h2 id="output"><a class="header" href="#output">Output</a></h2>
+<p>Displays a comprehensive quick reference covering:</p>
 <ul>
-<li>Each ADR is a node with its number and title</li>
-<li>Sequential ADRs are connected with dotted lines</li>
-<li>Explicit links between ADRs shown as solid edges with labels</li>
-<li>Nodes link to their ADR files (clickable in SVG)</li>
+<li>Getting started</li>
+<li>Creating ADRs</li>
+<li>Superseding and linking</li>
+<li>Managing status</li>
+<li>Viewing and searching</li>
+<li>Generating documentation</li>
+<li>Import/export</li>
+<li>Configuration</li>
 </ul>
-<hr />
-<h2 id="generate-book"><a class="header" href="#generate-book">generate book</a></h2>
-<p>Generate an mdbook from your ADRs.</p>
-<h3 id="usage-3"><a class="header" href="#usage-3">Usage</a></h3>
-<pre><code>adrs generate book [OPTIONS]
-</code></pre>
-<h3 id="options-2"><a class="header" href="#options-2">Options</a></h3>
-<div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>-o, --output &lt;DIR&gt;</code></td><td>Output directory (default: book)</td></tr>
-<tr><td><code>-t, --title &lt;TITLE&gt;</code></td><td>Book title</td></tr>
-<tr><td><code>-d, --description &lt;DESC&gt;</code></td><td>Book description</td></tr>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
-<tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
-<tr><td><code>-h, --help</code></td><td>Print help</td></tr>
-</tbody></table>
-</div>
-<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
-<h4 id="basic-book"><a class="header" href="#basic-book">Basic Book</a></h4>
-<pre><code class="language-sh">adrs generate book
-</code></pre>
-<p>This creates a <code>book/</code> directory with:</p>
-<ul>
-<li><code>book.toml</code> - mdbook configuration</li>
-<li><code>src/SUMMARY.md</code> - table of contents</li>
-<li><code>src/*.md</code> - copies of all ADR files</li>
-</ul>
-<h4 id="custom-output-directory"><a class="header" href="#custom-output-directory">Custom Output Directory</a></h4>
-<pre><code class="language-sh">adrs generate book -o docs/decisions
-</code></pre>
-<h4 id="custom-title-and-description"><a class="header" href="#custom-title-and-description">Custom Title and Description</a></h4>
-<pre><code class="language-sh">adrs generate book -t "Project Architecture" -d "Key decisions for the project"
-</code></pre>
-<h4 id="build-and-serve"><a class="header" href="#build-and-serve">Build and Serve</a></h4>
-<p>After generating:</p>
-<pre><code class="language-sh">adrs generate book
-cd book
-mdbook serve
-</code></pre>
-<h3 id="integration-with-ci"><a class="header" href="#integration-with-ci">Integration with CI</a></h3>
-<p>Generate and deploy the book automatically:</p>
-<pre><code class="language-yaml">- name: Generate ADR book
-  run: |
-    adrs generate book
-    cd book &amp;&amp; mdbook build
+<h2 id="example-output"><a class="header" href="#example-output">Example Output</a></h2>
+<pre><code>ADR Quick Reference
+===================
 
-- name: Deploy to GitHub Pages
-  uses: peaceiris/actions-gh-pages@v3
-  with:
-    github_token: ${{ secrets.GITHUB_TOKEN }}
-    publish_dir: ./book/book
+GETTING STARTED
+  adrs init                    Initialize ADR repository
+  adrs --ng init               Initialize with NextGen mode (YAML frontmatter)
+
+CREATING ADRS
+  adrs new "Title"             Create new ADR
+  adrs new --format madr       Use MADR 4.0.0 format
+  adrs new --variant minimal   Use minimal template
+  adrs new -t tag1,tag2        Add tags (NextGen mode)
+  adrs new --no-edit           Create without opening editor
+
+SUPERSEDING AND LINKING
+  adrs new -s 2 "New title"    Supersede ADR #2
+  adrs link 3 Amends 1         Link ADR #3 amends #1
+
+MANAGING STATUS
+  adrs status 1 accepted       Accept ADR #1
+  adrs status 2 deprecated     Deprecate ADR #2
+  adrs status 3 superseded 4   Mark #3 superseded by #4
+
+VIEWING AND SEARCHING
+  adrs list                    List all ADRs
+  adrs list --status accepted  Filter by status
+  adrs search postgres         Search content
+  adrs search -t database      Search titles only
+
+DOCUMENTATION
+  adrs generate toc            Generate table of contents
+  adrs generate graph          Generate Graphviz diagram
+  adrs generate book           Generate mdbook
+
+IMPORT/EXPORT
+  adrs export json             Export to JSON-ADR
+  adrs import file.json        Import from JSON-ADR
+
+CONFIGURATION
+  adrs config                  Show current config
+  adrs doctor                  Check repository health
+
+More: adrs --help, adrs &lt;command&gt; --help
 </code></pre>
-<h2 id="related"><a class="header" href="#related">Related</a></h2>
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
 <ul>
-<li><a href="./list.html">list</a> - List ADRs</li>
-<li><a href="./doctor.html">doctor</a> - Check repository health</li>
+<li>Run <code>adrs cheatsheet</code> whenever you need a quick reminder</li>
+<li>Use <code>adrs &lt;command&gt; --help</code> for detailed command documentation</li>
+<li>Full documentation at <a href="https://joshrotenberg.github.io/adrs-book/">joshrotenberg.github.io/adrs-book</a></li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../commands/import.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../commands/completions.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../commands/template.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../mcp.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -363,11 +269,11 @@ mdbook serve
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../commands/import.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../commands/completions.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../commands/template.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../mcp.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
