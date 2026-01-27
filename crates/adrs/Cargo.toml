@@ -13,7 +13,7 @@ name = "adrs"
 path = "src/main.rs"
 
 [features]
-default = []
+default = ["mcp"]
 mcp = ["rmcp", "schemars", "tokio"]
 mcp-http = ["mcp", "tokio-util", "axum"]
 
