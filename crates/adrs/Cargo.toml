@@ -14,8 +14,8 @@ path = "src/main.rs"
 
 [features]
 default = ["mcp"]
-mcp = ["rmcp", "schemars", "tokio"]
-mcp-http = ["mcp", "tokio-util", "axum"]
+mcp = ["dep:tower-mcp", "dep:schemars", "dep:tokio"]
+mcp-http = ["mcp", "tower-mcp/http"]
 
 [dependencies]
 adrs-core.workspace = true
@@ -29,11 +29,9 @@ time.workspace = true
 whoami.workspace = true
 
 # MCP server (optional)
-rmcp = { workspace = true, optional = true }
+tower-mcp = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
-tokio-util = { workspace = true, optional = true }
-axum = { workspace = true, optional = true }
 
 [dev-dependencies]
 serial_test.workspace = true
