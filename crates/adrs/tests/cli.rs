@@ -1,13 +1,13 @@
 //! CLI integration tests for the adrs binary.
 
-use assert_cmd::Command;
+use assert_cmd::{Command, cargo_bin_cmd};
 use assert_fs::prelude::*;
 use predicates::prelude::*;
 use std::fs;
 
 /// Get a command for the adrs binary.
 fn adrs() -> Command {
-    Command::cargo_bin("adrs").unwrap()
+    cargo_bin_cmd!("adrs")
 }
 
 // ============================================================================

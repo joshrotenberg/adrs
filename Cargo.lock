@@ -132,13 +132,12 @@ checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 
 [[package]]
 name = "assert_cmd"
-version = "2.0.16"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc1835b7f27878de8525dc71410b5a31cdcc5f230aed5ba5df968e09c201b23d"
+checksum = "9c5bcfa8749ac45dd12cb11055aeeb6b27a3895560d60d71e3c23bf979e60514"
 dependencies = [
  "anstyle",
  "bstr",
- "doc-comment",
  "libc",
  "predicates",
  "predicates-core",
@@ -1245,9 +1244,9 @@ dependencies = [
 
 [[package]]
 name = "mdbook-lint-core"
-version = "0.13.7"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16638fdfd2bdf5f24c363f7a8438b5c15a446ff90d7d600a4c04a09968979c28"
+checksum = "0361428cd991916c3d0a463c35ef08873bc6c19b4df20d08c9dc13d44845ac13"
 dependencies = [
  "anyhow",
  "comrak",
@@ -1262,9 +1261,9 @@ dependencies = [
 
 [[package]]
 name = "mdbook-lint-rulesets"
-version = "0.13.7"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ffac3e035272a557e440a5b45ad52ffd1453e305c7297524dbe1bae7cf84ab"
+checksum = "3e0e48fe6453170bae3bd066b6f240143edb162abf3097cc7f4e0d9066eb6c5e"
 dependencies = [
  "anyhow",
  "comrak",
@@ -1881,9 +1880,9 @@ dependencies = [
 
 [[package]]
 name = "scc"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28e1c91382686d21b5ac7959341fcb9780fa7c03773646995a87c950fa7be640"
+checksum = "46e6f046b7fef48e2660c57ed794263155d713de679057f2d0c169bfc6e756cc"
 dependencies = [
  "sdd",
 ]
@@ -1922,9 +1921,9 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "sdd"
-version = "3.0.5"
+version = "3.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "478f121bb72bbf63c52c93011ea1791dca40140dfe13f8336c4c5ac952c33aa9"
+checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
 
 [[package]]
 name = "self_cell"
