@@ -22,8 +22,8 @@ fuzzy-matcher.workspace = true
 regex.workspace = true
 
 # Linting (mdbook-lint integration)
-mdbook-lint-core = "0.13.7"
-mdbook-lint-rulesets = { version = "0.13.7", default-features = false, features = ["adr"] }
+mdbook-lint-core = "0.14.2"
+mdbook-lint-rulesets = { version = "0.14.2", default-features = false, features = ["adr"] }
 
 [dev-dependencies]
 tempfile.workspace = true

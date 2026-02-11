@@ -3,13 +3,13 @@
 //! These tests exercise complete user workflows rather than individual commands,
 //! catching integration issues that unit tests might miss.
 
-use assert_cmd::Command;
+use assert_cmd::{Command, cargo_bin_cmd};
 use assert_fs::prelude::*;
 use predicates::prelude::*;
 use std::fs;
 
 fn adrs() -> Command {
-    Command::cargo_bin("adrs").unwrap()
+    cargo_bin_cmd!("adrs")
 }
 
 // ============================================================================
