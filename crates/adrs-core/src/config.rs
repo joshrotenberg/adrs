@@ -60,6 +60,11 @@ impl Config {
         if config_path.exists() {
             let content = std::fs::read_to_string(&config_path)?;
             let config: Config = toml::from_str(&content)?;
+            if config.adr_dir.as_os_str().is_empty() {
+                return Err(Error::ConfigError(
+                    "adr_dir cannot be empty in adrs.toml".into(),
+                ));
+            }
             return Ok(config);
         }
 
@@ -67,6 +72,11 @@ impl Config {
         let legacy_path = root.join(LEGACY_CONFIG_FILE);
         if legacy_path.exists() {
             let adr_dir = std::fs::read_to_string(&legacy_path)?.trim().to_string();
+            if adr_dir.is_empty() {
+                return Err(Error::ConfigError(
+                    "ADR directory path is empty in .adr-dir file".into(),
+                ));
+            }
             return Ok(Self {
                 adr_dir: PathBuf::from(adr_dir),
                 mode: ConfigMode::Compatible,
@@ -764,9 +774,8 @@ mode = "nextgen"
         let temp = TempDir::new().unwrap();
         std::fs::write(temp.path().join(".adr-dir"), "").unwrap();
 
-        let config = Config::load(temp.path()).unwrap();
-        // Empty string becomes empty path
-        assert_eq!(config.adr_dir, PathBuf::from(""));
+        let result = Config::load(temp.path());
+        assert!(result.is_err(), "Empty .adr-dir should produce an error");
     }
 
     // ========== Config Discovery Tests ==========
@@ -898,5 +907,226 @@ mode = "nextgen"
         base.merge(&other);
         // Should keep original since other has default
         assert_eq!(base.adr_dir, PathBuf::from("original"));
+    }
+
+    // ========== Config Validation Tests ==========
+
+    #[test]
+    fn test_load_empty_adr_dir_in_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("adrs.toml"), r#"adr_dir = """#).unwrap();
+
+        let result = Config::load(temp.path());
+        assert!(
+            result.is_err(),
+            "Empty adr_dir in TOML should produce an error"
+        );
+    }
+
+    #[test]
+    fn test_load_whitespace_only_adr_dir_file() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join(".adr-dir"), "   \n  ").unwrap();
+
+        let result = Config::load(temp.path());
+        assert!(
+            result.is_err(),
+            "Whitespace-only .adr-dir should produce an error"
+        );
+    }
+
+    #[test]
+    fn test_invalid_format_string_accepted_in_toml() {
+        // Invalid format strings are stored as-is in config; they only error
+        // when parsed at ADR creation time. This is by design — the config
+        // layer stores strings, the command layer validates them.
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+
+[templates]
+format = "nonexistent"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(config.templates.format, Some("nonexistent".to_string()));
+    }
+
+    #[test]
+    fn test_invalid_variant_string_accepted_in_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+
+[templates]
+variant = "bogus"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(config.templates.variant, Some("bogus".to_string()));
+    }
+
+    #[test]
+    fn test_invalid_mode_string_rejected() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("adrs.toml"), r#"mode = "invalid_mode""#).unwrap();
+
+        let result = Config::load(temp.path());
+        assert!(
+            result.is_err(),
+            "Invalid mode should produce a TOML parse error"
+        );
+    }
+
+    #[test]
+    fn test_unknown_toml_fields_accepted() {
+        // Serde's default behavior: unknown fields are silently ignored.
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+unknown_field = "hello"
+
+[templates]
+also_unknown = true
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(config.adr_dir, PathBuf::from("doc/adr"));
+    }
+
+    #[test]
+    fn test_custom_template_path_in_config() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+mode = "ng"
+
+[templates]
+custom = "templates/my-adr.md"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(
+            config.templates.custom,
+            Some(PathBuf::from("templates/my-adr.md"))
+        );
+    }
+
+    // ========== Save/Load Roundtrip Tests ==========
+
+    #[test]
+    fn test_save_and_load_roundtrip_nextgen_with_templates() {
+        let temp = TempDir::new().unwrap();
+        let original = Config {
+            adr_dir: PathBuf::from("docs/decisions"),
+            mode: ConfigMode::NextGen,
+            templates: TemplateConfig {
+                format: Some("madr".to_string()),
+                variant: Some("minimal".to_string()),
+                custom: Some(PathBuf::from("templates/custom.md")),
+            },
+        };
+
+        original.save(temp.path()).unwrap();
+        let loaded = Config::load(temp.path()).unwrap();
+
+        assert_eq!(loaded.adr_dir, PathBuf::from("docs/decisions"));
+        assert_eq!(loaded.mode, ConfigMode::NextGen);
+        assert_eq!(loaded.templates.format, Some("madr".to_string()));
+        assert_eq!(loaded.templates.variant, Some("minimal".to_string()));
+        assert_eq!(
+            loaded.templates.custom,
+            Some(PathBuf::from("templates/custom.md"))
+        );
+    }
+
+    #[test]
+    fn test_save_and_load_roundtrip_nextgen_mode_serializes_as_ng() {
+        // NextGen serializes as "ng" but should load back as NextGen
+        let temp = TempDir::new().unwrap();
+        let original = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+
+        original.save(temp.path()).unwrap();
+
+        // Verify the file contains "ng" not "nextgen"
+        let content = std::fs::read_to_string(temp.path().join("adrs.toml")).unwrap();
+        assert!(content.contains(r#"mode = "ng""#));
+
+        // Load it back
+        let loaded = Config::load(temp.path()).unwrap();
+        assert_eq!(loaded.mode, ConfigMode::NextGen);
+    }
+
+    // ========== Config Merge Validation Tests ==========
+
+    #[test]
+    fn test_config_merge_variant_field() {
+        let mut base = Config::default();
+        let other = Config {
+            templates: TemplateConfig {
+                format: None,
+                variant: Some("minimal".to_string()),
+                custom: None,
+            },
+            ..Default::default()
+        };
+
+        base.merge(&other);
+        assert_eq!(base.templates.variant, Some("minimal".to_string()));
+    }
+
+    #[test]
+    fn test_config_merge_custom_field() {
+        let mut base = Config::default();
+        let other = Config {
+            templates: TemplateConfig {
+                format: None,
+                variant: None,
+                custom: Some(PathBuf::from("my-template.md")),
+            },
+            ..Default::default()
+        };
+
+        base.merge(&other);
+        assert_eq!(base.templates.custom, Some(PathBuf::from("my-template.md")));
+    }
+
+    #[test]
+    fn test_config_merge_does_not_overwrite_with_none() {
+        let mut base = Config {
+            templates: TemplateConfig {
+                format: Some("madr".to_string()),
+                variant: Some("minimal".to_string()),
+                custom: Some(PathBuf::from("template.md")),
+            },
+            ..Default::default()
+        };
+        let other = Config::default(); // all template fields are None
+
+        base.merge(&other);
+
+        // None values in other should NOT overwrite existing values
+        assert_eq!(base.templates.format, Some("madr".to_string()));
+        assert_eq!(base.templates.variant, Some("minimal".to_string()));
+        assert_eq!(base.templates.custom, Some(PathBuf::from("template.md")));
     }
 }

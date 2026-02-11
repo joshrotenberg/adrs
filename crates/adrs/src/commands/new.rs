@@ -1,6 +1,8 @@
 //! New ADR command.
 
-use adrs_core::{AdrStatus, Config, LinkKind, Repository, TemplateFormat, TemplateVariant};
+use adrs_core::{
+    AdrStatus, Config, LinkKind, Repository, Template, TemplateFormat, TemplateVariant,
+};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -47,10 +49,23 @@ pub fn new(
         AdrStatus::Proposed
     };
 
-    let repo = Repository::open(root)
+    let mut repo = Repository::open(root)
         .context("ADR repository not found. Run 'adrs init' first.")?
         .with_template_format(template_format)
         .with_template_variant(template_variant);
+
+    // Load custom template from config if set (and no format/variant CLI override)
+    if format.is_none()
+        && variant.is_none()
+        && let Some(ref custom_path) = config.templates.custom
+    {
+        let full_path = root.join(custom_path);
+        let template = Template::from_file(&full_path).context(format!(
+            "Failed to load custom template from config: {}",
+            custom_path.display()
+        ))?;
+        repo = repo.with_custom_template(template);
+    }
 
     let (mut adr, path) = if let Some(superseded) = supersedes {
         repo.supersede(&title, superseded)

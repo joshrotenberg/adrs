@@ -617,6 +617,195 @@ variant = "minimal"
 }
 
 // ============================================================================
+// Scenario: Custom Template from Config
+// ============================================================================
+
+/// User configures a custom template file in adrs.toml and expects
+/// `adrs new` to use it without any CLI flags.
+#[test]
+fn scenario_custom_template_from_config() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Step 1: Initialize with nextgen mode
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    // Step 2: Create a custom template file
+    let templates_dir = temp.child("templates");
+    templates_dir.create_dir_all().unwrap();
+    fs::write(
+        temp.path().join("templates/my-adr.md"),
+        "# CUSTOM: {{ number }}. {{ title }}\n\nThis is a custom template.\n",
+    )
+    .unwrap();
+
+    // Step 3: Write adrs.toml pointing to the custom template
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "ng"
+
+[templates]
+custom = "templates/my-adr.md"
+"#,
+    )
+    .unwrap();
+
+    // Step 4: Create ADR — should use the custom template
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Custom template test"])
+        .assert()
+        .success();
+
+    let adr = temp.child("doc/adr/0002-custom-template-test.md");
+    adr.assert(predicate::path::exists());
+    let content = fs::read_to_string(adr.path()).unwrap();
+
+    assert!(
+        content.contains("CUSTOM: 2. Custom template test"),
+        "ADR should use the custom template from config. Got:\n{content}"
+    );
+    assert!(
+        content.contains("This is a custom template."),
+        "ADR should contain custom template content"
+    );
+
+    // Step 5: CLI --format flag should bypass the custom template
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--format",
+            "madr",
+            "Override custom test",
+        ])
+        .assert()
+        .success();
+
+    let override_adr = temp.child("doc/adr/0003-override-custom-test.md");
+    let override_content = fs::read_to_string(override_adr.path()).unwrap();
+
+    assert!(
+        !override_content.contains("CUSTOM:"),
+        "CLI --format should bypass custom template"
+    );
+    assert!(
+        override_content.contains("Context and Problem Statement"),
+        "Should use MADR format when --format is specified"
+    );
+
+    temp.close().unwrap();
+}
+
+/// User sets a non-existent custom template path and gets a clear error.
+#[test]
+fn scenario_missing_custom_template_errors() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Setup: Initialize
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    // Write config pointing to non-existent template
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "ng"
+
+[templates]
+custom = "templates/does-not-exist.md"
+"#,
+    )
+    .unwrap();
+
+    // Creating ADR should fail with a clear error
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Should fail"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("custom template"));
+
+    temp.close().unwrap();
+}
+
+/// User sets an invalid format in config and gets a clear error on `adrs new`.
+#[test]
+fn scenario_invalid_config_format_errors() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "ng"
+
+[templates]
+format = "nonexistent_format"
+"#,
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Should fail"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Invalid template format"));
+
+    temp.close().unwrap();
+}
+
+/// User sets an invalid variant in config and gets a clear error on `adrs new`.
+#[test]
+fn scenario_invalid_config_variant_errors() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "ng"
+
+[templates]
+variant = "nonexistent_variant"
+"#,
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Should fail"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Invalid template variant"));
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // Scenario: Edit Existing ADR
 // ============================================================================
 
