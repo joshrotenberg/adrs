@@ -43,11 +43,9 @@ edit = "0.1"
 whoami = "1"
 
 # MCP server (optional feature)
-rmcp = { version = "0.14", features = ["server", "transport-io", "transport-streamable-http-server"] }
+tower-mcp = { version = "0.1", features = ["http"] }
 schemars = "1"
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["rt"] }
-axum = "0.8"
 
 # Internal
 adrs-core = { path = "crates/adrs-core", version = "0.6.2" }

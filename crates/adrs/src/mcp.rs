@@ -5,35 +5,20 @@
 
 use adrs_core::{AdrStatus, LinkKind, Repository};
 use anyhow::Result;
-use rmcp::{
-    ErrorData as McpError, ServerHandler,
-    handler::server::{router::tool::ToolRouter, tool::ToolCallContext, wrapper::Parameters},
-    model::{
-        CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams,
-        ServerCapabilities, ServerInfo,
-    },
-    schemars, tool, tool_router,
-};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Arc;
+use tower_mcp::{CallToolResult, McpRouter, ToolBuilder};
 
-/// ADR MCP Service
+/// Shared state for ADR MCP tools.
 #[derive(Debug, Clone)]
-pub struct AdrService {
-    /// Root directory for the ADR repository
+struct AdrState {
     root: PathBuf,
-    /// Tool router for MCP tools (used by macro-generated code)
-    #[allow(dead_code)]
-    tool_router: ToolRouter<Self>,
 }
 
-impl AdrService {
-    /// Create a new ADR service for the given root directory.
-    pub fn new(root: PathBuf) -> Self {
-        Self {
-            root,
-            tool_router: Self::tool_router(),
-        }
+impl AdrState {
+    fn new(root: PathBuf) -> Self {
+        Self { root }
     }
 
     fn open_repo(&self) -> Result<Repository, String> {
@@ -365,177 +350,200 @@ struct SuggestedTag {
     reason: String,
 }
 
-#[tool_router]
-impl AdrService {
-    /// List all ADRs in the repository
-    #[tool(
-        description = "List all Architecture Decision Records. Returns summary information for each ADR including number, title, status, and date. Optionally filter by status or tag."
-    )]
-    fn list_adrs(&self, Parameters(params): Parameters<ListAdrsParams>) -> String {
-        match self.list_adrs_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Get a specific ADR by number
-    #[tool(
-        description = "Get the full content of an Architecture Decision Record by its number. Returns the complete ADR including title, status, content, and links."
-    )]
-    fn get_adr(&self, Parameters(params): Parameters<GetAdrParams>) -> String {
-        match self.get_adr_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Search ADRs for matching content
-    #[tool(
-        description = "Search Architecture Decision Records for matching text. Searches both titles and content by default. Use title_only=true to search only titles."
-    )]
-    fn search_adrs(&self, Parameters(params): Parameters<SearchAdrsParams>) -> String {
-        match self.search_adrs_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    // Write operations
-
-    /// Create a new ADR
-    #[tool(
-        description = "Create a new Architecture Decision Record. The ADR will be created with 'proposed' status and requires human review before acceptance. Returns the created ADR details including its number and file path."
-    )]
-    fn create_adr(&self, Parameters(params): Parameters<CreateAdrParams>) -> String {
-        match self.create_adr_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Update an ADR's status
-    #[tool(
-        description = "Update the status of an existing ADR. Valid statuses: proposed, accepted, deprecated, superseded, rejected. For 'superseded', provide the superseded_by number. Note: Status changes should be reviewed by humans."
-    )]
-    fn update_status(&self, Parameters(params): Parameters<UpdateStatusParams>) -> String {
-        match self.update_status_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Link two ADRs together
-    #[tool(
-        description = "Create a bidirectional link between two ADRs. Link types: 'Supersedes', 'Amends', or 'Relates to'. The reverse link is automatically created on the target ADR."
-    )]
-    fn link_adrs(&self, Parameters(params): Parameters<LinkAdrsParams>) -> String {
-        match self.link_adrs_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Update ADR content sections
-    #[tool(
-        description = "Update the content sections (context, decision, consequences) of an existing ADR. Only provided fields are updated; omitted fields are preserved. Changes should be reviewed by humans."
-    )]
-    fn update_content(&self, Parameters(params): Parameters<UpdateContentParams>) -> String {
-        match self.update_content_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Update ADR tags
-    #[tool(
-        description = "Add or replace tags on an ADR. Requires NextGen mode (YAML frontmatter). Use replace=true to replace all tags, or false/omit to append."
-    )]
-    fn update_tags(&self, Parameters(params): Parameters<UpdateTagsParams>) -> String {
-        match self.update_tags_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Get repository information
-    #[tool(
-        description = "Get information about the ADR repository including mode (compatible/nextgen), ADR count, and configuration."
-    )]
-    fn get_repository_info(&self) -> String {
-        match self.get_repository_info_impl() {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Get ADRs related to a specific ADR
-    #[tool(
-        description = "Get all ADRs that are linked to or from a specific ADR. Returns both incoming and outgoing links with their types."
-    )]
-    fn get_related_adrs(&self, Parameters(params): Parameters<GetRelatedParams>) -> String {
-        match self.get_related_adrs_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Validate an ADR's structure and content
-    #[tool(
-        description = "Validate a single ADR's structure and content. Checks for required sections (Context, Decision, Consequences), validates status, and reports any issues. Returns validation results with severity levels (error/warning)."
-    )]
-    fn validate_adr(&self, Parameters(params): Parameters<ValidateAdrParams>) -> String {
-        match self.validate_adr_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Get ADR with parsed sections
-    #[tool(
-        description = "Get an ADR with its content parsed into separate sections (context, decision, consequences). Returns structured data instead of raw markdown, making it easier to analyze specific sections independently."
-    )]
-    fn get_adr_sections(&self, Parameters(params): Parameters<GetAdrSectionsParams>) -> String {
-        match self.get_adr_sections_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Compare two ADRs
-    #[tool(
-        description = "Compare two ADRs and show the differences between them. Useful for understanding how decisions evolved, especially when one ADR supersedes another. Returns structural comparison of title, status, and content sections."
-    )]
-    fn compare_adrs(&self, Parameters(params): Parameters<CompareAdrsParams>) -> String {
-        match self.compare_adrs_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Bulk update status of multiple ADRs
-    #[tool(
-        description = "Update the status of multiple ADRs in a single operation. Useful for batch accepting related ADRs or deprecating multiple outdated decisions. Returns detailed results for each ADR including any failures."
-    )]
-    fn bulk_update_status(&self, Parameters(params): Parameters<BulkUpdateStatusParams>) -> String {
-        match self.bulk_update_status_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
-
-    /// Suggest tags for an ADR
-    #[tool(
-        description = "Analyze an ADR's content and suggest relevant tags based on keywords and common architectural categories. Returns suggested tags with confidence scores and reasons. Requires NextGen mode for tags to be applied."
-    )]
-    fn suggest_tags(&self, Parameters(params): Parameters<SuggestTagsParams>) -> String {
-        match self.suggest_tags_impl(params) {
-            Ok(json) => json,
-            Err(e) => format!("Error: {}", e),
-        }
-    }
+// Macro to reduce boilerplate for tool registration.
+// Typed variant: handler receives a deserialized params struct.
+macro_rules! adr_tool {
+    ($state:expr, $name:expr, $desc:expr, $param:ty, $method:ident) => {
+        ToolBuilder::new($name)
+            .description($desc)
+            .handler({
+                let state = $state.clone();
+                move |params: $param| {
+                    let state = state.clone();
+                    async move {
+                        match state.$method(params) {
+                            Ok(json) => Ok(CallToolResult::text(json)),
+                            Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+                        }
+                    }
+                }
+            })
+            .build()?
+    };
+    // Parameterless variant (for get_repository_info).
+    ($state:expr, $name:expr, $desc:expr, $method:ident) => {
+        ToolBuilder::new($name).description($desc).raw_handler({
+            let state = $state.clone();
+            move |_: serde_json::Value| {
+                let state = state.clone();
+                async move {
+                    match state.$method() {
+                        Ok(json) => Ok(CallToolResult::text(json)),
+                        Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+                    }
+                }
+            }
+        })?
+    };
 }
 
-impl AdrService {
+/// Build the MCP router with all ADR tools registered.
+fn build_router(root: PathBuf) -> Result<McpRouter> {
+    let state = Arc::new(AdrState::new(root));
+
+    let list_adrs = adr_tool!(
+        state,
+        "list_adrs",
+        "List all Architecture Decision Records. Returns summary information for each ADR including number, title, status, and date. Optionally filter by status or tag.",
+        ListAdrsParams,
+        list_adrs_impl
+    );
+
+    let get_adr = adr_tool!(
+        state,
+        "get_adr",
+        "Get the full content of an Architecture Decision Record by its number. Returns the complete ADR including title, status, content, and links.",
+        GetAdrParams,
+        get_adr_impl
+    );
+
+    let search_adrs = adr_tool!(
+        state,
+        "search_adrs",
+        "Search Architecture Decision Records for matching text. Searches both titles and content by default. Use title_only=true to search only titles.",
+        SearchAdrsParams,
+        search_adrs_impl
+    );
+
+    let create_adr = adr_tool!(
+        state,
+        "create_adr",
+        "Create a new Architecture Decision Record. The ADR will be created with 'proposed' status and requires human review before acceptance. Returns the created ADR details including its number and file path.",
+        CreateAdrParams,
+        create_adr_impl
+    );
+
+    let update_status = adr_tool!(
+        state,
+        "update_status",
+        "Update the status of an existing ADR. Valid statuses: proposed, accepted, deprecated, superseded, rejected. For 'superseded', provide the superseded_by number. Note: Status changes should be reviewed by humans.",
+        UpdateStatusParams,
+        update_status_impl
+    );
+
+    let link_adrs = adr_tool!(
+        state,
+        "link_adrs",
+        "Create a bidirectional link between two ADRs. Link types: 'Supersedes', 'Amends', or 'Relates to'. The reverse link is automatically created on the target ADR.",
+        LinkAdrsParams,
+        link_adrs_impl
+    );
+
+    let update_content = adr_tool!(
+        state,
+        "update_content",
+        "Update the content sections (context, decision, consequences) of an existing ADR. Only provided fields are updated; omitted fields are preserved. Changes should be reviewed by humans.",
+        UpdateContentParams,
+        update_content_impl
+    );
+
+    let update_tags = adr_tool!(
+        state,
+        "update_tags",
+        "Add or replace tags on an ADR. Requires NextGen mode (YAML frontmatter). Use replace=true to replace all tags, or false/omit to append.",
+        UpdateTagsParams,
+        update_tags_impl
+    );
+
+    let get_repository_info = adr_tool!(
+        state,
+        "get_repository_info",
+        "Get information about the ADR repository including mode (compatible/nextgen), ADR count, and configuration.",
+        get_repository_info_impl
+    );
+
+    let get_related_adrs = adr_tool!(
+        state,
+        "get_related_adrs",
+        "Get all ADRs that are linked to or from a specific ADR. Returns both incoming and outgoing links with their types.",
+        GetRelatedParams,
+        get_related_adrs_impl
+    );
+
+    let validate_adr = adr_tool!(
+        state,
+        "validate_adr",
+        "Validate a single ADR's structure and content. Checks for required sections (Context, Decision, Consequences), validates status, and reports any issues. Returns validation results with severity levels (error/warning).",
+        ValidateAdrParams,
+        validate_adr_impl
+    );
+
+    let get_adr_sections = adr_tool!(
+        state,
+        "get_adr_sections",
+        "Get an ADR with its content parsed into separate sections (context, decision, consequences). Returns structured data instead of raw markdown, making it easier to analyze specific sections independently.",
+        GetAdrSectionsParams,
+        get_adr_sections_impl
+    );
+
+    let compare_adrs = adr_tool!(
+        state,
+        "compare_adrs",
+        "Compare two ADRs and show the differences between them. Useful for understanding how decisions evolved, especially when one ADR supersedes another. Returns structural comparison of title, status, and content sections.",
+        CompareAdrsParams,
+        compare_adrs_impl
+    );
+
+    let bulk_update_status = adr_tool!(
+        state,
+        "bulk_update_status",
+        "Update the status of multiple ADRs in a single operation. Useful for batch accepting related ADRs or deprecating multiple outdated decisions. Returns detailed results for each ADR including any failures.",
+        BulkUpdateStatusParams,
+        bulk_update_status_impl
+    );
+
+    let suggest_tags = adr_tool!(
+        state,
+        "suggest_tags",
+        "Analyze an ADR's content and suggest relevant tags based on keywords and common architectural categories. Returns suggested tags with confidence scores and reasons. Requires NextGen mode for tags to be applied.",
+        SuggestTagsParams,
+        suggest_tags_impl
+    );
+
+    let router = McpRouter::new()
+        .server_info("adrs", env!("CARGO_PKG_VERSION"))
+        .instructions(
+            "ADR (Architecture Decision Record) management server. \
+            Use list_adrs to see all decisions, get_adr to read a specific one, \
+            and search_adrs to find relevant decisions. For modifications: create_adr creates new ADRs \
+            (always as 'proposed' status for human review), update_status changes an ADR's status, \
+            link_adrs creates bidirectional links, update_content edits ADR sections, \
+            and update_tags manages ADR tags (NextGen mode only). \
+            Use get_repository_info to understand the repo configuration and get_related_adrs \
+            to explore ADR relationships. ADRs document important architectural decisions and their context."
+        )
+        .tool(list_adrs)
+        .tool(get_adr)
+        .tool(search_adrs)
+        .tool(create_adr)
+        .tool(update_status)
+        .tool(link_adrs)
+        .tool(update_content)
+        .tool(update_tags)
+        .tool(get_repository_info)
+        .tool(get_related_adrs)
+        .tool(validate_adr)
+        .tool(get_adr_sections)
+        .tool(compare_adrs)
+        .tool(bulk_update_status)
+        .tool(suggest_tags);
+
+    Ok(router)
+}
+
+// Business logic implementations (unchanged).
+
+impl AdrState {
     fn list_adrs_impl(&self, params: ListAdrsParams) -> Result<String, String> {
         let repo = self.open_repo()?;
         let adrs = repo.list().map_err(|e| e.to_string())?;
@@ -625,8 +633,6 @@ impl AdrService {
 
         serde_json::to_string_pretty(&matches).map_err(|e| e.to_string())
     }
-
-    // Phase 2: Write operations
 
     fn create_adr_impl(&self, params: CreateAdrParams) -> Result<String, String> {
         let repo = self.open_repo()?;
@@ -1347,99 +1353,27 @@ impl AdrService {
     }
 }
 
-impl ServerHandler for AdrService {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            instructions: Some(
-                "ADR (Architecture Decision Record) management server. \
-                Use list_adrs to see all decisions, get_adr to read a specific one, \
-                and search_adrs to find relevant decisions. For modifications: create_adr creates new ADRs \
-                (always as 'proposed' status for human review), update_status changes an ADR's status, \
-                link_adrs creates bidirectional links, update_content edits ADR sections, \
-                and update_tags manages ADR tags (NextGen mode only). \
-                Use get_repository_info to understand the repo configuration and get_related_adrs \
-                to explore ADR relationships. ADRs document important architectural decisions and their context."
-                    .into(),
-            ),
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            ..Default::default()
-        }
-    }
-
-    async fn list_tools(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
-    ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult {
-            tools: self.tool_router.list_all(),
-            next_cursor: None,
-            meta: None,
-        })
-    }
-
-    async fn call_tool(
-        &self,
-        request: CallToolRequestParams,
-        context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
-    ) -> Result<CallToolResult, McpError> {
-        self.tool_router
-            .call(ToolCallContext {
-                request_context: context,
-                service: self,
-                name: request.name,
-                arguments: request.arguments,
-                task: request.task,
-            })
-            .await
-    }
-}
-
 /// Run the MCP server on stdio.
 pub async fn serve_stdio(root: PathBuf) -> Result<()> {
-    use rmcp::ServiceExt;
-    use rmcp::transport::stdio;
+    use tower_mcp::StdioTransport;
 
-    let service = AdrService::new(root);
-    let server = service.serve(stdio()).await?;
-    server.waiting().await?;
+    let router = build_router(root)?;
+    let mut transport = StdioTransport::new(router);
+    transport.run().await?;
     Ok(())
 }
 
 /// Run the MCP server over HTTP.
 #[cfg(feature = "mcp-http")]
 pub async fn serve_http(root: PathBuf, addr: std::net::SocketAddr) -> Result<()> {
-    use rmcp::transport::streamable_http_server::{
-        StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
-    };
-    use tokio_util::sync::CancellationToken;
+    use tower_mcp::HttpTransport;
 
-    let ct = CancellationToken::new();
-
-    let service: StreamableHttpService<AdrService, LocalSessionManager> =
-        StreamableHttpService::new(
-            move || Ok(AdrService::new(root.clone())),
-            Default::default(),
-            StreamableHttpServerConfig {
-                stateful_mode: true,
-                sse_keep_alive: Some(std::time::Duration::from_secs(30)),
-                cancellation_token: ct.child_token(),
-                ..Default::default()
-            },
-        );
-
-    let router = axum::Router::new().nest_service("/mcp", service);
-    let tcp_listener = tokio::net::TcpListener::bind(addr).await?;
+    let router = build_router(root)?;
 
     eprintln!("MCP server listening on http://{}/mcp", addr);
 
-    axum::serve(tcp_listener, router)
-        .with_graceful_shutdown(async move {
-            tokio::signal::ctrl_c().await.ok();
-            eprintln!("\nShutting down MCP server...");
-            ct.cancel();
-        })
-        .await?;
+    let transport = HttpTransport::new(router);
+    transport.serve(&addr.to_string()).await?;
 
     Ok(())
 }
