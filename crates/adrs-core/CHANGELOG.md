@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.2] - 2026-02-11
+
+### Bug Fixes
+
+- Honor adrs.toml template fields and accept "nextgen" mode
+- Wire custom template config, validate empty adr_dir, add tests
+- Resolve security audit failures and update dependencies
+
+
 ## [0.6.1] - 2026-01-27
 
 ### Bug Fixes
