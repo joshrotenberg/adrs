@@ -27,6 +27,9 @@ pub fn config_with_discovery(start_dir: &Path, discovered: Option<DiscoveredConf
             if let Some(ref format) = disc.config.templates.format {
                 println!("Template format: {}", format);
             }
+            if let Some(ref variant) = disc.config.templates.variant {
+                println!("Template variant: {}", variant);
+            }
             if let Some(ref custom) = disc.config.templates.custom {
                 println!("Custom template: {}", custom.display());
             }

@@ -596,6 +596,7 @@ fn main() -> Result<()> {
                 status,
                 tags,
                 no_edit,
+                &discovered.config,
             )
         }
         Commands::Edit { adr } => {
