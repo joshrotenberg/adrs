@@ -508,6 +508,115 @@ fn scenario_madr_format() {
 }
 
 // ============================================================================
+// Scenario: Config-Driven Template Selection
+// ============================================================================
+
+/// User configures template format and variant in adrs.toml and expects
+/// `adrs new` to use those settings without CLI flags.
+#[test]
+fn scenario_config_driven_template() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Step 1: Initialize with nextgen mode
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    // Step 2: Write adrs.toml with format=madr, variant=minimal, mode=nextgen
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "nextgen"
+
+[templates]
+format = "madr"
+variant = "minimal"
+"#,
+    )
+    .unwrap();
+
+    // Step 3: Verify config shows the template settings
+    adrs()
+        .current_dir(temp.path())
+        .args(["config"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Template format: madr"))
+        .stdout(predicate::str::contains("Template variant: minimal"));
+
+    // Step 4: Create ADR without any --format or --variant flags
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Config driven template test"])
+        .assert()
+        .success();
+
+    // Step 5: Verify the ADR uses MADR minimal template
+    let adr = temp.child("doc/adr/0002-config-driven-template-test.md");
+    adr.assert(predicate::path::exists());
+    let content = fs::read_to_string(adr.path()).unwrap();
+
+    // MADR minimal has these sections
+    assert!(
+        content.contains("Context and Problem Statement"),
+        "Should use MADR format from config"
+    );
+    assert!(
+        content.contains("Considered Options"),
+        "Should use MADR format from config"
+    );
+    assert!(
+        content.contains("Decision Outcome"),
+        "Should use MADR format from config"
+    );
+    // MADR minimal does NOT have these sections (that's what makes it "minimal")
+    assert!(
+        !content.contains("Decision Drivers"),
+        "Minimal variant should not include Decision Drivers"
+    );
+    assert!(
+        !content.contains("Pros and Cons"),
+        "Minimal variant should not include Pros and Cons"
+    );
+
+    // Step 6: CLI flags should still override config
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--format",
+            "nygard",
+            "CLI override test",
+        ])
+        .assert()
+        .success();
+
+    let override_adr = temp.child("doc/adr/0003-cli-override-test.md");
+    override_adr.assert(predicate::path::exists());
+    let override_content = fs::read_to_string(override_adr.path()).unwrap();
+
+    // Nygard format has different sections than MADR
+    assert!(
+        override_content.contains("## Context"),
+        "CLI --format flag should override config"
+    );
+    assert!(
+        override_content.contains("## Decision"),
+        "CLI --format flag should override config"
+    );
+    assert!(
+        override_content.contains("## Consequences"),
+        "CLI --format flag should override config"
+    );
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // Scenario: Edit Existing ADR
 // ============================================================================
 
