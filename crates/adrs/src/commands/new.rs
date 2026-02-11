@@ -1,6 +1,6 @@
 //! New ADR command.
 
-use adrs_core::{AdrStatus, LinkKind, Repository, TemplateFormat, TemplateVariant};
+use adrs_core::{AdrStatus, Config, LinkKind, Repository, TemplateFormat, TemplateVariant};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -16,19 +16,26 @@ pub fn new(
     status: Option<String>,
     tags: Option<Vec<String>>,
     no_edit: bool,
+    config: &Config,
 ) -> Result<()> {
-    // Parse template format if specified
+    // Parse template format: CLI arg > config > default
     let template_format = if let Some(ref fmt) = format {
         fmt.parse::<TemplateFormat>()
             .context("Invalid template format. Use 'nygard' or 'madr'.")?
+    } else if let Some(ref fmt) = config.templates.format {
+        fmt.parse::<TemplateFormat>()
+            .context("Invalid template format in config. Use 'nygard' or 'madr'.")?
     } else {
         TemplateFormat::default()
     };
 
-    // Parse template variant if specified
+    // Parse template variant: CLI arg > config > default
     let template_variant = if let Some(ref var) = variant {
         var.parse::<TemplateVariant>()
             .context("Invalid template variant. Use 'full', 'minimal', or 'bare'.")?
+    } else if let Some(ref var) = config.templates.variant {
+        var.parse::<TemplateVariant>()
+            .context("Invalid template variant in config. Use 'full', 'minimal', or 'bare'.")?
     } else {
         TemplateVariant::default()
     };

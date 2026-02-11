@@ -129,6 +129,9 @@ impl Config {
         if other.templates.format.is_some() {
             self.templates.format = other.templates.format.clone();
         }
+        if other.templates.variant.is_some() {
+            self.templates.variant = other.templates.variant.clone();
+        }
         if other.templates.custom.is_some() {
             self.templates.custom = other.templates.custom.clone();
         }
@@ -316,7 +319,7 @@ pub enum ConfigMode {
     Compatible,
 
     /// Next-gen mode with YAML frontmatter and enhanced features.
-    #[serde(rename = "ng")]
+    #[serde(rename = "ng", alias = "nextgen")]
     NextGen,
 }
 
@@ -326,6 +329,9 @@ pub enum ConfigMode {
 pub struct TemplateConfig {
     /// The default template format to use.
     pub format: Option<String>,
+
+    /// The default template variant to use.
+    pub variant: Option<String>,
 
     /// Path to a custom template file.
     pub custom: Option<PathBuf>,
@@ -448,6 +454,43 @@ custom = "templates/adr.md"
     }
 
     #[test]
+    fn test_load_new_config_with_template_variant() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "decisions"
+mode = "ng"
+
+[templates]
+format = "madr"
+variant = "minimal"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(config.templates.format, Some("madr".to_string()));
+        assert_eq!(config.templates.variant, Some("minimal".to_string()));
+    }
+
+    #[test]
+    fn test_load_new_config_with_nextgen_alias() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "decisions"
+mode = "nextgen"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(config.mode, ConfigMode::NextGen);
+    }
+
+    #[test]
     fn test_load_new_config_minimal() {
         let temp = TempDir::new().unwrap();
         std::fs::write(temp.path().join("adrs.toml"), r#"adr_dir = "adrs""#).unwrap();
@@ -553,6 +596,7 @@ custom = "templates/adr.md"
             mode: ConfigMode::NextGen,
             templates: TemplateConfig {
                 format: Some("custom".to_string()),
+                variant: None,
                 custom: Some(PathBuf::from("my-template.md")),
             },
         };
@@ -588,6 +632,7 @@ custom = "templates/adr.md"
             mode: ConfigMode::NextGen,
             templates: TemplateConfig {
                 format: Some("markdown".to_string()),
+                variant: None,
                 custom: None,
             },
         };
@@ -664,12 +709,19 @@ custom = "templates/adr.md"
         assert_eq!(config.mode, ConfigMode::NextGen);
     }
 
+    #[test]
+    fn test_config_mode_deserialization_nextgen_alias() {
+        let config: Config = toml::from_str(r#"mode = "nextgen""#).unwrap();
+        assert_eq!(config.mode, ConfigMode::NextGen);
+    }
+
     // ========== TemplateConfig Tests ==========
 
     #[test]
     fn test_template_config_default() {
         let config = TemplateConfig::default();
         assert!(config.format.is_none());
+        assert!(config.variant.is_none());
         assert!(config.custom.is_none());
     }
 
@@ -677,6 +729,7 @@ custom = "templates/adr.md"
     fn test_template_config_serialization() {
         let config = TemplateConfig {
             format: Some("nygard".to_string()),
+            variant: None,
             custom: Some(PathBuf::from("templates/custom.md")),
         };
 
@@ -823,6 +876,7 @@ custom = "templates/adr.md"
             mode: ConfigMode::NextGen,
             templates: TemplateConfig {
                 format: Some("madr".to_string()),
+                variant: None,
                 custom: None,
             },
         };
