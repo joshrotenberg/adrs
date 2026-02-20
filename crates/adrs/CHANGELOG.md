@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-02-20
+
+### Bug Fixes
+
+- Generate functional supersedes/superseded-by markdown links
+- Honor config mode=ng for tags in `new` command ([#181](https://github.com/joshrotenberg/adrs/pull/181))
+
+### Styling
+
+- Run cargo fmt
+- Run cargo fmt
+
+
 ## [0.6.2] - 2026-02-11
 
 ### Bug Fixes

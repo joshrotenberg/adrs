@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-02-20
+
+### Bug Fixes
+
+- Generate functional supersedes/superseded-by markdown links
+
+### Styling
+
+- Run cargo fmt
+
+
 ## [0.6.2] - 2026-02-11
 
 ### Bug Fixes
