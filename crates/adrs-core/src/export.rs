@@ -528,8 +528,8 @@ pub fn import_to_directory(
             continue;
         }
 
-        // Render the ADR to markdown
-        let content = engine.render(&adr, &config)?;
+        // Render the ADR to markdown (no link title resolution for imports)
+        let content = engine.render(&adr, &config, &std::collections::HashMap::new())?;
 
         // Write the file (unless dry-run)
         if !options.dry_run {

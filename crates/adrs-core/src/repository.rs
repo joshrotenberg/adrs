@@ -6,6 +6,7 @@ use crate::{
 };
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -215,11 +216,29 @@ impl Repository {
         }
     }
 
+    /// Resolve link target titles and filenames for an ADR's links.
+    fn resolve_link_titles(&self, adr: &Adr) -> HashMap<u32, (String, String)> {
+        let mut map = HashMap::new();
+        for link in &adr.links {
+            if map.contains_key(&link.target) {
+                continue;
+            }
+            if let Ok(target_adr) = self.get(link.target) {
+                map.insert(
+                    link.target,
+                    (target_adr.title.clone(), target_adr.filename()),
+                );
+            }
+        }
+        map
+    }
+
     /// Create a new ADR.
     pub fn create(&self, adr: &Adr) -> Result<PathBuf> {
         let path = self.adr_path().join(adr.filename());
 
-        let content = self.template_engine.render(adr, &self.config)?;
+        let link_titles = self.resolve_link_titles(adr);
+        let content = self.template_engine.render(adr, &self.config, &link_titles)?;
         fs::write(&path, content)?;
 
         Ok(path)
@@ -239,13 +258,17 @@ impl Repository {
         let mut adr = Adr::new(number, title);
         adr.add_link(AdrLink::new(superseded, LinkKind::Supersedes));
 
-        // Update the superseded ADR
+        // Create the new ADR first so its file exists on disk when
+        // the old ADR's "Superseded by" link is resolved.
+        let path = self.create(&adr)?;
+
+        // Now update the superseded ADR — the new ADR is on disk so
+        // its title and filename can be resolved for the link.
         let mut old_adr = self.get(superseded)?;
         old_adr.status = AdrStatus::Superseded;
         old_adr.add_link(AdrLink::new(number, LinkKind::SupersededBy));
         self.update(&old_adr)?;
 
-        let path = self.create(&adr)?;
         Ok((adr, path))
     }
 
@@ -307,7 +330,8 @@ impl Repository {
             .clone()
             .unwrap_or_else(|| self.adr_path().join(adr.filename()));
 
-        let content = self.template_engine.render(adr, &self.config)?;
+        let link_titles = self.resolve_link_titles(adr);
+        let content = self.template_engine.render(adr, &self.config, &link_titles)?;
         fs::write(&path, content)?;
 
         Ok(path)
@@ -658,6 +682,142 @@ mod tests {
 
         let result = repo.supersede("New", 99);
         assert!(result.is_err());
+    }
+
+    // ========== Link Resolution Tests (Issue #180) ==========
+
+    #[test]
+    fn test_supersede_generates_functional_links() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        // Create ADR 2, then supersede it with ADR 3
+        repo.new_adr("Use MySQL for persistence").unwrap();
+        repo.supersede("Use PostgreSQL instead", 2).unwrap();
+
+        // Check the new ADR (3) has a functional "Supersedes" link to ADR 2
+        let new_content = fs::read_to_string(
+            repo.adr_path().join("0003-use-postgresql-instead.md"),
+        )
+        .unwrap();
+        assert!(
+            new_content.contains("Supersedes [2. Use MySQL for persistence](0002-use-mysql-for-persistence.md)"),
+            "New ADR should have functional Supersedes link. Got:\n{new_content}"
+        );
+
+        // Check the old ADR (2) has a functional "Superseded by" link to ADR 3
+        let old_content = fs::read_to_string(
+            repo.adr_path().join("0002-use-mysql-for-persistence.md"),
+        )
+        .unwrap();
+        assert!(
+            old_content.contains("Superseded by [3. Use PostgreSQL instead](0003-use-postgresql-instead.md)"),
+            "Old ADR should have functional Superseded by link. Got:\n{old_content}"
+        );
+    }
+
+    #[test]
+    fn test_link_generates_functional_links() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        repo.new_adr("Use REST API").unwrap();
+        repo.new_adr("Use JSON for API responses").unwrap();
+
+        repo.link(3, 2, LinkKind::Amends, LinkKind::AmendedBy)
+            .unwrap();
+
+        // Check source ADR has functional link
+        let source_content = fs::read_to_string(
+            repo.adr_path().join("0003-use-json-for-api-responses.md"),
+        )
+        .unwrap();
+        assert!(
+            source_content.contains("Amends [2. Use REST API](0002-use-rest-api.md)"),
+            "Source ADR should have functional Amends link. Got:\n{source_content}"
+        );
+
+        // Check target ADR has functional reverse link
+        let target_content = fs::read_to_string(
+            repo.adr_path().join("0002-use-rest-api.md"),
+        )
+        .unwrap();
+        assert!(
+            target_content.contains("Amended by [3. Use JSON for API responses](0003-use-json-for-api-responses.md)"),
+            "Target ADR should have functional Amended by link. Got:\n{target_content}"
+        );
+    }
+
+    #[test]
+    fn test_set_status_superseded_generates_functional_link() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        repo.new_adr("First Decision").unwrap();
+        repo.new_adr("Second Decision").unwrap();
+
+        repo.set_status(2, AdrStatus::Superseded, Some(3)).unwrap();
+
+        let content = fs::read_to_string(
+            repo.adr_path().join("0002-first-decision.md"),
+        )
+        .unwrap();
+        assert!(
+            content.contains("Superseded by [3. Second Decision](0003-second-decision.md)"),
+            "ADR should have functional Superseded by link. Got:\n{content}"
+        );
+    }
+
+    #[test]
+    fn test_supersede_chain_generates_functional_links() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        // ADR 1 is "Record architecture decisions" (from init)
+        // Create ADR 2
+        repo.new_adr("Use SQLite").unwrap();
+        // ADR 3 supersedes ADR 2
+        repo.supersede("Use PostgreSQL", 2).unwrap();
+        // ADR 4 supersedes ADR 3
+        repo.supersede("Use CockroachDB", 3).unwrap();
+
+        // Check ADR 3 has both directions
+        let adr3_content = fs::read_to_string(
+            repo.adr_path().join("0003-use-postgresql.md"),
+        )
+        .unwrap();
+        assert!(
+            adr3_content.contains("Supersedes [2. Use SQLite](0002-use-sqlite.md)"),
+            "ADR 3 should supersede ADR 2. Got:\n{adr3_content}"
+        );
+        assert!(
+            adr3_content.contains("Superseded by [4. Use CockroachDB](0004-use-cockroachdb.md)"),
+            "ADR 3 should be superseded by ADR 4. Got:\n{adr3_content}"
+        );
+    }
+
+    #[test]
+    fn test_ng_mode_supersede_generates_functional_links() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        repo.new_adr("Use MySQL").unwrap();
+        repo.supersede("Use PostgreSQL", 2).unwrap();
+
+        // Check the new ADR has functional links in both frontmatter and body
+        let new_content = fs::read_to_string(
+            repo.adr_path().join("0003-use-postgresql.md"),
+        )
+        .unwrap();
+
+        // Body should have functional markdown link
+        assert!(
+            new_content.contains("Supersedes [2. Use MySQL](0002-use-mysql.md)"),
+            "NG mode should have functional link in body. Got:\n{new_content}"
+        );
+        // Frontmatter should have structured link
+        assert!(new_content.contains("links:"));
+        assert!(new_content.contains("target: 2"));
     }
 
     // ========== Set Status Tests ==========

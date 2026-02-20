@@ -124,24 +124,24 @@ fn scenario_supersede_decision() {
         .assert()
         .success();
 
-    // Step 2: Verify new ADR exists and has supersedes link
+    // Step 2: Verify new ADR exists and has functional supersedes link
     let postgres_adr = temp.child("doc/adr/0003-use-postgresql-instead-of-mysql.md");
     postgres_adr.assert(predicate::path::exists());
     let postgres_content = fs::read_to_string(postgres_adr.path()).unwrap();
     assert!(
-        postgres_content.contains("Supersedes"),
-        "New ADR should contain 'Supersedes' link"
+        postgres_content.contains("Supersedes [2. Use MySQL for persistence](0002-use-mysql-for-persistence.md)"),
+        "New ADR should contain functional 'Supersedes' link. Got:\n{postgres_content}"
     );
 
-    // Step 3: Verify old ADR is now superseded
+    // Step 3: Verify old ADR has functional superseded-by link
     let mysql_content_after = fs::read_to_string(mysql_adr.path()).unwrap();
     assert!(
         mysql_content_after.contains("Superseded"),
         "Old ADR should have 'Superseded' status"
     );
     assert!(
-        mysql_content_after.contains("Superseded by"),
-        "Old ADR should have 'Superseded by' link"
+        mysql_content_after.contains("Superseded by [3. Use PostgreSQL instead of MySQL](0003-use-postgresql-instead-of-mysql.md)"),
+        "Old ADR should have functional 'Superseded by' link. Got:\n{mysql_content_after}"
     );
 
     // Step 4: List shows all ADRs (file paths)
@@ -943,6 +943,203 @@ fn scenario_status_workflow() {
     assert!(
         content.contains("Deprecated"),
         "ADR should be marked as Deprecated"
+    );
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
+// Scenario: Functional Links in ADRs (Issue #180)
+// ============================================================================
+
+/// Supersedes links should contain the actual target ADR title and filename.
+#[test]
+fn scenario_supersede_generates_functional_links() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Use SQLite for storage"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--supersedes",
+            "2",
+            "Use PostgreSQL for storage",
+        ])
+        .assert()
+        .success();
+
+    // New ADR should have functional Supersedes link
+    let new_adr = temp.child("doc/adr/0003-use-postgresql-for-storage.md");
+    let new_content = fs::read_to_string(new_adr.path()).unwrap();
+    assert!(
+        new_content.contains("Supersedes [2. Use SQLite for storage](0002-use-sqlite-for-storage.md)"),
+        "New ADR should have a clickable Supersedes link. Got:\n{new_content}"
+    );
+
+    // Old ADR should have functional Superseded by link
+    let old_adr = temp.child("doc/adr/0002-use-sqlite-for-storage.md");
+    let old_content = fs::read_to_string(old_adr.path()).unwrap();
+    assert!(
+        old_content.contains("Superseded by [3. Use PostgreSQL for storage](0003-use-postgresql-for-storage.md)"),
+        "Old ADR should have a clickable Superseded by link. Got:\n{old_content}"
+    );
+
+    temp.close().unwrap();
+}
+
+/// Links created via `adrs link` should also be functional.
+#[test]
+fn scenario_link_command_generates_functional_links() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Use REST API"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Use JSON for API responses"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["link", "3", "Amends", "2"])
+        .assert()
+        .success();
+
+    // Source ADR should have functional link
+    let adr3 = temp.child("doc/adr/0003-use-json-for-api-responses.md");
+    let adr3_content = fs::read_to_string(adr3.path()).unwrap();
+    assert!(
+        adr3_content.contains("Amends [2. Use REST API](0002-use-rest-api.md)"),
+        "Source ADR should have functional Amends link. Got:\n{adr3_content}"
+    );
+
+    // Target ADR should have functional reverse link
+    let adr2 = temp.child("doc/adr/0002-use-rest-api.md");
+    let adr2_content = fs::read_to_string(adr2.path()).unwrap();
+    assert!(
+        adr2_content.contains("Amended by [3. Use JSON for API responses](0003-use-json-for-api-responses.md)"),
+        "Target ADR should have functional reverse link. Got:\n{adr2_content}"
+    );
+
+    temp.close().unwrap();
+}
+
+/// Status command with --by should generate a functional superseded-by link.
+#[test]
+fn scenario_status_superseded_by_generates_functional_link() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Old Decision"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "New Decision"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "superseded", "--by", "3"])
+        .assert()
+        .success();
+
+    let content =
+        fs::read_to_string(temp.path().join("doc/adr/0002-old-decision.md")).unwrap();
+    assert!(
+        content.contains("Superseded by [3. New Decision](0003-new-decision.md)"),
+        "Status command should generate functional link. Got:\n{content}"
+    );
+
+    temp.close().unwrap();
+}
+
+/// Supersede chain: A -> B -> C should have functional links throughout.
+#[test]
+fn scenario_supersede_chain_functional_links() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Use SQLite"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--supersedes",
+            "2",
+            "Use PostgreSQL",
+        ])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--supersedes",
+            "3",
+            "Use CockroachDB",
+        ])
+        .assert()
+        .success();
+
+    // Middle ADR (3) should have both directions with functional links
+    let adr3 = fs::read_to_string(
+        temp.path().join("doc/adr/0003-use-postgresql.md"),
+    )
+    .unwrap();
+    assert!(
+        adr3.contains("Supersedes [2. Use SQLite](0002-use-sqlite.md)"),
+        "ADR 3 should have functional Supersedes link to ADR 2. Got:\n{adr3}"
+    );
+    assert!(
+        adr3.contains("Superseded by [4. Use CockroachDB](0004-use-cockroachdb.md)"),
+        "ADR 3 should have functional Superseded by link to ADR 4. Got:\n{adr3}"
     );
 
     temp.close().unwrap();
