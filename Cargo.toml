@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.2"
+version = "0.7.0"
 authors = ["josh rotenberg <joshrotenberg@gmail.com>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -50,7 +50,7 @@ tokio-util = { version = "0.7", features = ["rt"] }
 axum = "0.8"
 
 # Internal
-adrs-core = { path = "crates/adrs-core", version = "0.6.2" }
+adrs-core = { path = "crates/adrs-core", version = "0.7.0" }
 
 # Testing
 serial_test = "3"
