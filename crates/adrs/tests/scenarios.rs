@@ -987,8 +987,7 @@ fn scenario_config_ng_mode_enables_tags() {
         .success();
 
     // Step 4: Verify the ADR was created with tags and YAML frontmatter
-    let content =
-        fs::read_to_string(temp.path().join("doc/adr/0002-use-postgresql.md")).unwrap();
+    let content = fs::read_to_string(temp.path().join("doc/adr/0002-use-postgresql.md")).unwrap();
     assert!(
         content.starts_with("---"),
         "Config ng mode should produce YAML frontmatter"
@@ -1040,8 +1039,7 @@ fn scenario_config_nextgen_alias_enables_tags() {
         .assert()
         .success();
 
-    let content =
-        fs::read_to_string(temp.path().join("doc/adr/0002-api-design.md")).unwrap();
+    let content = fs::read_to_string(temp.path().join("doc/adr/0002-api-design.md")).unwrap();
     assert!(content.contains("tags:"));
     assert!(content.contains("api"));
 
@@ -1096,10 +1094,8 @@ fn scenario_ng_init_then_tags_without_flag() {
         .assert()
         .success();
 
-    let content = fs::read_to_string(
-        temp.path().join("doc/adr/0002-backend-service-design.md"),
-    )
-    .unwrap();
+    let content =
+        fs::read_to_string(temp.path().join("doc/adr/0002-backend-service-design.md")).unwrap();
     assert!(content.starts_with("---"), "Should have YAML frontmatter");
     assert!(content.contains("tags:"));
     assert!(content.contains("backend"));
