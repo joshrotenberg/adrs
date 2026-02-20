@@ -80,11 +80,14 @@ pub fn new(
         repo.update(&adr).context("Failed to update ADR status")?;
     }
 
-    // Set tags if specified (requires --ng mode for YAML frontmatter)
+    // Effective ng mode: CLI flag --ng OR config mode = "ng"
+    let is_ng = ng || config.is_next_gen();
+
+    // Set tags if specified (requires ng mode for YAML frontmatter)
     if let Some(tag_list) = tags {
-        if !ng {
+        if !is_ng {
             anyhow::bail!(
-                "Tags require --ng mode (YAML frontmatter). Use: adrs --ng new --tags ..."
+                "Tags require --ng mode (YAML frontmatter). Use: adrs --ng new --tags ... or set mode = \"ng\" in adrs.toml"
             );
         }
         if !tag_list.is_empty() {
