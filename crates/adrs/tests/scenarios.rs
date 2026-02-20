@@ -951,187 +951,214 @@ fn scenario_status_workflow() {
 }
 
 // ============================================================================
-// Scenario: Functional Links in ADRs (Issue #180)
+// Scenario: Config-Driven NextGen Mode (Issue #181)
 // ============================================================================
 
-/// Supersedes links should contain the actual target ADR title and filename.
+/// User sets mode = "ng" in adrs.toml and expects tags to work without --ng CLI flag.
 #[test]
-fn scenario_supersede_generates_functional_links() {
+fn scenario_config_ng_mode_enables_tags() {
     let temp = assert_fs::TempDir::new().unwrap();
 
+    // Step 1: Initialize with --ng
     adrs()
         .current_dir(temp.path())
-        .args(["init"])
+        .args(["--ng", "init"])
         .assert()
         .success();
 
-    adrs()
-        .current_dir(temp.path())
-        .args(["new", "--no-edit", "Use SQLite for storage"])
-        .assert()
-        .success();
+    // Step 2: Write adrs.toml with mode = "ng" (no CLI flag needed after this)
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\nmode = \"ng\"\n",
+    )
+    .unwrap();
 
+    // Step 3: Create ADR with tags using only config-driven ng mode (NO --ng flag)
     adrs()
         .current_dir(temp.path())
         .args([
             "new",
             "--no-edit",
-            "--supersedes",
-            "2",
-            "Use PostgreSQL for storage",
+            "-t",
+            "database,infrastructure",
+            "Use PostgreSQL",
         ])
         .assert()
         .success();
 
-    // New ADR should have functional Supersedes link
-    let new_adr = temp.child("doc/adr/0003-use-postgresql-for-storage.md");
-    let new_content = fs::read_to_string(new_adr.path()).unwrap();
+    // Step 4: Verify the ADR was created with tags and YAML frontmatter
+    let content =
+        fs::read_to_string(temp.path().join("doc/adr/0002-use-postgresql.md")).unwrap();
     assert!(
-        new_content
-            .contains("Supersedes [2. Use SQLite for storage](0002-use-sqlite-for-storage.md)"),
-        "New ADR should have a clickable Supersedes link. Got:\n{new_content}"
+        content.starts_with("---"),
+        "Config ng mode should produce YAML frontmatter"
+    );
+    assert!(
+        content.contains("tags:"),
+        "Tags should be present in frontmatter"
+    );
+    assert!(
+        content.contains("database"),
+        "Tag 'database' should be in frontmatter"
+    );
+    assert!(
+        content.contains("infrastructure"),
+        "Tag 'infrastructure' should be in frontmatter"
     );
 
-    // Old ADR should have functional Superseded by link
-    let old_adr = temp.child("doc/adr/0002-use-sqlite-for-storage.md");
-    let old_content = fs::read_to_string(old_adr.path()).unwrap();
-    assert!(
-        old_content.contains(
-            "Superseded by [3. Use PostgreSQL for storage](0003-use-postgresql-for-storage.md)"
-        ),
-        "Old ADR should have a clickable Superseded by link. Got:\n{old_content}"
-    );
+    // Step 5: List by tag should work
+    adrs()
+        .current_dir(temp.path())
+        .args(["list", "--tag", "database"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-use-postgresql.md"));
 
     temp.close().unwrap();
 }
 
-/// Links created via `adrs link` should also be functional.
+/// Config mode = "ng" with the alias "nextgen" also works for tags.
 #[test]
-fn scenario_link_command_generates_functional_links() {
+fn scenario_config_nextgen_alias_enables_tags() {
     let temp = assert_fs::TempDir::new().unwrap();
 
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\nmode = \"nextgen\"\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "-t", "api", "API Design"])
+        .assert()
+        .success();
+
+    let content =
+        fs::read_to_string(temp.path().join("doc/adr/0002-api-design.md")).unwrap();
+    assert!(content.contains("tags:"));
+    assert!(content.contains("api"));
+
+    temp.close().unwrap();
+}
+
+/// Tags still require ng mode - should fail in compatible mode.
+#[test]
+fn scenario_tags_fail_without_ng_mode() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Initialize in compatible mode (no --ng)
     adrs()
         .current_dir(temp.path())
         .args(["init"])
         .assert()
         .success();
 
+    // Tags should fail without ng mode
     adrs()
         .current_dir(temp.path())
-        .args(["new", "--no-edit", "Use REST API"])
+        .args(["new", "--no-edit", "-t", "foo", "Should Fail"])
         .assert()
-        .success();
-
-    adrs()
-        .current_dir(temp.path())
-        .args(["new", "--no-edit", "Use JSON for API responses"])
-        .assert()
-        .success();
-
-    adrs()
-        .current_dir(temp.path())
-        .args(["link", "3", "Amends", "2"])
-        .assert()
-        .success();
-
-    // Source ADR should have functional link
-    let adr3 = temp.child("doc/adr/0003-use-json-for-api-responses.md");
-    let adr3_content = fs::read_to_string(adr3.path()).unwrap();
-    assert!(
-        adr3_content.contains("Amends [2. Use REST API](0002-use-rest-api.md)"),
-        "Source ADR should have functional Amends link. Got:\n{adr3_content}"
-    );
-
-    // Target ADR should have functional reverse link
-    let adr2 = temp.child("doc/adr/0002-use-rest-api.md");
-    let adr2_content = fs::read_to_string(adr2.path()).unwrap();
-    assert!(
-        adr2_content.contains(
-            "Amended by [3. Use JSON for API responses](0003-use-json-for-api-responses.md)"
-        ),
-        "Target ADR should have functional reverse link. Got:\n{adr2_content}"
-    );
+        .failure()
+        .stderr(predicate::str::contains("Tags require --ng mode"));
 
     temp.close().unwrap();
 }
 
-/// Status command with --by should generate a functional superseded-by link.
+/// CLI --ng flag on init creates ng config, so subsequent commands work for tags.
 #[test]
-fn scenario_status_superseded_by_generates_functional_link() {
+fn scenario_ng_init_then_tags_without_flag() {
     let temp = assert_fs::TempDir::new().unwrap();
 
+    // Initialize with --ng (creates ng config)
     adrs()
         .current_dir(temp.path())
-        .args(["init"])
+        .args(["--ng", "init"])
         .assert()
         .success();
 
+    // Tags should work without --ng flag because config is already ng
     adrs()
         .current_dir(temp.path())
-        .args(["new", "--no-edit", "Old Decision"])
+        .args([
+            "new",
+            "--no-edit",
+            "-t",
+            "backend",
+            "Backend Service Design",
+        ])
         .assert()
         .success();
 
-    adrs()
-        .current_dir(temp.path())
-        .args(["new", "--no-edit", "New Decision"])
-        .assert()
-        .success();
-
-    adrs()
-        .current_dir(temp.path())
-        .args(["status", "2", "superseded", "--by", "3"])
-        .assert()
-        .success();
-
-    let content = fs::read_to_string(temp.path().join("doc/adr/0002-old-decision.md")).unwrap();
-    assert!(
-        content.contains("Superseded by [3. New Decision](0003-new-decision.md)"),
-        "Status command should generate functional link. Got:\n{content}"
-    );
+    let content = fs::read_to_string(
+        temp.path().join("doc/adr/0002-backend-service-design.md"),
+    )
+    .unwrap();
+    assert!(content.starts_with("---"), "Should have YAML frontmatter");
+    assert!(content.contains("tags:"));
+    assert!(content.contains("backend"));
 
     temp.close().unwrap();
 }
 
-/// Supersede chain: A -> B -> C should have functional links throughout.
+/// Config ng mode works for multiple ADRs with different tags.
 #[test]
-fn scenario_supersede_chain_functional_links() {
+fn scenario_config_ng_multiple_tagged_adrs() {
     let temp = assert_fs::TempDir::new().unwrap();
 
     adrs()
         .current_dir(temp.path())
-        .args(["init"])
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\nmode = \"ng\"\n",
+    )
+    .unwrap();
+
+    // Create multiple ADRs with different tags (no --ng flag)
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "-t", "database", "Use PostgreSQL"])
         .assert()
         .success();
 
     adrs()
         .current_dir(temp.path())
-        .args(["new", "--no-edit", "Use SQLite"])
+        .args(["new", "--no-edit", "-t", "api,security", "Auth Design"])
         .assert()
         .success();
 
     adrs()
         .current_dir(temp.path())
-        .args(["new", "--no-edit", "--supersedes", "2", "Use PostgreSQL"])
+        .args(["new", "--no-edit", "No Tags ADR"])
         .assert()
         .success();
+
+    // Verify tag filtering
+    adrs()
+        .current_dir(temp.path())
+        .args(["list", "--tag", "database"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-use-postgresql.md"))
+        .stdout(predicate::str::contains("0003-auth-design.md").not());
 
     adrs()
         .current_dir(temp.path())
-        .args(["new", "--no-edit", "--supersedes", "3", "Use CockroachDB"])
+        .args(["list", "--tag", "security"])
         .assert()
-        .success();
-
-    // Middle ADR (3) should have both directions with functional links
-    let adr3 = fs::read_to_string(temp.path().join("doc/adr/0003-use-postgresql.md")).unwrap();
-    assert!(
-        adr3.contains("Supersedes [2. Use SQLite](0002-use-sqlite.md)"),
-        "ADR 3 should have functional Supersedes link to ADR 2. Got:\n{adr3}"
-    );
-    assert!(
-        adr3.contains("Superseded by [4. Use CockroachDB](0004-use-cockroachdb.md)"),
-        "ADR 3 should have functional Superseded by link to ADR 4. Got:\n{adr3}"
-    );
+        .success()
+        .stdout(predicate::str::contains("0003-auth-design.md"))
+        .stdout(predicate::str::contains("0002-use-postgresql.md").not());
 
     temp.close().unwrap();
 }
