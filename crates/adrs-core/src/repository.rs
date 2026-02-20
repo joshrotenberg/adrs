@@ -238,7 +238,9 @@ impl Repository {
         let path = self.adr_path().join(adr.filename());
 
         let link_titles = self.resolve_link_titles(adr);
-        let content = self.template_engine.render(adr, &self.config, &link_titles)?;
+        let content = self
+            .template_engine
+            .render(adr, &self.config, &link_titles)?;
         fs::write(&path, content)?;
 
         Ok(path)
@@ -331,7 +333,9 @@ impl Repository {
             .unwrap_or_else(|| self.adr_path().join(adr.filename()));
 
         let link_titles = self.resolve_link_titles(adr);
-        let content = self.template_engine.render(adr, &self.config, &link_titles)?;
+        let content = self
+            .template_engine
+            .render(adr, &self.config, &link_titles)?;
         fs::write(&path, content)?;
 
         Ok(path)
@@ -696,22 +700,22 @@ mod tests {
         repo.supersede("Use PostgreSQL instead", 2).unwrap();
 
         // Check the new ADR (3) has a functional "Supersedes" link to ADR 2
-        let new_content = fs::read_to_string(
-            repo.adr_path().join("0003-use-postgresql-instead.md"),
-        )
-        .unwrap();
+        let new_content =
+            fs::read_to_string(repo.adr_path().join("0003-use-postgresql-instead.md")).unwrap();
         assert!(
-            new_content.contains("Supersedes [2. Use MySQL for persistence](0002-use-mysql-for-persistence.md)"),
+            new_content.contains(
+                "Supersedes [2. Use MySQL for persistence](0002-use-mysql-for-persistence.md)"
+            ),
             "New ADR should have functional Supersedes link. Got:\n{new_content}"
         );
 
         // Check the old ADR (2) has a functional "Superseded by" link to ADR 3
-        let old_content = fs::read_to_string(
-            repo.adr_path().join("0002-use-mysql-for-persistence.md"),
-        )
-        .unwrap();
+        let old_content =
+            fs::read_to_string(repo.adr_path().join("0002-use-mysql-for-persistence.md")).unwrap();
         assert!(
-            old_content.contains("Superseded by [3. Use PostgreSQL instead](0003-use-postgresql-instead.md)"),
+            old_content.contains(
+                "Superseded by [3. Use PostgreSQL instead](0003-use-postgresql-instead.md)"
+            ),
             "Old ADR should have functional Superseded by link. Got:\n{old_content}"
         );
     }
@@ -728,22 +732,20 @@ mod tests {
             .unwrap();
 
         // Check source ADR has functional link
-        let source_content = fs::read_to_string(
-            repo.adr_path().join("0003-use-json-for-api-responses.md"),
-        )
-        .unwrap();
+        let source_content =
+            fs::read_to_string(repo.adr_path().join("0003-use-json-for-api-responses.md")).unwrap();
         assert!(
             source_content.contains("Amends [2. Use REST API](0002-use-rest-api.md)"),
             "Source ADR should have functional Amends link. Got:\n{source_content}"
         );
 
         // Check target ADR has functional reverse link
-        let target_content = fs::read_to_string(
-            repo.adr_path().join("0002-use-rest-api.md"),
-        )
-        .unwrap();
+        let target_content =
+            fs::read_to_string(repo.adr_path().join("0002-use-rest-api.md")).unwrap();
         assert!(
-            target_content.contains("Amended by [3. Use JSON for API responses](0003-use-json-for-api-responses.md)"),
+            target_content.contains(
+                "Amended by [3. Use JSON for API responses](0003-use-json-for-api-responses.md)"
+            ),
             "Target ADR should have functional Amended by link. Got:\n{target_content}"
         );
     }
@@ -758,10 +760,7 @@ mod tests {
 
         repo.set_status(2, AdrStatus::Superseded, Some(3)).unwrap();
 
-        let content = fs::read_to_string(
-            repo.adr_path().join("0002-first-decision.md"),
-        )
-        .unwrap();
+        let content = fs::read_to_string(repo.adr_path().join("0002-first-decision.md")).unwrap();
         assert!(
             content.contains("Superseded by [3. Second Decision](0003-second-decision.md)"),
             "ADR should have functional Superseded by link. Got:\n{content}"
@@ -782,10 +781,8 @@ mod tests {
         repo.supersede("Use CockroachDB", 3).unwrap();
 
         // Check ADR 3 has both directions
-        let adr3_content = fs::read_to_string(
-            repo.adr_path().join("0003-use-postgresql.md"),
-        )
-        .unwrap();
+        let adr3_content =
+            fs::read_to_string(repo.adr_path().join("0003-use-postgresql.md")).unwrap();
         assert!(
             adr3_content.contains("Supersedes [2. Use SQLite](0002-use-sqlite.md)"),
             "ADR 3 should supersede ADR 2. Got:\n{adr3_content}"
@@ -805,10 +802,8 @@ mod tests {
         repo.supersede("Use PostgreSQL", 2).unwrap();
 
         // Check the new ADR has functional links in both frontmatter and body
-        let new_content = fs::read_to_string(
-            repo.adr_path().join("0003-use-postgresql.md"),
-        )
-        .unwrap();
+        let new_content =
+            fs::read_to_string(repo.adr_path().join("0003-use-postgresql.md")).unwrap();
 
         // Body should have functional markdown link
         assert!(

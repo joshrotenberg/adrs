@@ -193,9 +193,7 @@ impl Template {
                 let (target_title, target_filename) = link_titles
                     .get(&link.target)
                     .cloned()
-                    .unwrap_or_else(|| {
-                        ("...".to_string(), format!("{:04}-....md", link.target))
-                    });
+                    .unwrap_or_else(|| ("...".to_string(), format!("{:04}-....md", link.target)));
                 context! {
                     target => link.target,
                     kind => kind_display,
@@ -824,7 +822,9 @@ mod tests {
         let output = template.render(&adr, &config, &link_titles).unwrap();
 
         assert!(
-            output.contains("Supersedes [2. Use MySQL for persistence](0002-use-mysql-for-persistence.md)"),
+            output.contains(
+                "Supersedes [2. Use MySQL for persistence](0002-use-mysql-for-persistence.md)"
+            ),
             "Link should contain resolved title and filename. Got:\n{output}"
         );
     }
@@ -834,8 +834,7 @@ mod tests {
         let template = Template::builtin(TemplateFormat::Nygard);
         let mut adr = Adr::new(2, "Use MySQL");
         adr.status = AdrStatus::Superseded;
-        adr.links
-            .push(AdrLink::new(3, LinkKind::SupersededBy));
+        adr.links.push(AdrLink::new(3, LinkKind::SupersededBy));
 
         let mut link_titles = HashMap::new();
         link_titles.insert(
@@ -850,7 +849,9 @@ mod tests {
         let output = template.render(&adr, &config, &link_titles).unwrap();
 
         assert!(
-            output.contains("Superseded by [3. Use PostgreSQL instead](0003-use-postgresql-instead.md)"),
+            output.contains(
+                "Superseded by [3. Use PostgreSQL instead](0003-use-postgresql-instead.md)"
+            ),
             "Superseded-by link should contain resolved title and filename. Got:\n{output}"
         );
     }
@@ -1358,7 +1359,9 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         let adr = Adr::new(1, "Test");
 
         let compat_config = Config::default();
-        let output = custom.render(&adr, &compat_config, &no_link_titles()).unwrap();
+        let output = custom
+            .render(&adr, &compat_config, &no_link_titles())
+            .unwrap();
         assert_eq!(output, "Compatible Mode");
 
         let ng_config = Config {
