@@ -158,7 +158,15 @@ impl Template {
     }
 
     /// Render the template with the given ADR data.
-    pub fn render(&self, adr: &Adr, config: &Config) -> Result<String> {
+    ///
+    /// `link_titles` maps link target ADR numbers to `(title, filename)` pairs
+    /// for generating functional markdown links.
+    pub fn render(
+        &self,
+        adr: &Adr,
+        config: &Config,
+        link_titles: &std::collections::HashMap<u32, (String, String)>,
+    ) -> Result<String> {
         use crate::LinkKind;
 
         let mut env = Environment::new();
@@ -169,7 +177,7 @@ impl Template {
             .get_template(&self.name)
             .map_err(|e| Error::TemplateError(e.to_string()))?;
 
-        // Convert links to a format with display-friendly kind
+        // Convert links to a format with display-friendly kind and resolved titles
         let links: Vec<_> = adr
             .links
             .iter()
@@ -182,10 +190,18 @@ impl Template {
                     LinkKind::RelatesTo => "Relates to",
                     LinkKind::Custom(s) => s.as_str(),
                 };
+                let (target_title, target_filename) = link_titles
+                    .get(&link.target)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        ("...".to_string(), format!("{:04}-....md", link.target))
+                    });
                 context! {
                     target => link.target,
                     kind => kind_display,
                     description => &link.description,
+                    target_title => target_title,
+                    target_filename => target_filename,
                 }
             })
             .collect();
@@ -274,8 +290,13 @@ impl TemplateEngine {
     }
 
     /// Render an ADR using the configured template.
-    pub fn render(&self, adr: &Adr, config: &Config) -> Result<String> {
-        self.template().render(adr, config)
+    pub fn render(
+        &self,
+        adr: &Adr,
+        config: &Config,
+        link_titles: &std::collections::HashMap<u32, (String, String)>,
+    ) -> Result<String> {
+        self.template().render(adr, config, link_titles)
     }
 }
 
@@ -300,7 +321,7 @@ Date: {{ date }}
 
 {{ status }}
 {% for link in links %}
-{{ link.kind }} [{{ link.target }}. ...]({{ "%04d" | format(link.target) }}-....md)
+{{ link.kind }} [{{ link.target }}. {{ link.target_title }}]({{ link.target_filename }})
 {% endfor %}
 ## Context
 
@@ -417,7 +438,7 @@ Date: {{ date }}
 
 {{ status }}
 {% for link in links %}
-{{ link.kind }} [{{ link.target }}. ...]({{ "%04d" | format(link.target) }}-....md)
+{{ link.kind }} [{{ link.target }}. {{ link.target_title }}]({{ link.target_filename }})
 {% endfor %}
 ## Context
 
@@ -575,8 +596,13 @@ const MADR_BARE_MINIMAL_TEMPLATE: &str = r#"# {{ title }}
 mod tests {
     use super::*;
     use crate::{AdrLink, AdrStatus, ConfigMode, LinkKind};
+    use std::collections::HashMap;
     use tempfile::TempDir;
     use test_case::test_case;
+
+    fn no_link_titles() -> HashMap<u32, (String, String)> {
+        HashMap::new()
+    }
 
     // ========== TemplateFormat Tests ==========
 
@@ -696,7 +722,7 @@ mod tests {
         adr.status = AdrStatus::Accepted;
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("# 1. Use Rust"));
         assert!(output.contains("## Status"));
@@ -719,7 +745,7 @@ mod tests {
             let mut adr = Adr::new(1, "Test");
             adr.status = status;
 
-            let output = template.render(&adr, &config).unwrap();
+            let output = template.render(&adr, &config, &no_link_titles()).unwrap();
             assert!(
                 output.contains(expected_text),
                 "Output should contain '{expected_text}': {output}"
@@ -737,7 +763,7 @@ mod tests {
         adr.consequences = "Better memory safety.".to_string();
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("We need a safe language."));
         assert!(output.contains("We will use Rust."));
@@ -752,7 +778,7 @@ mod tests {
         adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("Supersedes"));
         assert!(output.contains("[1. ...]"));
@@ -769,11 +795,176 @@ mod tests {
         adr.links.push(AdrLink::new(3, LinkKind::SupersededBy));
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("Supersedes"));
         assert!(output.contains("Amends"));
         assert!(output.contains("Superseded by"));
+    }
+
+    // ========== Resolved Link Titles (Issue #180) ==========
+
+    #[test]
+    fn test_render_nygard_with_resolved_link_titles() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(3, "Use PostgreSQL instead");
+        adr.status = AdrStatus::Accepted;
+        adr.links.push(AdrLink::new(2, LinkKind::Supersedes));
+
+        let mut link_titles = HashMap::new();
+        link_titles.insert(
+            2,
+            (
+                "Use MySQL for persistence".to_string(),
+                "0002-use-mysql-for-persistence.md".to_string(),
+            ),
+        );
+
+        let config = Config::default();
+        let output = template.render(&adr, &config, &link_titles).unwrap();
+
+        assert!(
+            output.contains("Supersedes [2. Use MySQL for persistence](0002-use-mysql-for-persistence.md)"),
+            "Link should contain resolved title and filename. Got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_render_nygard_with_resolved_superseded_by_link() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(2, "Use MySQL");
+        adr.status = AdrStatus::Superseded;
+        adr.links
+            .push(AdrLink::new(3, LinkKind::SupersededBy));
+
+        let mut link_titles = HashMap::new();
+        link_titles.insert(
+            3,
+            (
+                "Use PostgreSQL instead".to_string(),
+                "0003-use-postgresql-instead.md".to_string(),
+            ),
+        );
+
+        let config = Config::default();
+        let output = template.render(&adr, &config, &link_titles).unwrap();
+
+        assert!(
+            output.contains("Superseded by [3. Use PostgreSQL instead](0003-use-postgresql-instead.md)"),
+            "Superseded-by link should contain resolved title and filename. Got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_render_nygard_with_multiple_resolved_links() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(5, "Combined Decision");
+        adr.status = AdrStatus::Accepted;
+        adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
+        adr.links.push(AdrLink::new(2, LinkKind::Amends));
+
+        let mut link_titles = HashMap::new();
+        link_titles.insert(
+            1,
+            (
+                "Initial Decision".to_string(),
+                "0001-initial-decision.md".to_string(),
+            ),
+        );
+        link_titles.insert(
+            2,
+            (
+                "Second Decision".to_string(),
+                "0002-second-decision.md".to_string(),
+            ),
+        );
+
+        let config = Config::default();
+        let output = template.render(&adr, &config, &link_titles).unwrap();
+
+        assert!(
+            output.contains("Supersedes [1. Initial Decision](0001-initial-decision.md)"),
+            "First link should be resolved. Got:\n{output}"
+        );
+        assert!(
+            output.contains("Amends [2. Second Decision](0002-second-decision.md)"),
+            "Second link should be resolved. Got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_render_nygard_unresolved_link_falls_back() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(2, "Test");
+        adr.status = AdrStatus::Accepted;
+        adr.links.push(AdrLink::new(99, LinkKind::Supersedes));
+
+        let config = Config::default();
+        // Empty link_titles = no resolution available
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
+
+        assert!(
+            output.contains("Supersedes [99. ...](0099-....md)"),
+            "Unresolved link should fall back to '...' placeholder. Got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_render_nygard_minimal_with_resolved_links() {
+        let template =
+            Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::Minimal);
+        let mut adr = Adr::new(2, "New Approach");
+        adr.status = AdrStatus::Accepted;
+        adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
+
+        let mut link_titles = HashMap::new();
+        link_titles.insert(
+            1,
+            (
+                "Old Approach".to_string(),
+                "0001-old-approach.md".to_string(),
+            ),
+        );
+
+        let config = Config::default();
+        let output = template.render(&adr, &config, &link_titles).unwrap();
+
+        assert!(
+            output.contains("Supersedes [1. Old Approach](0001-old-approach.md)"),
+            "Minimal template should also resolve link titles. Got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_render_nygard_ng_with_resolved_links() {
+        let template = Template::builtin(TemplateFormat::Nygard);
+        let mut adr = Adr::new(2, "New Approach");
+        adr.status = AdrStatus::Accepted;
+        adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
+
+        let mut link_titles = HashMap::new();
+        link_titles.insert(
+            1,
+            (
+                "Old Approach".to_string(),
+                "0001-old-approach.md".to_string(),
+            ),
+        );
+
+        let config = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+        let output = template.render(&adr, &config, &link_titles).unwrap();
+
+        // Body should have resolved link
+        assert!(
+            output.contains("Supersedes [1. Old Approach](0001-old-approach.md)"),
+            "NG mode body should have resolved links. Got:\n{output}"
+        );
+        // Frontmatter should still have structured link data
+        assert!(output.contains("links:"));
+        assert!(output.contains("target: 1"));
     }
 
     // ========== Template Rendering - Nygard NextGen Mode ==========
@@ -788,7 +979,7 @@ mod tests {
             mode: ConfigMode::NextGen,
             ..Default::default()
         };
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.starts_with("---")); // Has frontmatter in ng mode
         assert!(output.contains("number: 1"));
@@ -807,7 +998,7 @@ mod tests {
             mode: ConfigMode::NextGen,
             ..Default::default()
         };
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("links:"));
         assert!(output.contains("target: 1"));
@@ -822,7 +1013,7 @@ mod tests {
         adr.status = AdrStatus::Accepted;
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.starts_with("---")); // MADR always has frontmatter
         assert!(output.contains("status: accepted"));
@@ -842,7 +1033,7 @@ mod tests {
         adr.decision_makers = vec!["Alice".into(), "Bob".into()];
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("decision-makers:"));
         assert!(output.contains("  - Alice"));
@@ -857,7 +1048,7 @@ mod tests {
         adr.consulted = vec!["Carol".into()];
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("consulted:"));
         assert!(output.contains("  - Carol"));
@@ -871,7 +1062,7 @@ mod tests {
         adr.informed = vec!["Dave".into(), "Eve".into()];
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("informed:"));
         assert!(output.contains("  - Dave"));
@@ -888,7 +1079,7 @@ mod tests {
         adr.informed = vec!["Dave".into()];
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // Check frontmatter structure - now includes number and title
         assert!(
@@ -907,7 +1098,7 @@ mod tests {
         adr.status = AdrStatus::Proposed;
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // Empty optional fields should not appear
         assert!(!output.contains("decision-makers:"));
@@ -923,7 +1114,7 @@ mod tests {
             Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::Minimal);
         let adr = Adr::new(1, "Minimal Test");
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // Should have basic structure but no guidance text
         assert!(output.contains("# 1. Minimal Test"));
@@ -941,7 +1132,7 @@ mod tests {
             Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::Bare);
         let adr = Adr::new(1, "Bare Test");
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // Should have basic structure
         assert!(output.contains("# 1. Bare Test"));
@@ -957,7 +1148,7 @@ mod tests {
             Template::builtin_with_variant(TemplateFormat::Madr, TemplateVariant::Minimal);
         let adr = Adr::new(1, "MADR Minimal");
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // MADR minimal has NO frontmatter (matches official adr-template-minimal.md)
         assert!(!output.starts_with("---"));
@@ -975,7 +1166,7 @@ mod tests {
         let template = Template::builtin_with_variant(TemplateFormat::Madr, TemplateVariant::Bare);
         let adr = Adr::new(1, "MADR Bare");
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // MADR bare has frontmatter with empty fields (matches official adr-template-bare.md)
         assert!(output.starts_with("---"));
@@ -997,7 +1188,7 @@ mod tests {
             Template::builtin_with_variant(TemplateFormat::Madr, TemplateVariant::BareMinimal);
         let adr = Adr::new(1, "MADR Bare Minimal");
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // MADR bare-minimal has NO frontmatter, minimal sections
         assert!(!output.starts_with("---"));
@@ -1017,7 +1208,7 @@ mod tests {
             Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::BareMinimal);
         let adr = Adr::new(1, "Nygard Bare Minimal");
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // Should have basic structure without Date line
         assert!(output.contains("# 1. Nygard Bare Minimal"));
@@ -1109,7 +1300,7 @@ mod tests {
         let adr = Adr::new(1, "Test");
         let config = Config::default();
 
-        let output = engine.render(&adr, &config).unwrap();
+        let output = engine.render(&adr, &config, &no_link_titles()).unwrap();
         assert!(output.contains("# 1. Test"));
     }
 
@@ -1120,7 +1311,7 @@ mod tests {
         let adr = Adr::new(42, "Custom ADR");
         let config = Config::default();
 
-        let output = engine.render(&adr, &config).unwrap();
+        let output = engine.render(&adr, &config, &no_link_titles()).unwrap();
         assert_eq!(output, "ADR 42: Custom ADR");
     }
 
@@ -1147,7 +1338,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         adr.links.push(AdrLink::new(2, LinkKind::Amends));
 
         let config = Config::default();
-        let output = custom.render(&adr, &config).unwrap();
+        let output = custom.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("# 1. Test"));
         assert!(output.contains("Status: Accepted"));
@@ -1167,14 +1358,14 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         let adr = Adr::new(1, "Test");
 
         let compat_config = Config::default();
-        let output = custom.render(&adr, &compat_config).unwrap();
+        let output = custom.render(&adr, &compat_config, &no_link_titles()).unwrap();
         assert_eq!(output, "Compatible Mode");
 
         let ng_config = Config {
             mode: ConfigMode::NextGen,
             ..Default::default()
         };
-        let output = custom.render(&adr, &ng_config).unwrap();
+        let output = custom.render(&adr, &ng_config, &no_link_titles()).unwrap();
         assert_eq!(output, "NextGen Mode");
     }
 
@@ -1195,7 +1386,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
             .push(AdrLink::new(6, LinkKind::Custom("Depends on".into())));
 
         let config = Config::default();
-        let output = custom.render(&adr, &config).unwrap();
+        let output = custom.render(&adr, &config, &no_link_titles()).unwrap();
 
         assert!(output.contains("Supersedes|"));
         assert!(output.contains("Superseded by|"));
@@ -1213,7 +1404,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         let adr = Adr::new(1, "Test");
         let config = Config::default();
 
-        let result = custom.render(&adr, &config);
+        let result = custom.render(&adr, &config, &no_link_titles());
         assert!(result.is_err());
     }
 
@@ -1224,7 +1415,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         let config = Config::default();
 
         // minijinja treats undefined as empty string by default
-        let result = custom.render(&adr, &config);
+        let result = custom.render(&adr, &config, &no_link_titles());
         assert!(result.is_ok());
     }
 
@@ -1236,7 +1427,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         let adr = Adr::new(9999, "Large Number");
         let config = Config::default();
 
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
         assert!(output.contains("# 9999. Large Number"));
     }
 
@@ -1247,7 +1438,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         adr.links.push(AdrLink::new(1, LinkKind::Supersedes));
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // Link should use 4-digit padding
         assert!(output.contains("0001-"));
@@ -1265,7 +1456,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
             mode: ConfigMode::NextGen,
             ..Default::default()
         };
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // Tags should appear in YAML frontmatter
         assert!(output.contains("tags:"));
@@ -1280,7 +1471,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         adr.tags = vec!["api".to_string(), "security".to_string()];
 
         let config = Config::default();
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // Tags should appear in YAML frontmatter
         assert!(output.contains("tags:"));
@@ -1297,7 +1488,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
             mode: ConfigMode::NextGen,
             ..Default::default()
         };
-        let output = template.render(&adr, &config).unwrap();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
         // No tags section when tags are empty
         assert!(!output.contains("tags:"));
