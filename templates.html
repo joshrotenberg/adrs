@@ -266,7 +266,7 @@ Chosen option: "", because ...
 <p>Create custom templates using <a href="https://jinja.palletsprojects.com/">Jinja2</a> syntax.</p>
 <h3 id="template-variables"><a class="header" href="#template-variables">Template Variables</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Description</th><th>Example</th></tr></thead><tbody>
-<tr><td><code>number</code></td><td>ADR number (padded)</td><td><code>0001</code></td></tr>
+<tr><td><code>number</code></td><td>ADR number</td><td><code>1</code></td></tr>
 <tr><td><code>title</code></td><td>ADR title</td><td><code>Use PostgreSQL</code></td></tr>
 <tr><td><code>date</code></td><td>Current date</td><td><code>2024-01-15</code></td></tr>
 <tr><td><code>status</code></td><td>Initial status</td><td><code>Proposed</code></td></tr>
@@ -322,7 +322,7 @@ custom = "templates/my-template.md"
 ## Related Decisions
 
 {% for link in links %}
-* {{ link.kind }} [ADR {{ link.target }}]({{ link.target | pad(4) }}-*.md)
+* {{ link.kind }} [ADR {{ link.target }}]({{ link.target | pad(width=4) }}-*.md)
 {% endfor %}
 {% endif %}
 </code></pre>
