@@ -6,10 +6,23 @@ use crate::{
 };
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use walkdir::WalkDir;
+
+/// Regex for matching the status line in YAML frontmatter.
+static FM_STATUS_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^status:\s*.*$").unwrap());
+
+/// Regex for matching the links block in YAML frontmatter (multi-line).
+static FM_LINKS_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^links:\n(?:(?:  .+\n)*)").unwrap());
+
+/// Regex for matching the tags block in YAML frontmatter (multi-line).
+static FM_TAGS_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^tags:\n(?:(?:  .+\n)*)").unwrap());
 
 /// A repository of Architecture Decision Records.
 #[derive(Debug)]
@@ -32,12 +45,13 @@ impl Repository {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         let config = Config::load(&root)?;
+        let template_engine = Self::engine_from_config(&config);
 
         Ok(Self {
             root,
             config,
             parser: Parser::new(),
-            template_engine: TemplateEngine::new(),
+            template_engine,
         })
     }
 
@@ -45,12 +59,13 @@ impl Repository {
     pub fn open_or_default(root: impl Into<PathBuf>) -> Self {
         let root = root.into();
         let config = Config::load_or_default(&root);
+        let template_engine = Self::engine_from_config(&config);
 
         Self {
             root,
             config,
             parser: Parser::new(),
-            template_engine: TemplateEngine::new(),
+            template_engine,
         }
     }
 
@@ -81,11 +96,13 @@ impl Repository {
         };
         config.save(&root)?;
 
+        let template_engine = Self::engine_from_config(&config);
+
         let repo = Self {
             root,
             config,
             parser: Parser::new(),
-            template_engine: TemplateEngine::new(),
+            template_engine,
         };
 
         // Only create initial ADR if no ADRs exist
@@ -115,6 +132,17 @@ impl Repository {
     /// Get the full path to the ADR directory.
     pub fn adr_path(&self) -> PathBuf {
         self.config.adr_path(&self.root)
+    }
+
+    /// Build a template engine that respects the config's template format.
+    fn engine_from_config(config: &Config) -> TemplateEngine {
+        let mut engine = TemplateEngine::new();
+        if let Some(ref fmt) = config.templates.format
+            && let Ok(format) = fmt.parse::<TemplateFormat>()
+        {
+            engine = engine.with_format(format);
+        }
+        engine
     }
 
     /// Set the template format.
@@ -269,7 +297,7 @@ impl Repository {
         let mut old_adr = self.get(superseded)?;
         old_adr.status = AdrStatus::Superseded;
         old_adr.add_link(AdrLink::new(number, LinkKind::SupersededBy));
-        self.update(&old_adr)?;
+        self.update_metadata(&old_adr)?;
 
         Ok((adr, path))
     }
@@ -302,7 +330,7 @@ impl Repository {
             }
         }
 
-        self.update(&adr)
+        self.update_metadata(&adr)
     }
 
     /// Link two ADRs together.
@@ -319,8 +347,8 @@ impl Repository {
         source_adr.add_link(AdrLink::new(target, source_kind));
         target_adr.add_link(AdrLink::new(source, target_kind));
 
-        self.update(&source_adr)?;
-        self.update(&target_adr)?;
+        self.update_metadata(&source_adr)?;
+        self.update_metadata(&target_adr)?;
 
         Ok(())
     }
@@ -362,6 +390,204 @@ impl Repository {
 
         fs::write(&path, content)?;
         Ok(path)
+    }
+
+    /// Update only the metadata (status, links, tags) of an existing ADR file,
+    /// preserving all other content byte-for-byte.
+    pub fn update_metadata(&self, adr: &Adr) -> Result<PathBuf> {
+        let path = adr
+            .path
+            .clone()
+            .unwrap_or_else(|| self.adr_path().join(adr.filename()));
+
+        let content = fs::read_to_string(&path)?;
+
+        let updated = if content.starts_with("---\n") {
+            self.update_frontmatter_metadata(adr, &content)?
+        } else {
+            self.update_legacy_metadata(adr, &content)?
+        };
+
+        fs::write(&path, updated)?;
+        Ok(path)
+    }
+
+    /// Surgically update metadata fields in a YAML frontmatter file.
+    ///
+    /// Replaces only `status:`, `links:`, and `tags:` blocks in the frontmatter.
+    /// YAML comments (e.g., SPDX headers), unknown fields, and the entire
+    /// markdown body are preserved untouched.
+    fn update_frontmatter_metadata(&self, adr: &Adr, content: &str) -> Result<String> {
+        // Split into frontmatter and body at the closing `---`
+        let Some(rest) = content.strip_prefix("---\n") else {
+            return Err(Error::InvalidFormat {
+                path: Default::default(),
+                reason: "Missing opening frontmatter delimiter".into(),
+            });
+        };
+
+        let Some(end_idx) = rest.find("\n---\n").or_else(|| {
+            // Handle case where closing delimiter is at end of file with no trailing newline
+            if rest.ends_with("\n---") {
+                Some(rest.len() - 3)
+            } else {
+                None
+            }
+        }) else {
+            return Err(Error::InvalidFormat {
+                path: Default::default(),
+                reason: "Missing closing frontmatter delimiter".into(),
+            });
+        };
+
+        let yaml_block = &rest[..end_idx + 1]; // include trailing \n
+        let after_yaml = &rest[end_idx..]; // starts with \n---\n...
+
+        // 1. Replace status line
+        let new_status = format!("status: {}", adr.status.to_string().to_lowercase());
+        let yaml_block = FM_STATUS_RE.replace(yaml_block, new_status.as_str());
+
+        // 2. Replace or remove links block
+        let links_yaml = Self::format_links_yaml(&adr.links);
+        let yaml_block = if FM_LINKS_RE.is_match(&yaml_block) {
+            FM_LINKS_RE
+                .replace(&yaml_block, links_yaml.as_str())
+                .into_owned()
+        } else if !links_yaml.is_empty() {
+            // Append links before end of frontmatter
+            let mut s = yaml_block.into_owned();
+            if !s.ends_with('\n') {
+                s.push('\n');
+            }
+            s.push_str(&links_yaml);
+            s
+        } else {
+            yaml_block.into_owned()
+        };
+
+        // 3. Replace or remove tags block
+        let tags_yaml = Self::format_tags_yaml(&adr.tags);
+        let yaml_block = if FM_TAGS_RE.is_match(&yaml_block) {
+            FM_TAGS_RE
+                .replace(&yaml_block, tags_yaml.as_str())
+                .into_owned()
+        } else if !tags_yaml.is_empty() {
+            let mut s = yaml_block;
+            if !s.ends_with('\n') {
+                s.push('\n');
+            }
+            s.push_str(&tags_yaml);
+            s
+        } else {
+            yaml_block
+        };
+
+        Ok(format!("---\n{}{}", yaml_block, after_yaml))
+    }
+
+    /// Surgically update metadata in a legacy (no-frontmatter) ADR file.
+    ///
+    /// Replaces the content between `## Status` and the next `## ` heading
+    /// with the new status and link lines. All other sections pass through untouched.
+    fn update_legacy_metadata(&self, adr: &Adr, content: &str) -> Result<String> {
+        let lines: Vec<&str> = content.lines().collect();
+        let mut result = String::with_capacity(content.len());
+
+        // Find the ## Status section
+        let status_idx = lines.iter().position(|l| {
+            l.trim().eq_ignore_ascii_case("## Status") || l.trim().eq_ignore_ascii_case("## STATUS")
+        });
+
+        let Some(status_idx) = status_idx else {
+            // No status section found -- just return content unchanged
+            return Ok(content.to_string());
+        };
+
+        // Find the next ## heading after status
+        let next_heading_idx = lines[status_idx + 1..]
+            .iter()
+            .position(|l| l.starts_with("## "))
+            .map(|i| i + status_idx + 1);
+
+        // Write everything before the status section (including the ## Status line)
+        for line in &lines[..=status_idx] {
+            result.push_str(line);
+            result.push('\n');
+        }
+
+        // Write new status content
+        result.push('\n');
+        result.push_str(&adr.status.to_string());
+        result.push('\n');
+
+        // Write link lines with resolved titles
+        let link_titles = self.resolve_link_titles(adr);
+        for link in &adr.links {
+            result.push('\n');
+            if let Some((title, filename)) = link_titles.get(&link.target) {
+                result.push_str(&format!(
+                    "{} [{}. {}]({})",
+                    link.kind, link.target, title, filename
+                ));
+            } else {
+                result.push_str(&format!(
+                    "{} [{}. ...]({:04}-....md)",
+                    link.kind, link.target, link.target
+                ));
+            }
+            result.push('\n');
+        }
+
+        // Write everything from the next heading onward
+        if let Some(next_idx) = next_heading_idx {
+            result.push('\n');
+            for (i, line) in lines[next_idx..].iter().enumerate() {
+                result.push_str(line);
+                // Preserve trailing newline behavior
+                if next_idx + i < lines.len() - 1 || content.ends_with('\n') {
+                    result.push('\n');
+                }
+            }
+        } else if content.ends_with('\n') {
+            // No next heading, but original ended with newline
+        }
+
+        Ok(result)
+    }
+
+    /// Format links as YAML block for frontmatter insertion.
+    fn format_links_yaml(links: &[AdrLink]) -> String {
+        if links.is_empty() {
+            return String::new();
+        }
+        let mut s = String::from("links:\n");
+        for link in links {
+            let kind_str = match &link.kind {
+                LinkKind::Supersedes => "supersedes",
+                LinkKind::SupersededBy => "supersededby",
+                LinkKind::Amends => "amends",
+                LinkKind::AmendedBy => "amendedby",
+                LinkKind::RelatesTo => "relatesto",
+                LinkKind::Custom(c) => c.as_str(),
+            };
+            s.push_str(&format!(
+                "  - target: {}\n    kind: {}\n",
+                link.target, kind_str
+            ));
+        }
+        s
+    }
+
+    /// Format tags as YAML block for frontmatter insertion.
+    fn format_tags_yaml(tags: &[String]) -> String {
+        if tags.is_empty() {
+            return String::new();
+        }
+        let mut s = String::from("tags:\n");
+        for tag in tags {
+            s.push_str(&format!("  - {}\n", tag));
+        }
+        s
     }
 }
 
@@ -1121,5 +1347,395 @@ mod tests {
         let (adr, path) = repo.new_adr("Use C++ & Rust!").unwrap();
         assert!(path.exists());
         assert_eq!(adr.title, "Use C++ & Rust!");
+    }
+
+    // ========== Metadata Preservation Tests (issue #187) ==========
+
+    #[test]
+    fn test_set_status_preserves_madr_body() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let madr_content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2026-01-15
+status: proposed
+---
+
+# Use Redis for caching
+
+## Context and Problem Statement
+
+We need a **fast** caching layer for our [API](https://api.example.com).
+
+## Considered Options
+
+* Redis
+* Memcached
+* In-memory cache
+
+## Decision Outcome
+
+Chosen option: "Redis", because it supports data structures beyond simple key-value.
+
+### Consequences
+
+* Good, because it provides pub/sub
+* Bad, because it adds operational complexity
+
+## Pros and Cons of the Options
+
+### Redis
+
+* Good, because it supports complex data types
+* Bad, because it requires a separate server
+
+### Memcached
+
+* Good, because it's simpler
+* Bad, because it only supports strings
+"#;
+        let adr_path = repo.adr_path().join("0002-use-redis-for-caching.md");
+        fs::write(&adr_path, madr_content).unwrap();
+
+        // Change status
+        repo.set_status(2, AdrStatus::Accepted, None).unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+
+        // Status should be updated
+        assert!(result.contains("status: accepted"));
+        assert!(!result.contains("status: proposed"));
+
+        // Body should be completely preserved
+        let body_start = result.find("\n# Use Redis").unwrap();
+        let original_body_start = madr_content.find("\n# Use Redis").unwrap();
+        assert_eq!(
+            &result[body_start..],
+            &madr_content[original_body_start..],
+            "Body content was modified"
+        );
+    }
+
+    #[test]
+    fn test_set_status_preserves_yaml_comments() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content_with_comments = r#"---
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Example Corp
+number: 2
+title: Use MADR format
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+We need a standard ADR format.
+
+## Decision Outcome
+
+Use MADR 4.0.0.
+"#;
+        let adr_path = repo.adr_path().join("0002-use-madr-format.md");
+        fs::write(&adr_path, content_with_comments).unwrap();
+
+        repo.set_status(2, AdrStatus::Accepted, None).unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+
+        // YAML comments must be preserved
+        assert!(
+            result.contains("# SPDX-License-Identifier: MIT"),
+            "SPDX comment was destroyed"
+        );
+        assert!(
+            result.contains("# SPDX-FileCopyrightText: 2026 Example Corp"),
+            "Copyright comment was destroyed"
+        );
+        assert!(result.contains("status: accepted"));
+    }
+
+    #[test]
+    fn test_set_status_preserves_markdown_links() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Use PostgreSQL
+date: 2026-01-15
+status: proposed
+---
+
+## Context
+
+See the [PostgreSQL docs](https://www.postgresql.org/docs/) for details.
+
+Also see [RFC 7159](https://tools.ietf.org/html/rfc7159) and `inline code`.
+
+## Decision
+
+We will use **PostgreSQL** version `16.x`.
+
+## Consequences
+
+- [Monitoring guide](https://example.com/monitoring)
+- Performance benchmarks in [this report](./benchmarks.md)
+"#;
+        let adr_path = repo.adr_path().join("0002-use-postgresql.md");
+        fs::write(&adr_path, content).unwrap();
+
+        repo.set_status(2, AdrStatus::Accepted, None).unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+
+        assert!(result.contains("[PostgreSQL docs](https://www.postgresql.org/docs/)"));
+        assert!(result.contains("[RFC 7159](https://tools.ietf.org/html/rfc7159)"));
+        assert!(result.contains("`inline code`"));
+        assert!(result.contains("**PostgreSQL**"));
+        assert!(result.contains("[Monitoring guide](https://example.com/monitoring)"));
+        assert!(result.contains("[this report](./benchmarks.md)"));
+    }
+
+    #[test]
+    fn test_link_preserves_body_content() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content_1 = r#"---
+number: 2
+title: First decision
+date: 2026-01-15
+status: accepted
+---
+
+## Context
+
+Custom context with **bold** and [links](https://example.com).
+
+## Decision
+
+A detailed decision paragraph.
+
+## Consequences
+
+- Important consequence 1
+- Important consequence 2
+"#;
+        let content_2 = r#"---
+number: 3
+title: Second decision
+date: 2026-01-16
+status: accepted
+---
+
+## Context
+
+Different context entirely.
+
+## Decision
+
+Another decision.
+
+## Consequences
+
+None significant.
+"#;
+        fs::write(repo.adr_path().join("0002-first-decision.md"), content_1).unwrap();
+        fs::write(repo.adr_path().join("0003-second-decision.md"), content_2).unwrap();
+
+        repo.link(2, 3, LinkKind::Amends, LinkKind::AmendedBy)
+            .unwrap();
+
+        let result_1 = fs::read_to_string(repo.adr_path().join("0002-first-decision.md")).unwrap();
+        let result_2 = fs::read_to_string(repo.adr_path().join("0003-second-decision.md")).unwrap();
+
+        // Bodies must be intact
+        assert!(result_1.contains("Custom context with **bold** and [links](https://example.com)"));
+        assert!(result_1.contains("A detailed decision paragraph."));
+        assert!(result_2.contains("Different context entirely."));
+        assert!(result_2.contains("None significant."));
+
+        // Links must be present in frontmatter
+        assert!(result_1.contains("links:"));
+        assert!(result_1.contains("target: 3"));
+        assert!(result_2.contains("links:"));
+        assert!(result_2.contains("target: 2"));
+    }
+
+    #[test]
+    fn test_supersede_preserves_old_adr_body() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let rich_content = r#"---
+number: 2
+title: Original approach
+date: 2026-01-15
+status: accepted
+---
+
+## Context and Problem Statement
+
+This has **rich** markdown with [links](https://example.com).
+
+```rust
+fn important_code() -> bool {
+    true
+}
+```
+
+## Decision Outcome
+
+We chose the original approach.
+
+| Criteria | Score |
+|----------|-------|
+| Speed    | 9/10  |
+| Safety   | 8/10  |
+"#;
+        fs::write(
+            repo.adr_path().join("0002-original-approach.md"),
+            rich_content,
+        )
+        .unwrap();
+
+        repo.supersede("Better approach", 2).unwrap();
+
+        let old_content =
+            fs::read_to_string(repo.adr_path().join("0002-original-approach.md")).unwrap();
+
+        // Old ADR body must be preserved
+        assert!(old_content.contains("```rust"));
+        assert!(old_content.contains("fn important_code()"));
+        assert!(old_content.contains("| Criteria | Score |"));
+        assert!(old_content.contains("[links](https://example.com)"));
+
+        // Status and links must be updated
+        assert!(old_content.contains("status: superseded"));
+        assert!(old_content.contains("target: 3"));
+    }
+
+    #[test]
+    fn test_set_status_legacy_preserves_sections() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let legacy_content = r#"# 2. Use Rust for backend
+
+Date: 2026-01-15
+
+## Status
+
+Proposed
+
+## Context
+
+We need a fast, safe language for our backend services.
+
+See the [Rust book](https://doc.rust-lang.org/book/) for details.
+
+## Decision
+
+We will use **Rust** with the `tokio` runtime.
+
+```toml
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+```
+
+## Consequences
+
+- Type safety prevents many bugs at compile time
+- Learning curve for team members
+"#;
+        let adr_path = repo.adr_path().join("0002-use-rust-for-backend.md");
+        fs::write(&adr_path, legacy_content).unwrap();
+
+        repo.set_status(2, AdrStatus::Accepted, None).unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+
+        // Status should change
+        assert!(result.contains("Accepted"));
+
+        // Other sections must be preserved exactly
+        assert!(result.contains("[Rust book](https://doc.rust-lang.org/book/)"));
+        assert!(result.contains("**Rust**"));
+        assert!(result.contains("`tokio`"));
+        assert!(result.contains("```toml"));
+        assert!(result.contains("tokio = { version = \"1\", features = [\"full\"] }"));
+        assert!(result.contains("Type safety prevents many bugs"));
+    }
+
+    #[test]
+    fn test_set_status_frontmatter_with_existing_links() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Updated approach
+date: 2026-01-15
+status: proposed
+links:
+  - target: 1
+    kind: amends
+---
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+"#;
+        let adr_path = repo.adr_path().join("0002-updated-approach.md");
+        fs::write(&adr_path, content).unwrap();
+
+        // Just change status, links should be preserved
+        repo.set_status(2, AdrStatus::Accepted, None).unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+        assert!(result.contains("status: accepted"));
+        assert!(result.contains("links:"));
+        assert!(result.contains("target: 1"));
+        assert!(result.contains("kind: amends"));
+    }
+
+    #[test]
+    fn test_update_metadata_adds_tags_to_frontmatter() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Tagged ADR
+date: 2026-01-15
+status: proposed
+---
+
+## Context
+
+Context.
+"#;
+        let adr_path = repo.adr_path().join("0002-tagged-adr.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.set_tags(vec!["security".into(), "api".into()]);
+        repo.update_metadata(&adr).unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+        assert!(result.contains("tags:"));
+        assert!(result.contains("  - security"));
+        assert!(result.contains("  - api"));
+        // Body preserved
+        assert!(result.contains("## Context\n\nContext."));
     }
 }

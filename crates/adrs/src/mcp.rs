@@ -798,7 +798,7 @@ impl AdrService {
             }
         }
 
-        let path = repo.update(&adr).map_err(|e| e.to_string())?;
+        let path = repo.update_metadata(&adr).map_err(|e| e.to_string())?;
 
         #[derive(Serialize)]
         struct TagsResponse {

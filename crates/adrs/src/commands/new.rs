@@ -77,7 +77,8 @@ pub fn new(
     // Set custom status if specified (and not superseding, which sets its own status)
     if supersedes.is_none() && status.is_some() {
         adr.status = initial_status;
-        repo.update(&adr).context("Failed to update ADR status")?;
+        repo.update_metadata(&adr)
+            .context("Failed to update ADR status")?;
     }
 
     // Effective ng mode: CLI flag --ng OR config mode = "ng"
@@ -92,7 +93,8 @@ pub fn new(
         }
         if !tag_list.is_empty() {
             adr.set_tags(tag_list);
-            repo.update(&adr).context("Failed to update ADR tags")?;
+            repo.update_metadata(&adr)
+                .context("Failed to update ADR tags")?;
         }
     }
 
