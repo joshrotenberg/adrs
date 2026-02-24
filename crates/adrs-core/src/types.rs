@@ -11,6 +11,7 @@ pub struct Adr {
     pub number: u32,
 
     /// The title of the decision.
+    #[serde(default)]
     pub title: String,
 
     /// The date the decision was made.

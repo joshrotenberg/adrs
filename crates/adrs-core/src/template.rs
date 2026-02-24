@@ -84,6 +84,19 @@ impl std::str::FromStr for TemplateVariant {
     }
 }
 
+/// Zero-pad a number to a given width (default 4).
+///
+/// Used in templates as `{{ number | pad }}` or `{{ number | pad(width=6) }}`.
+fn pad_filter(
+    value: u32,
+    kwargs: minijinja::value::Kwargs,
+) -> std::result::Result<String, minijinja::Error> {
+    let width: Option<u32> = kwargs.get("width")?;
+    kwargs.assert_all_used()?;
+    let w = width.unwrap_or(4) as usize;
+    Ok(format!("{value:0>w$}"))
+}
+
 /// A template for generating ADRs.
 #[derive(Debug, Clone)]
 pub struct Template {
@@ -170,6 +183,7 @@ impl Template {
         use crate::LinkKind;
 
         let mut env = Environment::new();
+        env.add_filter("pad", pad_filter);
         env.add_template(&self.name, &self.content)
             .map_err(|e| Error::TemplateError(e.to_string()))?;
 
@@ -1495,5 +1509,27 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
 
         // No tags section when tags are empty
         assert!(!output.contains("tags:"));
+    }
+
+    // ========== Pad Filter Tests (#185) ==========
+
+    #[test]
+    fn test_pad_filter_default_width() {
+        let template = Template::from_string("test", "{{ number | pad }}");
+        let adr = Adr::new(1, "Test");
+        let config = Config::default();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
+
+        assert_eq!(output, "0001");
+    }
+
+    #[test]
+    fn test_pad_filter_custom_width() {
+        let template = Template::from_string("test", "{{ number | pad(width=6) }}");
+        let adr = Adr::new(1, "Test");
+        let config = Config::default();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
+
+        assert_eq!(output, "000001");
     }
 }

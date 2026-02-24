@@ -103,7 +103,7 @@ Create custom templates using [Jinja2](https://jinja.palletsprojects.com/) synta
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `number` | ADR number (padded) | `0001` |
+| `number` | ADR number | `1` |
 | `title` | ADR title | `Use PostgreSQL` |
 | `date` | Current date | `2024-01-15` |
 | `status` | Initial status | `Proposed` |
@@ -169,7 +169,7 @@ Use Jinja2 conditionals for optional content:
 ## Related Decisions
 
 {% for link in links %}
-* {{ link.kind }} [ADR {{ link.target }}]({{ link.target | pad(4) }}-*.md)
+* {{ link.kind }} [ADR {{ link.target }}]({{ link.target | pad(width=4) }}-*.md)
 {% endfor %}
 {% endif %}
 ```

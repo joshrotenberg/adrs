@@ -67,6 +67,16 @@ impl Parser {
         // Parse frontmatter
         let mut adr: Adr = serde_yaml::from_str(yaml)?;
 
+        // If title is missing from frontmatter, try to extract from body H1
+        if adr.title.is_empty()
+            && let Some((num, title)) = extract_h1_title(body)
+        {
+            adr.title = title;
+            if adr.number == 0 {
+                adr.number = num;
+            }
+        }
+
         // Parse body sections
         let sections = self.parse_sections(body);
         if let Some(context) = sections.get("context") {
@@ -90,14 +100,9 @@ impl Parser {
         let sections = self.extract_sections_raw(content);
 
         // Parse H1 title
-        if let Some(title_line) = content.lines().find(|l| l.starts_with("# ")) {
-            let title_str = title_line.trim_start_matches("# ").trim();
-            if let Some((num, title)) = parse_numbered_title(title_str) {
-                adr.number = num;
-                adr.title = title;
-            } else {
-                adr.title = title_str.to_string();
-            }
+        if let Some((num, title)) = extract_h1_title(content) {
+            adr.number = num;
+            adr.title = title;
         }
 
         // Apply sections
@@ -249,6 +254,23 @@ impl Parser {
         }
 
         sections
+    }
+}
+
+/// Extract a title from the first H1 heading in markdown content.
+///
+/// Returns `(number, title)` where number is extracted from patterns like `# 1. Title`,
+/// or `0` if the H1 has no number prefix.
+fn extract_h1_title(content: &str) -> Option<(u32, String)> {
+    let title_line = content.lines().find(|l| l.starts_with("# "))?;
+    let title_str = title_line.trim_start_matches("# ").trim();
+    if title_str.is_empty() {
+        return None;
+    }
+    if let Some((num, title)) = parse_numbered_title(title_str) {
+        Some((num, title))
+    } else {
+        Some((0, title_str.to_string()))
     }
 }
 
@@ -1312,5 +1334,82 @@ Context.
         assert_eq!(adr.links.len(), 2);
         assert_eq!(adr.links[0].kind, LinkKind::Supersedes);
         assert_eq!(adr.links[1].kind, LinkKind::Amends);
+    }
+
+    // ========== Frontmatter Title Fallback (#186) ==========
+
+    #[test]
+    fn test_parse_frontmatter_title_from_body_h1() {
+        let content = r#"---
+number: 2
+date: 2024-01-15
+status: proposed
+---
+
+# My Decision Title
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 2);
+        assert_eq!(adr.title, "My Decision Title");
+        assert_eq!(adr.status, AdrStatus::Proposed);
+    }
+
+    #[test]
+    fn test_parse_frontmatter_title_from_body_h1_numbered() {
+        let content = r#"---
+number: 2
+date: 2024-01-15
+status: proposed
+---
+
+# 2. My Numbered Title
+
+## Context
+
+Context.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.number, 2);
+        assert_eq!(adr.title, "My Numbered Title");
+    }
+
+    #[test]
+    fn test_parse_frontmatter_title_prefers_frontmatter() {
+        let content = r#"---
+number: 2
+title: Frontmatter Title
+date: 2024-01-15
+status: proposed
+---
+
+# Body Title
+
+## Context
+
+Context.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.title, "Frontmatter Title");
     }
 }
