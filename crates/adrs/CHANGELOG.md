@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-02-24
+
+### Bug Fixes
+
+- Preserve file content when updating ADR metadata ([#187](https://github.com/joshrotenberg/adrs/pull/187))
+
+
 ## [0.7.0] - 2026-02-20
 
 ### Bug Fixes
