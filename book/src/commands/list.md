@@ -16,6 +16,7 @@ adrs list [OPTIONS]
 | `-s, --status <STATUS>` | Filter by status (e.g., proposed, accepted, deprecated, superseded) |
 | `--since <DATE>` | Show ADRs from this date onwards (YYYY-MM-DD) |
 | `--until <DATE>` | Show ADRs up to this date (YYYY-MM-DD) |
+| `-t, --tag <TAG>` | Filter by tag (NextGen mode) |
 | `--decider <NAME>` | Filter by decision maker (MADR format) |
 | `--ng` | Use NextGen mode |
 | `-C, --cwd <DIR>` | Working directory |

@@ -28,8 +28,9 @@ adrs status <NUMBER> superseded --by <NUMBER>
 - `accepted` - Decision has been accepted
 - `deprecated` - Decision is deprecated but not replaced
 - `superseded` - Decision has been replaced by another ADR
+- `rejected` - Decision was not approved
 
-You can also use custom status values for your workflow (e.g., `draft`, `rejected`, `on-hold`).
+You can also use custom status values for your workflow (e.g., `draft`, `on-hold`).
 
 ## Examples
 

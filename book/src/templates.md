@@ -13,13 +13,14 @@
 
 ### Variants
 
-Each format has three variants:
+Each format has four variants:
 
 | Variant | Description |
 |---------|-------------|
 | `full` | Complete template with all sections and guidance comments |
 | `minimal` | Essential sections only, no guidance |
-| `bare` | Minimal structure with placeholders |
+| `bare` | All sections, but empty (no guidance) |
+| `bare-minimal` | Core sections only, empty content |
 
 ### Using Built-in Templates
 
@@ -107,7 +108,15 @@ Create custom templates using [Jinja2](https://jinja.palletsprojects.com/) synta
 | `title` | ADR title | `Use PostgreSQL` |
 | `date` | Current date | `2024-01-15` |
 | `status` | Initial status | `Proposed` |
+| `context` | Context section content | |
+| `decision` | Decision section content | |
+| `consequences` | Consequences section content | |
 | `links` | Array of links | See below |
+| `tags` | Array of tags | |
+| `is_ng` | Whether NextGen mode is active | `true` |
+| `decision_makers` | MADR decision makers | |
+| `consulted` | MADR consulted list | |
+| `informed` | MADR informed list | |
 
 ### Link Variables
 
@@ -147,13 +156,7 @@ Each link in the `links` array has:
 <!-- Any relevant links or documents -->
 ```
 
-2. Use it when creating ADRs:
-
-```sh
-adrs new --template path/to/template.md "My Decision"
-```
-
-Or configure it in `adrs.toml`:
+2. Configure it in `adrs.toml`:
 
 ```toml
 [templates]
@@ -182,7 +185,7 @@ Available filters:
 |--------|-------------|---------|
 | `lower` | Lowercase | `{{ status \| lower }}` |
 | `upper` | Uppercase | `{{ title \| upper }}` |
-| `pad(n)` | Zero-pad number | `{{ number \| pad(4) }}` |
+| `pad` | Zero-pad number (default width 4) | `{{ number \| pad }}` or `{{ number \| pad(width=6) }}` |
 
 ## Default Configuration
 

@@ -29,10 +29,10 @@ Output:
 Available templates:
 
 nygard (default)
-  Variants: full (default), minimal, bare
+  Variants: full (default), minimal, bare, bare-minimal
 
 madr
-  Variants: full (default), minimal, bare
+  Variants: full (default), minimal, bare, bare-minimal
 ```
 
 ## show
@@ -90,7 +90,8 @@ Markdown Any Decision Record format with additional sections:
 |---------|-------------|
 | `full` | Complete template with all sections and guidance |
 | `minimal` | Essential sections only |
-| `bare` | Minimal structure, just headings |
+| `bare` | All sections, but empty (no guidance) |
+| `bare-minimal` | Core sections only, empty content |
 
 ## See Also
 

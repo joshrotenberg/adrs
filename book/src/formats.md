@@ -161,13 +161,14 @@ format = "madr"
 
 ## Template Variants
 
-Both formats support three variants:
+Both formats support four variants:
 
 | Variant | Description |
 |---------|-------------|
 | `full` | All sections with guidance comments |
 | `minimal` | Essential sections only |
-| `bare` | Bare structure, no comments |
+| `bare` | All sections, but empty (no guidance) |
+| `bare-minimal` | Core sections only, empty content |
 
 ```sh
 adrs new --format madr --variant minimal "Use PostgreSQL"

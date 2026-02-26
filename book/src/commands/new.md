@@ -21,8 +21,10 @@ adrs new [OPTIONS] <TITLE>
 | `-f, --format <FORMAT>` | Template format: `nygard` or `madr` (default: `nygard`) |
 | `-v, --variant <VARIANT>` | Template variant: `full`, `minimal`, or `bare` (default: `full`) |
 | `--status <STATUS>` | Initial status (default: `Proposed`) |
-| `-s, --supersedes <N>` | ADR number(s) this supersedes |
+| `-s, --supersedes <N>` | ADR number this supersedes |
 | `-l, --link <LINK>` | Link to another ADR |
+| `-t, --tags <TAGS>` | Tags for categorization (comma-separated, requires --ng) |
+| `--no-edit` | Create ADR without opening editor (for scripting/CI) |
 | `--ng` | Use NextGen mode (YAML frontmatter) |
 | `-C, --cwd <DIR>` | Working directory |
 | `-h, --help` | Print help |
@@ -69,12 +71,6 @@ This creates a new ADR and:
 - Adds a "Supersedes" link in the new ADR
 - Adds a "Superseded by" link in ADR #2
 - Changes ADR #2's status to "Superseded"
-
-### Superseding Multiple ADRs
-
-```sh
-adrs new --supersedes 2 --supersedes 3 "Consolidated database decision"
-```
 
 ### Linking to Another ADR
 
