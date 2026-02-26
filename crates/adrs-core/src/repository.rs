@@ -482,6 +482,7 @@ impl Repository {
             yaml_block
         };
 
+        let yaml_block = yaml_block.trim_end_matches('\n');
         Ok(format!("---\n{}{}", yaml_block, after_yaml))
     }
 
@@ -1706,6 +1707,38 @@ Decision.
         assert!(result.contains("links:"));
         assert!(result.contains("target: 1"));
         assert!(result.contains("kind: amends"));
+        // No extra blank line before closing ---
+        assert!(
+            !result.contains("\n\n---"),
+            "Should not have extra blank line before closing ---: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_set_status_no_extra_newline_before_separator() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = "---\nnumber: 2\ntitle: Test\ndate: 2026-01-15\nstatus: proposed\n---\n\n## Context\n\nContext.\n";
+        let adr_path = repo.adr_path().join("0002-test.md");
+        fs::write(&adr_path, content).unwrap();
+
+        repo.set_status(2, AdrStatus::Accepted, None).unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+        assert!(result.contains("status: accepted"));
+        // Frontmatter should close cleanly without extra blank line (#192)
+        assert!(
+            result.contains("\n---\n"),
+            "Should have clean closing separator: {:?}",
+            result
+        );
+        assert!(
+            !result.contains("\n\n---"),
+            "Should not have extra blank line before closing ---: {:?}",
+            result
+        );
     }
 
     #[test]
