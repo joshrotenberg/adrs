@@ -320,11 +320,12 @@ adrs new --format nygard "Use PostgreSQL"
 format = "madr"
 </code></pre>
 <h2 id="template-variants"><a class="header" href="#template-variants">Template Variants</a></h2>
-<p>Both formats support three variants:</p>
+<p>Both formats support four variants:</p>
 <div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>full</code></td><td>All sections with guidance comments</td></tr>
 <tr><td><code>minimal</code></td><td>Essential sections only</td></tr>
-<tr><td><code>bare</code></td><td>Bare structure, no comments</td></tr>
+<tr><td><code>bare</code></td><td>All sections, but empty (no guidance)</td></tr>
+<tr><td><code>bare-minimal</code></td><td>Core sections only, empty content</td></tr>
 </tbody></table>
 </div>
 <pre><code class="language-sh">adrs new --format madr --variant minimal "Use PostgreSQL"

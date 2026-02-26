@@ -196,8 +196,10 @@
 <tr><td><code>-f, --format &lt;FORMAT&gt;</code></td><td>Template format: <code>nygard</code> or <code>madr</code> (default: <code>nygard</code>)</td></tr>
 <tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: <code>full</code>, <code>minimal</code>, or <code>bare</code> (default: <code>full</code>)</td></tr>
 <tr><td><code>--status &lt;STATUS&gt;</code></td><td>Initial status (default: <code>Proposed</code>)</td></tr>
-<tr><td><code>-s, --supersedes &lt;N&gt;</code></td><td>ADR number(s) this supersedes</td></tr>
+<tr><td><code>-s, --supersedes &lt;N&gt;</code></td><td>ADR number this supersedes</td></tr>
 <tr><td><code>-l, --link &lt;LINK&gt;</code></td><td>Link to another ADR</td></tr>
+<tr><td><code>-t, --tags &lt;TAGS&gt;</code></td><td>Tags for categorization (comma-separated, requires --ng)</td></tr>
+<tr><td><code>--no-edit</code></td><td>Create ADR without opening editor (for scripting/CI)</td></tr>
 <tr><td><code>--ng</code></td><td>Use NextGen mode (YAML frontmatter)</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
@@ -228,9 +230,6 @@
 <li>Adds a "Superseded by" link in ADR #2</li>
 <li>Changes ADR #2's status to "Superseded"</li>
 </ul>
-<h3 id="superseding-multiple-adrs"><a class="header" href="#superseding-multiple-adrs">Superseding Multiple ADRs</a></h3>
-<pre><code class="language-sh">adrs new --supersedes 2 --supersedes 3 "Consolidated database decision"
-</code></pre>
 <h3 id="linking-to-another-adr"><a class="header" href="#linking-to-another-adr">Linking to Another ADR</a></h3>
 <pre><code class="language-sh">adrs new --link "2:Amends:Amended by" "Clarify database choice"
 </code></pre>

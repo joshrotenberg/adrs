@@ -184,12 +184,7 @@
                         <h1 id="mcp-server"><a class="header" href="#mcp-server">MCP Server</a></h1>
 <p><code>adrs</code> includes an MCP (Model Context Protocol) server for AI agent integration. This allows AI assistants like Claude to read, search, create, and manage ADRs directly.</p>
 <h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
-<p>The MCP server is an optional feature. Install with:</p>
-<pre><code class="language-sh">cargo install adrs --features mcp
-</code></pre>
-<p>Or build from source:</p>
-<pre><code class="language-sh">cargo build --release --features mcp
-</code></pre>
+<p>The MCP server is included by default since v0.6.1. A plain <code>cargo install adrs</code> includes it.</p>
 <p>For HTTP transport support (independent server mode):</p>
 <pre><code class="language-sh">cargo install adrs --features mcp-http
 </code></pre>

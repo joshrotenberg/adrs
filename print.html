@@ -528,11 +528,12 @@ adrs new --format nygard "Use PostgreSQL"
 format = "madr"
 </code></pre>
 <h2 id="template-variants"><a class="header" href="#template-variants">Template Variants</a></h2>
-<p>Both formats support three variants:</p>
+<p>Both formats support four variants:</p>
 <div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>full</code></td><td>All sections with guidance comments</td></tr>
 <tr><td><code>minimal</code></td><td>Essential sections only</td></tr>
-<tr><td><code>bare</code></td><td>Bare structure, no comments</td></tr>
+<tr><td><code>bare</code></td><td>All sections, but empty (no guidance)</td></tr>
+<tr><td><code>bare-minimal</code></td><td>Core sections only, empty content</td></tr>
 </tbody></table>
 </div>
 <pre><code class="language-sh">adrs new --format madr --variant minimal "Use PostgreSQL"
@@ -656,11 +657,12 @@ mode = "nextgen"
 </tbody></table>
 </div>
 <h3 id="variants"><a class="header" href="#variants">Variants</a></h3>
-<p>Each format has three variants:</p>
+<p>Each format has four variants:</p>
 <div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>full</code></td><td>Complete template with all sections and guidance comments</td></tr>
 <tr><td><code>minimal</code></td><td>Essential sections only, no guidance</td></tr>
-<tr><td><code>bare</code></td><td>Minimal structure with placeholders</td></tr>
+<tr><td><code>bare</code></td><td>All sections, but empty (no guidance)</td></tr>
+<tr><td><code>bare-minimal</code></td><td>Core sections only, empty content</td></tr>
 </tbody></table>
 </div>
 <h3 id="using-built-in-templates"><a class="header" href="#using-built-in-templates">Using Built-in Templates</a></h3>
@@ -735,7 +737,15 @@ Chosen option: "", because ...
 <tr><td><code>title</code></td><td>ADR title</td><td><code>Use PostgreSQL</code></td></tr>
 <tr><td><code>date</code></td><td>Current date</td><td><code>2024-01-15</code></td></tr>
 <tr><td><code>status</code></td><td>Initial status</td><td><code>Proposed</code></td></tr>
+<tr><td><code>context</code></td><td>Context section content</td><td></td></tr>
+<tr><td><code>decision</code></td><td>Decision section content</td><td></td></tr>
+<tr><td><code>consequences</code></td><td>Consequences section content</td><td></td></tr>
 <tr><td><code>links</code></td><td>Array of links</td><td>See below</td></tr>
+<tr><td><code>tags</code></td><td>Array of tags</td><td></td></tr>
+<tr><td><code>is_ng</code></td><td>Whether NextGen mode is active</td><td><code>true</code></td></tr>
+<tr><td><code>decision_makers</code></td><td>MADR decision makers</td><td></td></tr>
+<tr><td><code>consulted</code></td><td>MADR consulted list</td><td></td></tr>
+<tr><td><code>informed</code></td><td>MADR informed list</td><td></td></tr>
 </tbody></table>
 </div>
 <h3 id="link-variables"><a class="header" href="#link-variables">Link Variables</a></h3>
@@ -773,11 +783,8 @@ Chosen option: "", because ...
 &lt;!-- Any relevant links or documents --&gt;
 </code></pre>
 <ol start="2">
-<li>Use it when creating ADRs:</li>
+<li>Configure it in <code>adrs.toml</code>:</li>
 </ol>
-<pre><code class="language-sh">adrs new --template path/to/template.md "My Decision"
-</code></pre>
-<p>Or configure it in <code>adrs.toml</code>:</p>
 <pre><code class="language-toml">[templates]
 custom = "templates/my-template.md"
 </code></pre>
@@ -796,7 +803,7 @@ custom = "templates/my-template.md"
 <div class="table-wrapper"><table><thead><tr><th>Filter</th><th>Description</th><th>Example</th></tr></thead><tbody>
 <tr><td><code>lower</code></td><td>Lowercase</td><td><code>{{ status | lower }}</code></td></tr>
 <tr><td><code>upper</code></td><td>Uppercase</td><td><code>{{ title | upper }}</code></td></tr>
-<tr><td><code>pad(n)</code></td><td>Zero-pad number</td><td><code>{{ number | pad(4) }}</code></td></tr>
+<tr><td><code>pad</code></td><td>Zero-pad number (default width 4)</td><td><code>{{ number | pad }}</code> or <code>{{ number | pad(width=6) }}</code></td></tr>
 </tbody></table>
 </div>
 <h2 id="default-configuration"><a class="header" href="#default-configuration">Default Configuration</a></h2>
@@ -966,8 +973,10 @@ date: 2024-01-15
 <tr><td><code>-f, --format &lt;FORMAT&gt;</code></td><td>Template format: <code>nygard</code> or <code>madr</code> (default: <code>nygard</code>)</td></tr>
 <tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: <code>full</code>, <code>minimal</code>, or <code>bare</code> (default: <code>full</code>)</td></tr>
 <tr><td><code>--status &lt;STATUS&gt;</code></td><td>Initial status (default: <code>Proposed</code>)</td></tr>
-<tr><td><code>-s, --supersedes &lt;N&gt;</code></td><td>ADR number(s) this supersedes</td></tr>
+<tr><td><code>-s, --supersedes &lt;N&gt;</code></td><td>ADR number this supersedes</td></tr>
 <tr><td><code>-l, --link &lt;LINK&gt;</code></td><td>Link to another ADR</td></tr>
+<tr><td><code>-t, --tags &lt;TAGS&gt;</code></td><td>Tags for categorization (comma-separated, requires --ng)</td></tr>
+<tr><td><code>--no-edit</code></td><td>Create ADR without opening editor (for scripting/CI)</td></tr>
 <tr><td><code>--ng</code></td><td>Use NextGen mode (YAML frontmatter)</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
@@ -998,9 +1007,6 @@ date: 2024-01-15
 <li>Adds a "Superseded by" link in ADR #2</li>
 <li>Changes ADR #2's status to "Superseded"</li>
 </ul>
-<h3 id="superseding-multiple-adrs"><a class="header" href="#superseding-multiple-adrs">Superseding Multiple ADRs</a></h3>
-<pre><code class="language-sh">adrs new --supersedes 2 --supersedes 3 "Consolidated database decision"
-</code></pre>
 <h3 id="linking-to-another-adr"><a class="header" href="#linking-to-another-adr">Linking to Another ADR</a></h3>
 <pre><code class="language-sh">adrs new --link "2:Amends:Amended by" "Clarify database choice"
 </code></pre>
@@ -1121,6 +1127,7 @@ export EDITOR="vim"          # Vim
 <tr><td><code>-s, --status &lt;STATUS&gt;</code></td><td>Filter by status (e.g., proposed, accepted, deprecated, superseded)</td></tr>
 <tr><td><code>--since &lt;DATE&gt;</code></td><td>Show ADRs from this date onwards (YYYY-MM-DD)</td></tr>
 <tr><td><code>--until &lt;DATE&gt;</code></td><td>Show ADRs up to this date (YYYY-MM-DD)</td></tr>
+<tr><td><code>-t, --tag &lt;TAG&gt;</code></td><td>Filter by tag (NextGen mode)</td></tr>
 <tr><td><code>--decider &lt;NAME&gt;</code></td><td>Filter by decision maker (MADR format)</td></tr>
 <tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
@@ -1259,8 +1266,9 @@ adrs status &lt;NUMBER&gt; superseded --by &lt;NUMBER&gt;
 <li><code>accepted</code> - Decision has been accepted</li>
 <li><code>deprecated</code> - Decision is deprecated but not replaced</li>
 <li><code>superseded</code> - Decision has been replaced by another ADR</li>
+<li><code>rejected</code> - Decision was not approved</li>
 </ul>
-<p>You can also use custom status values for your workflow (e.g., <code>draft</code>, <code>rejected</code>, <code>on-hold</code>).</p>
+<p>You can also use custom status values for your workflow (e.g., <code>draft</code>, <code>on-hold</code>).</p>
 <h2 id="examples-5"><a class="header" href="#examples-5">Examples</a></h2>
 <h3 id="accept-a-proposed-adr"><a class="header" href="#accept-a-proposed-adr">Accept a proposed ADR</a></h3>
 <pre><code class="language-bash">adrs status 5 accepted
@@ -1289,14 +1297,14 @@ adrs status &lt;NUMBER&gt; superseded --by &lt;NUMBER&gt;
 <div style="break-before: page; page-break-before: always;"></div><h1 id="link"><a class="header" href="#link">link</a></h1>
 <p>Link two Architecture Decision Records together.</p>
 <h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
-<pre><code>adrs link [OPTIONS] &lt;SOURCE&gt; &lt;LINK&gt; &lt;TARGET&gt; &lt;REVERSE_LINK&gt;
+<pre><code>adrs link [OPTIONS] &lt;SOURCE&gt; &lt;LINK&gt; &lt;TARGET&gt; [REVERSE_LINK]
 </code></pre>
 <h2 id="arguments-5"><a class="header" href="#arguments-5">Arguments</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Argument</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>&lt;SOURCE&gt;</code></td><td>Source ADR number</td></tr>
 <tr><td><code>&lt;LINK&gt;</code></td><td>Link description from source to target</td></tr>
 <tr><td><code>&lt;TARGET&gt;</code></td><td>Target ADR number</td></tr>
-<tr><td><code>&lt;REVERSE_LINK&gt;</code></td><td>Reverse link description from target to source</td></tr>
+<tr><td><code>[REVERSE_LINK]</code></td><td>Reverse link description (optional, auto-derived if omitted)</td></tr>
 </tbody></table>
 </div>
 <h2 id="options-6"><a class="header" href="#options-6">Options</a></h2>
@@ -1390,7 +1398,7 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
   "generated_at": "2024-01-15T10:30:00Z",
   "tool": {
     "name": "adrs",
-    "version": "0.5.0"
+    "version": "0.7.1"
   },
   "repository": {
     "adr_directory": "doc/adr"
@@ -1701,10 +1709,10 @@ mdbook serve
 <pre><code>Available templates:
 
 nygard (default)
-  Variants: full (default), minimal, bare
+  Variants: full (default), minimal, bare, bare-minimal
 
 madr
-  Variants: full (default), minimal, bare
+  Variants: full (default), minimal, bare, bare-minimal
 </code></pre>
 <h2 id="show"><a class="header" href="#show">show</a></h2>
 <p>Display the content of a specific template.</p>
@@ -1750,7 +1758,8 @@ adrs template show nygard --variant bare
 <div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>full</code></td><td>Complete template with all sections and guidance</td></tr>
 <tr><td><code>minimal</code></td><td>Essential sections only</td></tr>
-<tr><td><code>bare</code></td><td>Minimal structure, just headings</td></tr>
+<tr><td><code>bare</code></td><td>All sections, but empty (no guidance)</td></tr>
+<tr><td><code>bare-minimal</code></td><td>Core sections only, empty content</td></tr>
 </tbody></table>
 </div>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
@@ -1987,7 +1996,7 @@ CREATING ADRS
   adrs new "Title"             Create new ADR
   adrs new --format madr       Use MADR 4.0.0 format
   adrs new --variant minimal   Use minimal template
-  adrs new -t tag1,tag2        Add tags (NextGen mode)
+  adrs --ng new -t tag1,tag2 "Title"  Add tags (NextGen mode)
   adrs new --no-edit           Create without opening editor
 
 SUPERSEDING AND LINKING
@@ -1997,7 +2006,7 @@ SUPERSEDING AND LINKING
 MANAGING STATUS
   adrs status 1 accepted       Accept ADR #1
   adrs status 2 deprecated     Deprecate ADR #2
-  adrs status 3 superseded 4   Mark #3 superseded by #4
+  adrs status 3 superseded --by 4  Mark #3 superseded by #4
 
 VIEWING AND SEARCHING
   adrs list                    List all ADRs
@@ -2012,7 +2021,7 @@ DOCUMENTATION
 
 IMPORT/EXPORT
   adrs export json             Export to JSON-ADR
-  adrs import file.json        Import from JSON-ADR
+  adrs import json file.json   Import from JSON-ADR
 
 CONFIGURATION
   adrs config                  Show current config
@@ -2024,17 +2033,12 @@ More: adrs --help, adrs &lt;command&gt; --help
 <ul>
 <li>Run <code>adrs cheatsheet</code> whenever you need a quick reminder</li>
 <li>Use <code>adrs &lt;command&gt; --help</code> for detailed command documentation</li>
-<li>Full documentation at <a href="https://joshrotenberg.github.io/adrs-book/">joshrotenberg.github.io/adrs-book</a></li>
+<li>Full documentation at <a href="https://joshrotenberg.com/adrs/">joshrotenberg.com/adrs</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="mcp-server"><a class="header" href="#mcp-server">MCP Server</a></h1>
 <p><code>adrs</code> includes an MCP (Model Context Protocol) server for AI agent integration. This allows AI assistants like Claude to read, search, create, and manage ADRs directly.</p>
 <h2 id="installation-3"><a class="header" href="#installation-3">Installation</a></h2>
-<p>The MCP server is an optional feature. Install with:</p>
-<pre><code class="language-sh">cargo install adrs --features mcp
-</code></pre>
-<p>Or build from source:</p>
-<pre><code class="language-sh">cargo build --release --features mcp
-</code></pre>
+<p>The MCP server is included by default since v0.6.1. A plain <code>cargo install adrs</code> includes it.</p>
 <p>For HTTP transport support (independent server mode):</p>
 <pre><code class="language-sh">cargo install adrs --features mcp-http
 </code></pre>
@@ -2229,7 +2233,7 @@ More: adrs --help, adrs &lt;command&gt; --help
 <h2 id="installation-4"><a class="header" href="#installation-4">Installation</a></h2>
 <p>Add to your <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-adrs-core = "0.4"
+adrs-core = "0.7"
 </code></pre>
 <h2 id="basic-usage-3"><a class="header" href="#basic-usage-3">Basic Usage</a></h2>
 <h3 id="opening-a-repository"><a class="header" href="#opening-a-repository">Opening a Repository</a></h3>
@@ -2523,7 +2527,7 @@ cargo test --all-features
 </code></pre>
 <h2 id="guidelines"><a class="header" href="#guidelines">Guidelines</a></h2>
 <h3 id="compatibility-1"><a class="header" href="#compatibility-1">Compatibility</a></h3>
-<p>The v2 rewrite maintains compatibility with <a href="https://github.com/npryce/adr-tools">adr-tools</a> repositories. Changes should not break existing ADR directories.</p>
+<p><code>adrs</code> maintains compatibility with <a href="https://github.com/npryce/adr-tools">adr-tools</a> repositories. Changes should not break existing ADR directories.</p>
 <p>New features that extend beyond adr-tools compatibility should:</p>
 <ul>
 <li>Work in both Compatible and NextGen modes where possible</li>

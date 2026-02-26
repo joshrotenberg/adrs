@@ -191,11 +191,12 @@
 </tbody></table>
 </div>
 <h3 id="variants"><a class="header" href="#variants">Variants</a></h3>
-<p>Each format has three variants:</p>
+<p>Each format has four variants:</p>
 <div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>full</code></td><td>Complete template with all sections and guidance comments</td></tr>
 <tr><td><code>minimal</code></td><td>Essential sections only, no guidance</td></tr>
-<tr><td><code>bare</code></td><td>Minimal structure with placeholders</td></tr>
+<tr><td><code>bare</code></td><td>All sections, but empty (no guidance)</td></tr>
+<tr><td><code>bare-minimal</code></td><td>Core sections only, empty content</td></tr>
 </tbody></table>
 </div>
 <h3 id="using-built-in-templates"><a class="header" href="#using-built-in-templates">Using Built-in Templates</a></h3>
@@ -270,7 +271,15 @@ Chosen option: "", because ...
 <tr><td><code>title</code></td><td>ADR title</td><td><code>Use PostgreSQL</code></td></tr>
 <tr><td><code>date</code></td><td>Current date</td><td><code>2024-01-15</code></td></tr>
 <tr><td><code>status</code></td><td>Initial status</td><td><code>Proposed</code></td></tr>
+<tr><td><code>context</code></td><td>Context section content</td><td></td></tr>
+<tr><td><code>decision</code></td><td>Decision section content</td><td></td></tr>
+<tr><td><code>consequences</code></td><td>Consequences section content</td><td></td></tr>
 <tr><td><code>links</code></td><td>Array of links</td><td>See below</td></tr>
+<tr><td><code>tags</code></td><td>Array of tags</td><td></td></tr>
+<tr><td><code>is_ng</code></td><td>Whether NextGen mode is active</td><td><code>true</code></td></tr>
+<tr><td><code>decision_makers</code></td><td>MADR decision makers</td><td></td></tr>
+<tr><td><code>consulted</code></td><td>MADR consulted list</td><td></td></tr>
+<tr><td><code>informed</code></td><td>MADR informed list</td><td></td></tr>
 </tbody></table>
 </div>
 <h3 id="link-variables"><a class="header" href="#link-variables">Link Variables</a></h3>
@@ -308,11 +317,8 @@ Chosen option: "", because ...
 &lt;!-- Any relevant links or documents --&gt;
 </code></pre>
 <ol start="2">
-<li>Use it when creating ADRs:</li>
+<li>Configure it in <code>adrs.toml</code>:</li>
 </ol>
-<pre><code class="language-sh">adrs new --template path/to/template.md "My Decision"
-</code></pre>
-<p>Or configure it in <code>adrs.toml</code>:</p>
 <pre><code class="language-toml">[templates]
 custom = "templates/my-template.md"
 </code></pre>
@@ -331,7 +337,7 @@ custom = "templates/my-template.md"
 <div class="table-wrapper"><table><thead><tr><th>Filter</th><th>Description</th><th>Example</th></tr></thead><tbody>
 <tr><td><code>lower</code></td><td>Lowercase</td><td><code>{{ status | lower }}</code></td></tr>
 <tr><td><code>upper</code></td><td>Uppercase</td><td><code>{{ title | upper }}</code></td></tr>
-<tr><td><code>pad(n)</code></td><td>Zero-pad number</td><td><code>{{ number | pad(4) }}</code></td></tr>
+<tr><td><code>pad</code></td><td>Zero-pad number (default width 4)</td><td><code>{{ number | pad }}</code> or <code>{{ number | pad(width=6) }}</code></td></tr>
 </tbody></table>
 </div>
 <h2 id="default-configuration"><a class="header" href="#default-configuration">Default Configuration</a></h2>
