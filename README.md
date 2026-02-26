@@ -155,11 +155,7 @@ adrs import decisions.json --renumber
 
 ## MCP Server (AI Integration)
 
-`adrs` includes an MCP (Model Context Protocol) server for AI agent integration. Build with:
-
-```sh
-cargo install adrs --features mcp
-```
+`adrs` includes an MCP (Model Context Protocol) server for AI agent integration (enabled by default).
 
 Add to Claude Desktop config (`claude_desktop_config.json`):
 
@@ -183,7 +179,7 @@ The MCP server provides 15 tools for reading, creating, and managing ADRs.
 
 ```toml
 [dependencies]
-adrs-core = "0.6"
+adrs-core = "0.7"
 ```
 
 ```rust
@@ -199,7 +195,7 @@ See [library documentation](https://docs.rs/adrs-core) for more details.
 
 ## Documentation
 
-Full documentation: [joshrotenberg.github.io/adrs-book](https://joshrotenberg.github.io/adrs-book/)
+Full documentation: [joshrotenberg.com/adrs](https://joshrotenberg.com/adrs/)
 
 ## Contributing
 
