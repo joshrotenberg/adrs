@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2026-02-26
+
+### Bug Fixes
+
+- Trim extra newline before frontmatter closing separator ([#192](https://github.com/joshrotenberg/adrs/pull/192))
+
+
 ## [0.7.1] - 2026-02-24
 
 ### Bug Fixes

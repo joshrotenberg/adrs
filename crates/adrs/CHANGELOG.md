@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2026-02-26
+
+### Documentation
+
+- Fix documentation link and update README
+- Audit and fix book documentation
+
+
 ## [0.7.1] - 2026-02-24
 
 ### Bug Fixes
