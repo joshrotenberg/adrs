@@ -8,7 +8,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-adrs-core = "0.4"
+adrs-core = "0.7"
 ```
 
 ## Basic Usage

@@ -42,7 +42,7 @@ cargo test --all-features
 
 ### Compatibility
 
-The v2 rewrite maintains compatibility with [adr-tools](https://github.com/npryce/adr-tools) repositories. Changes should not break existing ADR directories.
+`adrs` maintains compatibility with [adr-tools](https://github.com/npryce/adr-tools) repositories. Changes should not break existing ADR directories.
 
 New features that extend beyond adr-tools compatibility should:
 - Work in both Compatible and NextGen modes where possible

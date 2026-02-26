@@ -37,7 +37,7 @@ CREATING ADRS
   adrs new "Title"             Create new ADR
   adrs new --format madr       Use MADR 4.0.0 format
   adrs new --variant minimal   Use minimal template
-  adrs new -t tag1,tag2        Add tags (NextGen mode)
+  adrs --ng new -t tag1,tag2 "Title"  Add tags (NextGen mode)
   adrs new --no-edit           Create without opening editor
 
 SUPERSEDING AND LINKING
@@ -47,7 +47,7 @@ SUPERSEDING AND LINKING
 MANAGING STATUS
   adrs status 1 accepted       Accept ADR #1
   adrs status 2 deprecated     Deprecate ADR #2
-  adrs status 3 superseded 4   Mark #3 superseded by #4
+  adrs status 3 superseded --by 4  Mark #3 superseded by #4
 
 VIEWING AND SEARCHING
   adrs list                    List all ADRs
@@ -62,7 +62,7 @@ DOCUMENTATION
 
 IMPORT/EXPORT
   adrs export json             Export to JSON-ADR
-  adrs import file.json        Import from JSON-ADR
+  adrs import json file.json   Import from JSON-ADR
 
 CONFIGURATION
   adrs config                  Show current config
@@ -75,4 +75,4 @@ More: adrs --help, adrs <command> --help
 
 - Run `adrs cheatsheet` whenever you need a quick reminder
 - Use `adrs <command> --help` for detailed command documentation
-- Full documentation at [joshrotenberg.github.io/adrs-book](https://joshrotenberg.github.io/adrs-book/)
+- Full documentation at [joshrotenberg.com/adrs](https://joshrotenberg.com/adrs/)

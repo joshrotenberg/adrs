@@ -5,7 +5,7 @@ Link two Architecture Decision Records together.
 ## Usage
 
 ```
-adrs link [OPTIONS] <SOURCE> <LINK> <TARGET> <REVERSE_LINK>
+adrs link [OPTIONS] <SOURCE> <LINK> <TARGET> [REVERSE_LINK]
 ```
 
 ## Arguments
@@ -15,7 +15,7 @@ adrs link [OPTIONS] <SOURCE> <LINK> <TARGET> <REVERSE_LINK>
 | `<SOURCE>` | Source ADR number |
 | `<LINK>` | Link description from source to target |
 | `<TARGET>` | Target ADR number |
-| `<REVERSE_LINK>` | Reverse link description from target to source |
+| `[REVERSE_LINK]` | Reverse link description (optional, auto-derived if omitted) |
 
 ## Options
 

@@ -6,7 +6,7 @@ title = "adrs documentation"
 
 [output.html]
 default-theme = "navy"
-site-url = "/adrs-book/"
+site-url = "/adrs/"
 git-repository-url = "https://github.com/joshrotenberg/adrs/tree/main/book"
 edit-url-template = "https://github.com/joshrotenberg/adrs/edit/main/book/{path}"
 

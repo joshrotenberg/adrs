@@ -4,17 +4,7 @@
 
 ## Installation
 
-The MCP server is an optional feature. Install with:
-
-```sh
-cargo install adrs --features mcp
-```
-
-Or build from source:
-
-```sh
-cargo build --release --features mcp
-```
+The MCP server is included by default since v0.6.1. A plain `cargo install adrs` includes it.
 
 For HTTP transport support (independent server mode):
 

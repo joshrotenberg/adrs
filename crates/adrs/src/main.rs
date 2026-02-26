@@ -42,7 +42,7 @@ EXAMPLES:
   adrs link 3 Amends 1                          Link two ADRs (auto-derives reverse)
   adrs generate toc > doc/adr/README.md         Generate table of contents
 
-DOCUMENTATION: https://joshrotenberg.github.io/adrs-book/")]
+DOCUMENTATION: https://joshrotenberg.com/adrs/")]
 struct Cli {
     /// Enable NextGen mode with YAML frontmatter for richer metadata
     #[arg(
@@ -842,7 +842,7 @@ CONFIGURATION
   adrs template list                     Show available templates
 
 For detailed help: adrs <command> --help
-Documentation: https://joshrotenberg.github.io/adrs-book/
+Documentation: https://joshrotenberg.com/adrs/
 "#
     );
 }
