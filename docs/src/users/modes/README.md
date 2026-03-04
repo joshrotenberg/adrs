@@ -45,6 +45,6 @@ adrs init --ng
 ## Related
 
 - [Frontmatter](../frontmatter.md) - YAML metadata reference (NextGen)
-- [Templates](../templates/README.md) - Format and variant options
+- [Templates](../../reference/templates/README.md) - Format and variant options
 
-> **Related:** [ADR-0005: Dual Mode Operation](../adrs/0005-dual-mode-compatible-and-nextgen.md)
+> **Related:** [ADR-0005: Dual Mode Operation](../../reference/adrs/0005-dual-mode-compatible-and-nextgen.md)

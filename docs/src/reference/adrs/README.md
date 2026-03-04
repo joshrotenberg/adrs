@@ -45,7 +45,7 @@ Each ADR follows a consistent structure:
 
 ## Related Documentation
 
-- [Modes](../modes/README.md) - Compatible vs NextGen mode (ADR-0005)
+- [Modes](../../users/modes/README.md) - Compatible vs NextGen mode (ADR-0005)
 - [Templates](../templates/README.md) - Template formats and variants (ADR-0007)
-- [Frontmatter](../frontmatter.md) - YAML metadata format (ADR-0006)
-- [Library Usage](../library.md) - Using adrs-core programmatically (ADR-0004)
+- [Frontmatter](../../users/frontmatter.md) - YAML metadata format (ADR-0006)
+- [Library Usage](../../developers/lib/README.md) - Using adrs-core programmatically (ADR-0004)

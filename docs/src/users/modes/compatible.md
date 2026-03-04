@@ -130,6 +130,6 @@ adrs init
 
 - [NextGen Mode](./nextgen.md) - Enhanced features mode
 - [Modes Overview](./README.md) - Mode comparison
-- [Nygard Format](../templates/nygard.md) - Default template format
+- [Nygard Format](../../reference/templates/nygard.md) - Default template format
 
-> **Related:** [ADR-0005: Dual Mode Operation](../adrs/0005-dual-mode-compatible-and-nextgen.md)
+> **Related:** [ADR-0005: Dual Mode Operation](../../reference/adrs/0005-dual-mode-compatible-and-nextgen.md)

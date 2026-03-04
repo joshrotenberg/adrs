@@ -190,6 +190,6 @@ mode = "nextgen"
 - [Compatible Mode](./compatible.md) - adr-tools compatible mode
 - [Modes Overview](./README.md) - Mode comparison
 - [Frontmatter](../frontmatter.md) - YAML field reference
-- [MADR Format](../templates/madr.md) - Recommended template for NextGen
+- [MADR Format](../../reference/templates/madr.md) - Recommended template for NextGen
 
-> **Related:** [ADR-0005: Dual Mode Operation](../adrs/0005-dual-mode-compatible-and-nextgen.md)
+> **Related:** [ADR-0005: Dual Mode Operation](../../reference/adrs/0005-dual-mode-compatible-and-nextgen.md)

@@ -80,11 +80,11 @@ adrs link 2 "Amends" 1 "Amended by"
 1. Install `adrs`
 2. Run commands as usual - `adrs` reads the existing `.adr-dir` file and ADR documents
 
-For new features like MADR format or YAML frontmatter, see the [Configuration](./configuration.md) chapter.
+For new features like MADR format or YAML frontmatter, see the [Configuration](./users/configuration.md) chapter.
 
 ## Next Steps
 
-- [Configuration](./configuration.md) - Learn about configuration options
-- [Commands](./commands/README.md) - Detailed command reference
-- [Templates](./templates/README.md) - Template formats and customization
-- [Modes](./modes/README.md) - Compatible vs NextGen mode
+- [Configuration](./users/configuration.md) - Learn about configuration options
+- [Commands](./users/commands/README.md) - Detailed command reference
+- [Templates](./reference/templates/README.md) - Template formats and customization
+- [Modes](./users/modes/README.md) - Compatible vs NextGen mode

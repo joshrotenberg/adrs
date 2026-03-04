@@ -134,4 +134,4 @@ adrs new --format nygard --variant minimal "My Decision"
 
 - [MADR Format](./madr.md) - Alternative format with more structure
 - [Variants](./variants.md) - Full, minimal, bare variants
-- [Compatible Mode](../modes/compatible.md) - Mode that uses Nygard by default
+- [Compatible Mode](../../users/modes/compatible.md) - Mode that uses Nygard by default

@@ -16,7 +16,7 @@ The original shell-based ADR tooling created by Nat Pryce. `adrs` is designed as
 
 ### Compatible Mode
 
-The default operating mode of `adrs` that maintains full compatibility with adr-tools. Uses `.adr-dir` configuration and plain markdown without frontmatter. See [Compatible Mode](./modes/compatible.md).
+The default operating mode of `adrs` that maintains full compatibility with adr-tools. Uses `.adr-dir` configuration and plain markdown without frontmatter. See [Compatible Mode](../users/modes/compatible.md).
 
 ## F
 
@@ -31,7 +31,7 @@ See [Templates](./templates/README.md).
 
 ### Frontmatter
 
-YAML metadata at the beginning of a markdown file, delimited by `---` markers. Used in NextGen mode to store structured data like status, date, and links. See [Frontmatter](./frontmatter.md).
+YAML metadata at the beginning of a markdown file, delimited by `---` markers. Used in NextGen mode to store structured data like status, date, and links. See [Frontmatter](../users/frontmatter.md).
 
 ## L
 
@@ -53,7 +53,7 @@ A structured ADR format with YAML frontmatter and additional sections for decisi
 
 ### NextGen Mode
 
-An enhanced operating mode that enables YAML frontmatter, structured metadata, and full MADR support. Enabled with `--ng` flag or `adrs.toml` configuration. See [NextGen Mode](./modes/nextgen.md).
+An enhanced operating mode that enables YAML frontmatter, structured metadata, and full MADR support. Enabled with `--ng` flag or `adrs.toml` configuration. See [NextGen Mode](../users/modes/nextgen.md).
 
 ### Nygard Format
 
@@ -99,6 +99,6 @@ See [Variants](./templates/variants.md).
 
 ## Related Documentation
 
-- [Installation](./installation.md)
-- [Configuration](./configuration.md)
-- [Commands](./commands/README.md)
+- [Installation](../users/installation.md)
+- [Configuration](../users/configuration.md)
+- [Commands](../users/commands/README.md)

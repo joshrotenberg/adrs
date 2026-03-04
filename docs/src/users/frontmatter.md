@@ -195,7 +195,7 @@ decision-makers:
 ## Related
 
 - [NextGen Mode](./modes/nextgen.md) - Mode that uses frontmatter
-- [MADR Format](./templates/madr.md) - Template format with full frontmatter
-- [Templates](./templates/README.md) - Template variable reference
+- [MADR Format](../reference/templates/madr.md) - Template format with full frontmatter
+- [Templates](../reference/templates/README.md) - Template variable reference
 
-> **Related:** [ADR-0006: YAML Frontmatter for Metadata](./adrs/0006-yaml-frontmatter-for-metadata.md)
+> **Related:** [ADR-0006: YAML Frontmatter for Metadata](../reference/adrs/0006-yaml-frontmatter-for-metadata.md)

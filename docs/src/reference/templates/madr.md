@@ -79,7 +79,7 @@ MADR uses YAML frontmatter for structured metadata:
 | `consulted` | No | List of people whose opinions were sought |
 | `informed` | No | List of people who were informed |
 
-See [Frontmatter](../frontmatter.md) for full field reference.
+See [Frontmatter](../../users/frontmatter.md) for full field reference.
 
 ## Sections
 
@@ -200,7 +200,7 @@ format = "madr"
 
 - [Nygard Format](./nygard.md) - Simpler alternative format
 - [Variants](./variants.md) - Full, minimal, bare variants
-- [Frontmatter](../frontmatter.md) - YAML frontmatter reference
-- [NextGen Mode](../modes/nextgen.md) - Mode that enables MADR features
+- [Frontmatter](../../users/frontmatter.md) - YAML frontmatter reference
+- [NextGen Mode](../../users/modes/nextgen.md) - Mode that enables MADR features
 
 > **Related:** [ADR-0006: YAML Frontmatter for Metadata](../adrs/0006-yaml-frontmatter-for-metadata.md)

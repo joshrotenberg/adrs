@@ -84,6 +84,6 @@ variant = "minimal"
 - [Nygard Format](./nygard.md) - Classic ADR format details
 - [MADR Format](./madr.md) - MADR 4.0.0 format details
 - [Variants](./variants.md) - Template variant examples
-- [Frontmatter](../frontmatter.md) - YAML metadata in NextGen mode
+- [Frontmatter](../../users/frontmatter.md) - YAML metadata in NextGen mode
 
 > **Related:** [ADR-0007: Use minijinja for Templates](../adrs/0007-use-minijinja-for-templates.md)
