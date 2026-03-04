@@ -16,8 +16,8 @@ This section provides documentation specifically for AI agents working with `adr
 
 Pre-defined capabilities for AI agents:
 
-- [Development Skills](./skills/development.md) - For developing the adrs CLI/library
-- [Operations Skills](./skills/operations.md) - For using adrs to manage ADRs
+- [Development Skills](./skills/development/SKILL.md) - For developing the adrs CLI/library
+- [Operations Skills](./skills/operations/SKILL.md) - For using adrs to manage ADRs
 
 ## MCP Integration
 

@@ -54,8 +54,8 @@
 
 - [AI Documentation](./ai/README.md)
 - [Skills](./ai/skills/README.md)
-  - [Development](./ai/skills/development.md)
-  - [Operations](./ai/skills/operations.md)
+  - [Development](./ai/skills/development/SKILL.md)
+  - [Operations](./ai/skills/operations/SKILL.md)
 
 ---
 

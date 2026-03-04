@@ -1,14 +1,18 @@
-# Introduction
+# Introduction to `adrs`
 
-`adrs` is a command-line tool for creating and managing [Architecture Decision Records](https://adr.github.io) (ADRs).
+> A CLI for creating & managing [Architecture Decision Records](https://adr.github.io) (ADRs).
 
-## What are ADRs?
+## ADRs (Architecture Decision Records)
+
+### The "What"
 
 Architecture Decision Records are short documents that capture important architectural decisions made during a project. Each ADR describes a single decision, including:
 
 - **Context**: The situation that requires a decision
 - **Decision**: What was decided
 - **Consequences**: The implications of the decision
+
+### The "Why"
 
 ADRs help teams:
 - Document why decisions were made

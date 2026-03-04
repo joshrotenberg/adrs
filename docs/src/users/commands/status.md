@@ -55,8 +55,8 @@ adrs status 2 superseded --by 5
 ```
 
 This updates ADR 2's status and creates links:
-- ADR 2: "Superseded by [5. New Approach](0005-new-approach.md)"
-- ADR 5: "Supersedes [2. Old Approach](0002-old-approach.md)"
+- ADR 2: "Superseded by 5. New Approach"
+- ADR 5: "Supersedes 2. Old Approach"
 
 ### Custom status
 

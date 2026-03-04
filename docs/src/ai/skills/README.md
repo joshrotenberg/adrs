@@ -4,7 +4,7 @@ Skills are pre-defined capabilities that AI agents can use when working with `ad
 
 ## Available Skills
 
-### [Development Skills](./development.md)
+### [Development Skills](./development/SKILL.md)
 
 For AI agents working on the `adrs` codebase:
 - Understanding project architecture
@@ -12,7 +12,7 @@ For AI agents working on the `adrs` codebase:
 - Making code changes
 - Creating pull requests
 
-### [Operations Skills](./operations.md)
+### [Operations Skills](./operations/SKILL.md)
 
 For AI agents using `adrs` to manage ADRs:
 - Creating new decisions
