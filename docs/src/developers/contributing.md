@@ -1,1 +1,1 @@
-# Contributing
+{{#include ../../../CONTRIBUTING.md}}

@@ -4,16 +4,39 @@ language = "en"
 src = "src"
 title = "adrs documentation"
 
+[build]
+build-dir = "book"
+
 [output.html]
 default-theme = "navy"
 site-url = "/adrs/"
 git-repository-url = "https://github.com/joshrotenberg/adrs/tree/main/docs"
 edit-url-template = "https://github.com/joshrotenberg/adrs/edit/main/docs/{path}"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
 [output.html.fold]
 enable = true
 
-# Lint is run manually: mdbook-lint book/src
+# Mermaid diagrams
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+# Inline table of contents (use <!-- toc --> marker)
+[preprocessor.toc]
+command = "mdbook-toc"
+
+# Auto-link glossary terms
+[preprocessor.termlink]
+command = "mdbook-termlink"
+glossary = "reference/glossary.md"
+
+# Link checking (validates internal and external links)
+# Uses mdbook-linkcheck2 (compatible with mdbook 0.5+)
+[output.linkcheck2]
+follow-web-links = false
+traverse-parent-directories = false
+
+# Lint is run manually: mdbook-lint docs/src
 # [preprocessor.lint]
 # command = "mdbook-lint"
 # renderer = ["html"]
