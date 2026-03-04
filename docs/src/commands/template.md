@@ -96,4 +96,4 @@ Markdown Any Decision Record format with additional sections:
 ## See Also
 
 - [new](./new.md) - Create ADRs using templates
-- [Templates](../templates.md) - Template customization guide
+- [Templates](../templates/README.md) - Template formats and customization

@@ -151,4 +151,4 @@ Examples:
 
 - [edit](./edit.md) - Edit an existing ADR
 - [link](./link.md) - Link ADRs together
-- [Templates](../templates.md) - Available templates
+- [Templates](../templates/README.md) - Template formats and variants

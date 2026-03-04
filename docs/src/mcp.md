@@ -228,5 +228,5 @@ Claude will use `compare_adrs` to show the differences.
 ## See Also
 
 - [Configuration](./configuration.md) - Repository configuration
-- [Formats](./formats.md) - ADR format options
-- [Compatibility](./compatibility.md) - NextGen vs Compatible mode
+- [Templates](./templates/README.md) - ADR format options
+- [Modes](./modes/README.md) - NextGen vs Compatible mode

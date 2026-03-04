@@ -86,5 +86,5 @@ For new features like MADR format or YAML frontmatter, see the [Configuration](.
 
 - [Configuration](./configuration.md) - Learn about configuration options
 - [Commands](./commands/README.md) - Detailed command reference
-- [Templates](./templates.md) - Customize ADR templates
-- [Formats](./formats.md) - Nygard vs MADR format comparison
+- [Templates](./templates/README.md) - Template formats and customization
+- [Modes](./modes/README.md) - Compatible vs NextGen mode
