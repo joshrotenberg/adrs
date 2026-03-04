@@ -364,11 +364,8 @@ mod tests {
 
     #[test]
     fn test_lint_valid_nygard_adr() {
-        // Create a temporary file with valid Nygard format
-        // NOTE: Uses simplified Decision text to avoid ADR014 false positive on "described"
-        // in mdbook-lint-rulesets <= 0.14.2. Update to actual ADR #0001 text (with
-        // "as described by Michael Nygard") once mdbook-lint-rulesets >= 0.15 is released
-        // with the word-boundary fix.
+        // Uses the actual ADR #0001 text produced by `adrs init`. The word "described"
+        // previously triggered an ADR014 false positive (fixed in mdbook-lint-rulesets 0.14.3).
         let content = r#"# 1. Record architecture decisions
 
 Date: 2024-03-04
@@ -383,11 +380,11 @@ We need to record the architectural decisions made on this project.
 
 ## Decision
 
-We will use Architecture Decision Records.
+We will use Architecture Decision Records, as described by Michael Nygard in his article "Documenting Architecture Decisions".
 
 ## Consequences
 
-See Michael Nygard's article for details.
+See Michael Nygard's article, linked above. For a lightweight ADR toolset, see Nat Pryce's adr-tools.
 "#;
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir
