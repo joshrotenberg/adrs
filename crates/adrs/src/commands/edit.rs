@@ -9,10 +9,12 @@ pub fn edit(root: &Path, query: &str) -> Result<()> {
         Repository::open(root).context("ADR repository not found. Run 'adrs init' first.")?;
 
     let adr = repo.find(query).context("ADR not found")?;
-    let content = repo.read_content(&adr)?;
+    let path = adr
+        .path
+        .clone()
+        .unwrap_or_else(|| repo.adr_path().join(adr.filename()));
 
-    let edited = edit::edit(&content).context("Failed to open editor")?;
-    let path = repo.write_content(&adr, &edited)?;
+    edit::edit_file(&path).context("Failed to open editor")?;
 
     println!("{}", path.display());
     Ok(())

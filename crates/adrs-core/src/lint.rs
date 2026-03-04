@@ -365,6 +365,10 @@ mod tests {
     #[test]
     fn test_lint_valid_nygard_adr() {
         // Create a temporary file with valid Nygard format
+        // NOTE: Uses simplified Decision text to avoid ADR014 false positive on "described"
+        // in mdbook-lint-rulesets <= 0.14.2. Update to actual ADR #0001 text (with
+        // "as described by Michael Nygard") once mdbook-lint-rulesets >= 0.15 is released
+        // with the word-boundary fix.
         let content = r#"# 1. Record architecture decisions
 
 Date: 2024-03-04

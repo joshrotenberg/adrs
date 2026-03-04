@@ -115,9 +115,7 @@ pub fn new(
 
     // Open in editor unless --no-edit was specified
     if !no_edit {
-        let content = repo.read_content(&adr)?;
-        let edited = edit::edit(&content).context("Failed to open editor")?;
-        repo.write_content(&adr, &edited)?;
+        edit::edit_file(&path).context("Failed to open editor")?;
     }
 
     println!("{}", path.display());
