@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.3] - 2026-03-04
+
+### Bug Fixes
+
+- Open actual ADR file in editor instead of temp file
+
+
 ## [0.7.2] - 2026-02-26
 
 ### Documentation
