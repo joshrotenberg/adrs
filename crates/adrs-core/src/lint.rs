@@ -1,8 +1,60 @@
-//! ADR linting using mdbook-lint rules.
+//! # ADR Linting
 //!
-//! This module provides unified linting for ADRs, combining per-file validation
-//! (title format, required sections, date format) with repository-level checks
-//! (sequential numbering, duplicate detection, broken links).
+//! Unified linting for ADRs using mdbook-lint rules. Combines per-file
+//! validation with repository-level checks.
+//!
+//! ## Overview
+//!
+//! | Function | Scope | Description |
+//! |----------|-------|-------------|
+//! | [`lint_adr`] | Single file | Validate title, sections, date format |
+//! | [`lint_all`] | All files | Run per-file checks on all ADRs |
+//! | [`check_repository`] | Repository | Sequential numbering, broken links |
+//! | [`check_all`] | All | Combined per-file and repository checks |
+//!
+//! ## Rules
+//!
+//! Per-file rules (ADR001-ADR009, ADR014-ADR017):
+//! - Title format and numbering
+//! - Required sections (Status, Context, Decision, Consequences)
+//! - Date format validation
+//! - Status value validation
+//!
+//! Repository rules (ADR010-ADR013):
+//! - Superseded ADRs have replacements
+//! - Sequential numbering
+//! - Duplicate number detection
+//! - Broken link detection
+//!
+//! ## Examples
+//!
+//! ### Linting a repository
+//!
+//! ```rust
+//! use adrs_core::Repository;
+//! use adrs_core::lint::check_all;
+//! use tempfile::TempDir;
+//!
+//! let temp = TempDir::new().unwrap();
+//! let repo = Repository::init(temp.path(), None, false).unwrap();
+//!
+//! let report = check_all(&repo).unwrap();
+//!
+//! if report.is_clean() {
+//!     println!("All checks passed!");
+//! }
+//! ```
+//!
+//! ### Checking for errors
+//!
+//! ```rust
+//! use adrs_core::lint::{LintReport, IssueSeverity};
+//!
+//! let report = LintReport::new();
+//!
+//! assert!(!report.has_errors());
+//! assert_eq!(report.count_by_severity(IssueSeverity::Error), 0);
+//! ```
 
 use crate::{Adr, Repository, Result};
 use mdbook_lint_core::Document;
@@ -14,6 +66,23 @@ use mdbook_lint_rulesets::adr::{
 use std::path::PathBuf;
 
 /// Severity level for lint issues.
+///
+/// Ordered from lowest to highest severity: Info < Warning < Error.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::lint::IssueSeverity;
+///
+/// // Severity comparison
+/// assert!(IssueSeverity::Error > IssueSeverity::Warning);
+/// assert!(IssueSeverity::Warning > IssueSeverity::Info);
+///
+/// // Display format
+/// assert_eq!(IssueSeverity::Error.to_string(), "error");
+/// assert_eq!(IssueSeverity::Warning.to_string(), "warning");
+/// assert_eq!(IssueSeverity::Info.to_string(), "info");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IssueSeverity {
     /// Informational message.
@@ -44,7 +113,32 @@ impl From<mdbook_lint_core::Severity> for IssueSeverity {
     }
 }
 
-/// A unified issue type for both per-file lint violations and repository-level diagnostics.
+/// A unified issue type for lint violations and diagnostics.
+///
+/// Represents a single problem found during linting, whether from
+/// per-file validation or repository-level checks.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::lint::{Issue, IssueSeverity};
+/// use std::path::PathBuf;
+///
+/// let issue = Issue {
+///     rule_id: "ADR001".to_string(),
+///     rule_name: "adr-title-format".to_string(),
+///     severity: IssueSeverity::Error,
+///     message: "Title must start with ADR number".to_string(),
+///     path: Some(PathBuf::from("doc/adr/0001-test.md")),
+///     line: Some(1),
+///     column: Some(1),
+///     adr_number: Some(1),
+///     related_adrs: Vec::new(),
+/// };
+///
+/// assert_eq!(issue.rule_id, "ADR001");
+/// assert_eq!(issue.severity, IssueSeverity::Error);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Issue {
     /// The rule that produced this issue (e.g., "ADR001", "adr-title-format").
@@ -89,6 +183,39 @@ impl Issue {
 }
 
 /// Results from linting.
+///
+/// Collects all issues found during linting operations and provides
+/// methods for querying and organizing them.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::lint::{LintReport, Issue, IssueSeverity};
+/// use std::path::PathBuf;
+///
+/// let mut report = LintReport::new();
+///
+/// // Initially clean
+/// assert!(report.is_clean());
+/// assert!(!report.has_errors());
+///
+/// // Add an issue
+/// report.add(Issue {
+///     rule_id: "ADR002".to_string(),
+///     rule_name: "adr-status-section".to_string(),
+///     severity: IssueSeverity::Error,
+///     message: "Missing Status section".to_string(),
+///     path: Some(PathBuf::from("0001-test.md")),
+///     line: None,
+///     column: None,
+///     adr_number: Some(1),
+///     related_adrs: Vec::new(),
+/// });
+///
+/// assert!(!report.is_clean());
+/// assert!(report.has_errors());
+/// assert_eq!(report.count_by_severity(IssueSeverity::Error), 1);
+/// ```
 #[derive(Debug, Default)]
 pub struct LintReport {
     /// All issues found.
@@ -96,36 +223,103 @@ pub struct LintReport {
 }
 
 impl LintReport {
-    /// Create a new empty report.
+    /// Creates a new empty report.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::lint::LintReport;
+    ///
+    /// let report = LintReport::new();
+    /// assert!(report.issues.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add an issue to the report.
+    /// Adds an issue to the report.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::lint::{LintReport, Issue, IssueSeverity};
+    ///
+    /// let mut report = LintReport::new();
+    /// report.add(Issue {
+    ///     rule_id: "ADR001".to_string(),
+    ///     rule_name: "test".to_string(),
+    ///     severity: IssueSeverity::Warning,
+    ///     message: "Test warning".to_string(),
+    ///     path: None,
+    ///     line: None,
+    ///     column: None,
+    ///     adr_number: None,
+    ///     related_adrs: Vec::new(),
+    /// });
+    ///
+    /// assert_eq!(report.issues.len(), 1);
+    /// ```
     pub fn add(&mut self, issue: Issue) {
         self.issues.push(issue);
     }
 
-    /// Check if there are any errors.
+    /// Returns true if there are any errors.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::lint::LintReport;
+    ///
+    /// let report = LintReport::new();
+    /// assert!(!report.has_errors());
+    /// ```
     pub fn has_errors(&self) -> bool {
         self.issues
             .iter()
             .any(|i| i.severity == IssueSeverity::Error)
     }
 
-    /// Check if there are any warnings.
+    /// Returns true if there are any warnings.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::lint::LintReport;
+    ///
+    /// let report = LintReport::new();
+    /// assert!(!report.has_warnings());
+    /// ```
     pub fn has_warnings(&self) -> bool {
         self.issues
             .iter()
             .any(|i| i.severity == IssueSeverity::Warning)
     }
 
-    /// Check if the report is clean (no warnings or errors).
+    /// Returns true if the report is clean (no warnings or errors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::lint::LintReport;
+    ///
+    /// let report = LintReport::new();
+    /// assert!(report.is_clean());
+    /// ```
     pub fn is_clean(&self) -> bool {
         !self.has_errors() && !self.has_warnings()
     }
 
-    /// Get the count of issues by severity.
+    /// Returns the count of issues by severity.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::lint::{LintReport, IssueSeverity};
+    ///
+    /// let report = LintReport::new();
+    /// assert_eq!(report.count_by_severity(IssueSeverity::Error), 0);
+    /// assert_eq!(report.count_by_severity(IssueSeverity::Warning), 0);
+    /// ```
     pub fn count_by_severity(&self, severity: IssueSeverity) -> usize {
         self.issues
             .iter()
@@ -133,7 +327,45 @@ impl LintReport {
             .count()
     }
 
-    /// Sort issues by severity (errors first), then by path, then by line.
+    /// Sorts issues by severity (errors first), then by path, then by line.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::lint::{LintReport, Issue, IssueSeverity};
+    /// use std::path::PathBuf;
+    ///
+    /// let mut report = LintReport::new();
+    ///
+    /// // Add warning first, then error
+    /// report.add(Issue {
+    ///     rule_id: "W001".to_string(),
+    ///     rule_name: "test".to_string(),
+    ///     severity: IssueSeverity::Warning,
+    ///     message: "Warning".to_string(),
+    ///     path: Some(PathBuf::from("a.md")),
+    ///     line: Some(1),
+    ///     column: None,
+    ///     adr_number: None,
+    ///     related_adrs: Vec::new(),
+    /// });
+    /// report.add(Issue {
+    ///     rule_id: "E001".to_string(),
+    ///     rule_name: "test".to_string(),
+    ///     severity: IssueSeverity::Error,
+    ///     message: "Error".to_string(),
+    ///     path: Some(PathBuf::from("b.md")),
+    ///     line: Some(1),
+    ///     column: None,
+    ///     adr_number: None,
+    ///     related_adrs: Vec::new(),
+    /// });
+    ///
+    /// report.sort();
+    ///
+    /// // Error should come first after sorting
+    /// assert_eq!(report.issues[0].severity, IssueSeverity::Error);
+    /// ```
     pub fn sort(&mut self) {
         self.issues.sort_by(|a, b| {
             b.severity
@@ -144,9 +376,34 @@ impl LintReport {
     }
 }
 
-/// Lint a single ADR file.
+/// Lints a single ADR file.
 ///
-/// Runs all per-file lint rules against the ADR content.
+/// Runs all per-file lint rules (ADR001-ADR009, ADR014-ADR017) against
+/// the ADR content, checking title format, required sections, and more.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::Adr;
+/// use adrs_core::lint::lint_adr;
+/// use tempfile::TempDir;
+/// use std::fs;
+///
+/// let temp = TempDir::new().unwrap();
+/// let path = temp.path().join("0001-test.md");
+///
+/// fs::write(&path, "# 1. Test\n\nDate: 2024-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nContext.\n\n## Decision\n\nDecision.\n\n## Consequences\n\nConsequences.\n").unwrap();
+///
+/// let mut adr = Adr::new(1, "Test");
+/// adr.path = Some(path);
+///
+/// let report = lint_adr(&adr).unwrap();
+/// // Valid ADR should have no errors
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if the ADR file cannot be read.
 pub fn lint_adr(adr: &Adr) -> Result<LintReport> {
     let mut report = LintReport::new();
 
@@ -223,7 +480,29 @@ pub fn lint_adr(adr: &Adr) -> Result<LintReport> {
     Ok(report)
 }
 
-/// Lint all ADRs in a repository (per-file checks only).
+/// Lints all ADRs in a repository (per-file checks only).
+///
+/// Runs per-file lint rules on every ADR in the repository. For
+/// repository-level checks, use [`check_repository`] or [`check_all`].
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::Repository;
+/// use adrs_core::lint::lint_all;
+/// use tempfile::TempDir;
+///
+/// let temp = TempDir::new().unwrap();
+/// let repo = Repository::init(temp.path(), None, false).unwrap();
+///
+/// let report = lint_all(&repo).unwrap();
+///
+/// println!("Found {} issues", report.issues.len());
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if ADR files cannot be read.
 pub fn lint_all(repo: &Repository) -> Result<LintReport> {
     let mut report = LintReport::new();
     let adrs = repo.list()?;
@@ -237,13 +516,36 @@ pub fn lint_all(repo: &Repository) -> Result<LintReport> {
     Ok(report)
 }
 
-/// Run repository-level checks (collection rules).
+/// Runs repository-level checks (collection rules).
 ///
 /// These checks analyze the ADR set as a whole:
-/// - Sequential numbering (ADR011)
-/// - Duplicate numbers (ADR012)
-/// - Broken links (ADR013)
-/// - Superseded ADRs have replacements (ADR010)
+/// - ADR010: Superseded ADRs have replacements
+/// - ADR011: Sequential numbering
+/// - ADR012: Duplicate number detection
+/// - ADR013: Broken link detection
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::Repository;
+/// use adrs_core::lint::check_repository;
+/// use tempfile::TempDir;
+///
+/// let temp = TempDir::new().unwrap();
+/// let repo = Repository::init(temp.path(), None, false).unwrap();
+///
+/// let report = check_repository(&repo).unwrap();
+///
+/// if report.has_errors() {
+///     for issue in &report.issues {
+///         println!("{}: {}", issue.rule_id, issue.message);
+///     }
+/// }
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if ADR files cannot be read.
 pub fn check_repository(repo: &Repository) -> Result<LintReport> {
     let mut report = LintReport::new();
     let adrs = repo.list()?;
@@ -314,7 +616,36 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
     Ok(report)
 }
 
-/// Run all checks: per-file lint + repository-level checks.
+/// Runs all checks: per-file lint plus repository-level checks.
+///
+/// Combines [`lint_all`] and [`check_repository`] into a single
+/// comprehensive check, returning a sorted report with all issues.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::Repository;
+/// use adrs_core::lint::{check_all, IssueSeverity};
+/// use tempfile::TempDir;
+///
+/// let temp = TempDir::new().unwrap();
+/// let repo = Repository::init(temp.path(), None, false).unwrap();
+///
+/// let report = check_all(&repo).unwrap();
+///
+/// let errors = report.count_by_severity(IssueSeverity::Error);
+/// let warnings = report.count_by_severity(IssueSeverity::Warning);
+///
+/// println!("Errors: {}, Warnings: {}", errors, warnings);
+///
+/// if report.is_clean() {
+///     println!("All checks passed!");
+/// }
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if ADR files cannot be read.
 pub fn check_all(repo: &Repository) -> Result<LintReport> {
     let mut report = lint_all(repo)?;
     let repo_report = check_repository(repo)?;
