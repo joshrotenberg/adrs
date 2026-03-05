@@ -23,10 +23,17 @@ For more background, see [ADR-0001](./0001-record-architecture-decisions.md) and
 | [0005](./0005-dual-mode-compatible-and-nextgen.md) | Dual Mode: Compatible and NextGen | Accepted | 2025-01-21 |
 | [0006](./0006-yaml-frontmatter-for-metadata.md) | YAML Frontmatter for Metadata | Accepted | 2025-01-21 |
 | [0007](./0007-use-minijinja-for-templates.md) | Use minijinja for Templates | Accepted | 2025-01-21 |
+| [0008](./0008-linting-with-mdbook-lint.md) | Linting with mdbook-lint | Accepted | 2026-03-04 |
+| [0009](./0009-json-adr-export-format.md) | JSON-ADR Export Format | Accepted | 2026-03-04 |
+| [0010](./0010-error-handling-strategy.md) | Error Handling Strategy | Accepted | 2026-03-04 |
+| [0011](./0011-mcp-server-integration.md) | MCP Server Integration | Accepted | 2026-03-04 |
+| [0012](./0012-mcp-server-library-selection.md) | MCP Server Library Selection | Proposed | 2026-03-04 |
+| [0013](./0013-adopt-figment-for-configuration.md) | Adopt Figment for Configuration | Proposed | 2026-03-05 |
 
 ## Status Summary
 
-- **Accepted**: 7
+- **Accepted**: 11
+- **Proposed**: 2
 - **Superseded**: 0
 - **Deprecated**: 0
 
