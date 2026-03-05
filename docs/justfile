@@ -1,5 +1,7 @@
 # docs/justfile - Documentation recipes
 
+set working-directory := ".."
+
 # Check documentation (missing docs, broken links)
 check:
     RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" \

@@ -1,5 +1,7 @@
 # quality/justfile - Code quality, security, and coverage recipes
 
+set working-directory := ".."
+
 # === Coverage ===
 
 # Generate coverage report (HTML)

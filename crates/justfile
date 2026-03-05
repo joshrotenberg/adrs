@@ -1,5 +1,7 @@
 # crates/justfile - Crate build recipes
 
+set working-directory := ".."
+
 mod cli './adrs/justfile'
 mod lib './adrs-core/justfile'
 

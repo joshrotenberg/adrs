@@ -1,5 +1,7 @@
 # crates/adrs/justfile - CLI crate recipes
 
+set working-directory := "../.."
+
 # Run CLI binary
 run *args:
     cargo run --package adrs -- {{args}}

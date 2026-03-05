@@ -1,5 +1,7 @@
 # tests/justfile - Test recipes
 
+set working-directory := ".."
+
 # Run all tests with nextest
 run:
     cargo nextest run

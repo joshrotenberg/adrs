@@ -1,5 +1,7 @@
 # schema/justfile - JSON schema recipes
 
+set working-directory := ".."
+
 # Validate schema files
 validate:
     @echo "Schema validation not yet implemented"

@@ -1,5 +1,7 @@
 # crates/adrs-core/justfile - Core library recipes
 
+set working-directory := "../.."
+
 # Build core library
 build:
     cargo build --package adrs-core
