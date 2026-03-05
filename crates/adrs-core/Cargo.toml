@@ -20,12 +20,12 @@ walkdir.workspace = true
 time.workspace = true
 fuzzy-matcher.workspace = true
 regex.workspace = true
+tempfile.workspace = true  # For doctest_helpers
 
 # Linting (mdbook-lint integration)
 mdbook-lint-core = "0.14.3"
 mdbook-lint-rulesets = { version = "0.14.3", default-features = false, features = ["adr"] }
 
 [dev-dependencies]
-tempfile.workspace = true
 proptest.workspace = true
 test-case.workspace = true
