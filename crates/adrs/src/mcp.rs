@@ -1807,10 +1807,12 @@ mod tests {
         let json = result.unwrap();
         let suggestions: SuggestTagsResult = serde_json::from_str(&json).unwrap();
         // Should suggest "database" based on content
-        assert!(suggestions
-            .suggested_tags
-            .iter()
-            .any(|t| t.tag == "database"));
+        assert!(
+            suggestions
+                .suggested_tags
+                .iter()
+                .any(|t| t.tag == "database")
+        );
     }
 
     #[test]
