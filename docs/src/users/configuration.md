@@ -114,6 +114,8 @@ mode = "nextgen"
 
 ```sh
 adrs config
+# or
+adrs config show
 ```
 
 Output:
@@ -125,3 +127,57 @@ ADR directory: doc/adr
 Full path: /path/to/project/doc/adr
 Mode: Compatible
 ```
+
+### Verbose Output
+
+To see all configuration layers and their values:
+
+```sh
+adrs config show --verbose
+```
+
+Output:
+
+```
+Project root: /path/to/project
+Config source: adrs.toml
+ADR directory: doc/adr
+Full path: /path/to/project/doc/adr
+Mode: NextGen
+
+Configuration layers (highest to lowest priority):
+
+Layer 1: Environment variables
+  (not set)
+
+Layer 2: adrs.toml
+  adr_dir = "doc/adr"
+  mode = "ng"
+
+Layer 3: .adr-dir (legacy)
+  (not found)
+
+Layer 4: Global config
+  ~/.config/adrs/config.toml (not found)
+
+Layer 5: Defaults
+  adr_dir = "doc/adr"
+  mode = "compatible"
+```
+
+## Migrate Configuration
+
+Convert between configuration formats:
+
+```sh
+# Convert .adr-dir to adrs.toml
+adrs config migrate --to toml
+
+# Convert adrs.toml to .adr-dir
+adrs config migrate --to adr-dir
+
+# Preview without writing files
+adrs config migrate --to toml --dry-run
+```
+
+> **Note:** Converting to `.adr-dir` is lossy - only the `adr_dir` setting is preserved. Mode, templates, and other settings will be lost.
