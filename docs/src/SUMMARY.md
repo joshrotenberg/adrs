@@ -117,6 +117,7 @@
   - [0009: JSON-ADR Export](./reference/adrs/0009-json-adr-export-format.md)
   - [0010: Error Handling Strategy](./reference/adrs/0010-error-handling-strategy.md)
   - [0011: MCP Server Integration](./reference/adrs/0011-mcp-server-integration.md)
+  - [0012: MCP Library Selection](./reference/adrs/0012-mcp-server-library-selection.md)
 - [Glossary](./reference/glossary.md)
 
 ---
