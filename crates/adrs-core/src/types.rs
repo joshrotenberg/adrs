@@ -1,10 +1,69 @@
-//! Core types for representing ADRs.
+//! # Core Types
+//!
+//! Fundamental data types for representing Architecture Decision Records.
+//!
+//! ## Overview
+//!
+//! This module provides the core types used throughout `adrs-core`:
+//!
+//! | Type | Description |
+//! |------|-------------|
+//! | [`Adr`] | A single Architecture Decision Record |
+//! | [`AdrStatus`] | The lifecycle status of an ADR |
+//! | [`AdrLink`] | A relationship between two ADRs |
+//! | [`LinkKind`] | The type of relationship |
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use adrs_core::{Adr, AdrStatus, AdrLink, LinkKind};
+//!
+//! // Create a new ADR
+//! let mut adr = Adr::new(1, "Use Rust for implementation");
+//! assert_eq!(adr.status, AdrStatus::Proposed);
+//!
+//! // Update status
+//! adr.set_status(AdrStatus::Accepted);
+//! assert_eq!(adr.status, AdrStatus::Accepted);
+//!
+//! // Add a link to another ADR
+//! adr.add_link(AdrLink::new(2, LinkKind::Supersedes));
+//! assert_eq!(adr.links.len(), 1);
+//! ```
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use time::Date;
 
-/// An Architecture Decision Record.
+/// A single Architecture Decision Record.
+///
+/// An ADR captures an important architectural decision made along with
+/// its context and consequences. This struct represents all the data
+/// associated with one ADR.
+///
+/// # Fields
+///
+/// | Field | Description |
+/// |-------|-------------|
+/// | `number` | Unique identifier (1, 2, 3, ...) |
+/// | `title` | Short description of the decision |
+/// | `status` | Current lifecycle status |
+/// | `date` | When the ADR was created/updated |
+/// | `links` | Relationships to other ADRs |
+/// | `tags` | Categorization labels |
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::{Adr, AdrStatus};
+///
+/// let adr = Adr::new(1, "Use PostgreSQL for persistence");
+///
+/// assert_eq!(adr.number, 1);
+/// assert_eq!(adr.title, "Use PostgreSQL for persistence");
+/// assert_eq!(adr.status, AdrStatus::Proposed);
+/// assert!(adr.links.is_empty());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Adr {
     /// The ADR number (e.g., 1, 2, 3).
@@ -65,7 +124,24 @@ pub struct Adr {
 }
 
 impl Adr {
-    /// Create a new ADR with the given number and title.
+    /// Creates a new ADR with the given number and title.
+    ///
+    /// The ADR is initialized with:
+    /// - Status: [`AdrStatus::Proposed`]
+    /// - Date: Today's date
+    /// - Empty body, context, decision, and consequences
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Adr, AdrStatus};
+    ///
+    /// let adr = Adr::new(1, "Use Rust for implementation");
+    ///
+    /// assert_eq!(adr.number, 1);
+    /// assert_eq!(adr.title, "Use Rust for implementation");
+    /// assert_eq!(adr.status, AdrStatus::Proposed);
+    /// ```
     pub fn new(number: u32, title: impl Into<String>) -> Self {
         Self {
             number,
@@ -85,21 +161,67 @@ impl Adr {
     }
 
     /// Returns the formatted filename for this ADR.
+    ///
+    /// The filename follows the pattern `NNNN-slug.md` where NNNN is
+    /// the zero-padded number and slug is the URL-friendly title.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Adr;
+    ///
+    /// let adr = Adr::new(1, "Use Rust");
+    /// assert_eq!(adr.filename(), "0001-use-rust.md");
+    ///
+    /// let adr = Adr::new(42, "API Design Guidelines");
+    /// assert_eq!(adr.filename(), "0042-api-design-guidelines.md");
+    /// ```
     pub fn filename(&self) -> String {
         format!("{:04}-{}.md", self.number, slug(&self.title))
     }
 
-    /// Returns the full title with number prefix (e.g., "1. Use Rust").
+    /// Returns the full title with number prefix.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Adr;
+    ///
+    /// let adr = Adr::new(1, "Use Rust");
+    /// assert_eq!(adr.full_title(), "1. Use Rust");
+    /// ```
     pub fn full_title(&self) -> String {
         format!("{}. {}", self.number, self.title)
     }
 
-    /// Add a link to another ADR.
+    /// Adds a link to another ADR.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Adr, AdrLink, LinkKind};
+    ///
+    /// let mut adr = Adr::new(2, "Use GraphQL");
+    /// adr.add_link(AdrLink::new(1, LinkKind::Supersedes));
+    ///
+    /// assert_eq!(adr.links.len(), 1);
+    /// assert_eq!(adr.links[0].target, 1);
+    /// ```
     pub fn add_link(&mut self, link: AdrLink) {
         self.links.push(link);
     }
 
-    /// Set the status and optionally record what this supersedes.
+    /// Sets the ADR status.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Adr, AdrStatus};
+    ///
+    /// let mut adr = Adr::new(1, "Example");
+    /// adr.set_status(AdrStatus::Accepted);
+    /// assert_eq!(adr.status, AdrStatus::Accepted);
+    /// ```
     pub fn set_status(&mut self, status: AdrStatus) {
         self.status = status;
     }
@@ -139,13 +261,69 @@ impl Adr {
         self.tags = tags;
     }
 
-    /// Add a tag for categorization.
+    /// Adds a tag for categorization.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Adr;
+    ///
+    /// let mut adr = Adr::new(1, "Use Rust");
+    /// adr.add_tag("language");
+    /// adr.add_tag("core");
+    ///
+    /// assert_eq!(adr.tags, vec!["language", "core"]);
+    /// ```
     pub fn add_tag(&mut self, tag: impl Into<String>) {
         self.tags.push(tag.into());
     }
 }
 
-/// The status of an ADR.
+/// The lifecycle status of an ADR.
+///
+/// ADRs progress through these states:
+///
+/// ```text
+/// Proposed ──┬──► Accepted ──► Superseded
+///            │         │
+///            │         ▼
+///            │    Deprecated
+///            │
+///            └──► Custom(...)
+/// ```
+///
+/// # Parsing
+///
+/// Status can be parsed from strings (case-insensitive):
+///
+/// ```rust
+/// use adrs_core::AdrStatus;
+/// use std::str::FromStr;
+///
+/// assert_eq!(AdrStatus::from_str("accepted").unwrap(), AdrStatus::Accepted);
+/// assert_eq!(AdrStatus::from_str("PROPOSED").unwrap(), AdrStatus::Proposed);
+/// ```
+///
+/// # Display
+///
+/// Status displays with title case:
+///
+/// ```rust
+/// use adrs_core::AdrStatus;
+///
+/// assert_eq!(AdrStatus::Accepted.to_string(), "Accepted");
+/// assert_eq!(AdrStatus::Superseded.to_string(), "Superseded");
+/// ```
+///
+/// # Default
+///
+/// New ADRs start as [`Proposed`](Self::Proposed):
+///
+/// ```rust
+/// use adrs_core::AdrStatus;
+///
+/// assert_eq!(AdrStatus::default(), AdrStatus::Proposed);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AdrStatus {
@@ -194,7 +372,22 @@ impl std::str::FromStr for AdrStatus {
     }
 }
 
-/// A link between ADRs.
+/// A relationship between two ADRs.
+///
+/// Links connect ADRs to show how decisions relate to each other.
+/// Each link has a target ADR number and a kind describing the
+/// relationship.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::{AdrLink, LinkKind};
+///
+/// // ADR 2 supersedes ADR 1
+/// let link = AdrLink::new(1, LinkKind::Supersedes);
+/// assert_eq!(link.target, 1);
+/// assert_eq!(link.kind, LinkKind::Supersedes);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AdrLink {
     /// The target ADR number.
@@ -209,7 +402,17 @@ pub struct AdrLink {
 }
 
 impl AdrLink {
-    /// Create a new link to another ADR.
+    /// Creates a new link to the specified ADR.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{AdrLink, LinkKind};
+    ///
+    /// let link = AdrLink::new(5, LinkKind::Amends);
+    /// assert_eq!(link.target, 5);
+    /// assert_eq!(link.kind, LinkKind::Amends);
+    /// ```
     pub fn new(target: u32, kind: LinkKind) -> Self {
         Self {
             target,
@@ -228,7 +431,23 @@ impl AdrLink {
     }
 }
 
-/// The kind of link between ADRs.
+/// The type of relationship between ADRs.
+///
+/// Links are directional. For example, if ADR 2 supersedes ADR 1,
+/// then ADR 2 has a [`Supersedes`](Self::Supersedes) link to ADR 1,
+/// and ADR 1 has a [`SupersededBy`](Self::SupersededBy) link to ADR 2.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::LinkKind;
+///
+/// let kind = LinkKind::Supersedes;
+/// assert_eq!(kind.reverse(), LinkKind::SupersededBy);
+///
+/// // Reverse is symmetric
+/// assert_eq!(kind.reverse().reverse(), kind);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkKind {
