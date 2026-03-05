@@ -157,6 +157,12 @@ impl Repository {
         self
     }
 
+    /// Override the configuration mode.
+    pub fn with_mode(mut self, mode: ConfigMode) -> Self {
+        self.config.mode = mode;
+        self
+    }
+
     /// Set a custom template.
     pub fn with_custom_template(mut self, template: Template) -> Self {
         self.template_engine = self.template_engine.with_custom_template(template);
@@ -1224,6 +1230,43 @@ mod tests {
 
         let content = repo.read_content(&adr).unwrap();
         assert!(content.contains("Modified"));
+    }
+
+    // ========== Mode Override Tests ==========
+
+    #[test]
+    fn test_with_mode_overrides_compatible_to_ng() {
+        let temp = TempDir::new().unwrap();
+        // Init in compatible mode
+        let repo = Repository::init(temp.path(), None, false)
+            .unwrap()
+            .with_mode(ConfigMode::NextGen);
+
+        let (_, path) = repo.new_adr("Mode Override Test").unwrap();
+        let content = fs::read_to_string(path).unwrap();
+
+        assert!(
+            content.starts_with("---\n"),
+            "with_mode(NextGen) on compatible repo should produce YAML frontmatter. Got:\n{content}"
+        );
+        assert!(content.contains("status: proposed"));
+    }
+
+    #[test]
+    fn test_with_mode_ng_to_compatible() {
+        let temp = TempDir::new().unwrap();
+        // Init in ng mode, then override to compatible
+        let repo = Repository::init(temp.path(), None, true)
+            .unwrap()
+            .with_mode(ConfigMode::Compatible);
+
+        let (_, path) = repo.new_adr("Downgrade Mode Test").unwrap();
+        let content = fs::read_to_string(path).unwrap();
+
+        assert!(
+            !content.starts_with("---\n"),
+            "with_mode(Compatible) on ng repo should NOT produce YAML frontmatter. Got:\n{content}"
+        );
     }
 
     // ========== Template Configuration Tests ==========
