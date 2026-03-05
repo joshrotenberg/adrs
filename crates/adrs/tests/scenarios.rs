@@ -1016,6 +1016,151 @@ fn scenario_config_ng_mode_enables_tags() {
     temp.close().unwrap();
 }
 
+// ============================================================================
+// Scenario: --ng Flag Overrides Compatible Mode (Issue #204)
+// ============================================================================
+
+/// User has a compatible-mode repo but uses --ng flag to create an ADR with
+/// YAML frontmatter. This was broken: --ng only affected tag validation,
+/// not template rendering.
+#[test]
+fn scenario_ng_flag_overrides_compatible_mode() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Step 1: Initialize in compatible mode (no --ng)
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Verify compatible mode (no adrs.toml, just .adr-dir)
+    let first_adr = temp.child("doc/adr/0001-record-architecture-decisions.md");
+    let content = fs::read_to_string(first_adr.path()).unwrap();
+    assert!(
+        !content.starts_with("---"),
+        "Compatible mode init should not have frontmatter"
+    );
+
+    // Step 2: Create ADR with --ng flag
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "--no-edit", "Use PostgreSQL for persistence"])
+        .assert()
+        .success();
+
+    // Step 3: Verify the new ADR has YAML frontmatter
+    let ng_adr = temp.child("doc/adr/0002-use-postgresql-for-persistence.md");
+    let content = fs::read_to_string(ng_adr.path()).unwrap();
+    assert!(
+        content.starts_with("---\n"),
+        "--ng flag should produce YAML frontmatter. Got:\n{content}"
+    );
+    assert!(
+        content.contains("status: proposed"),
+        "Frontmatter should contain status field"
+    );
+
+    temp.close().unwrap();
+}
+
+/// User has a compatible-mode repo and uses --ng flag with tags.
+#[test]
+fn scenario_ng_flag_with_tags_on_compatible_repo() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Initialize in compatible mode
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Create ADR with --ng flag AND tags
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "--ng",
+            "new",
+            "--no-edit",
+            "-t",
+            "database,infrastructure",
+            "Use PostgreSQL",
+        ])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp.path().join("doc/adr/0002-use-postgresql.md")).unwrap();
+    assert!(
+        content.starts_with("---\n"),
+        "--ng flag should produce YAML frontmatter"
+    );
+    assert!(content.contains("tags:"), "Should have tags in frontmatter");
+    assert!(content.contains("database"), "Should contain database tag");
+    assert!(
+        content.contains("infrastructure"),
+        "Should contain infrastructure tag"
+    );
+
+    temp.close().unwrap();
+}
+
+/// User has a compatible-mode repo and uses --ng flag with supersede.
+#[test]
+fn scenario_ng_flag_supersede_on_compatible_repo() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Initialize in compatible mode and create an ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Use MySQL"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // Supersede with --ng flag
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "--ng",
+            "new",
+            "--no-edit",
+            "--supersedes",
+            "2",
+            "Use PostgreSQL instead",
+        ])
+        .assert()
+        .success();
+
+    // New ADR should have frontmatter
+    let new_adr = temp.child("doc/adr/0003-use-postgresql-instead.md");
+    let content = fs::read_to_string(new_adr.path()).unwrap();
+    assert!(
+        content.starts_with("---\n"),
+        "Superseding ADR with --ng should have frontmatter. Got:\n{content}"
+    );
+
+    // Old ADR should still be compatible format (no frontmatter) but updated
+    let old_adr = temp.child("doc/adr/0002-use-mysql.md");
+    let old_content = fs::read_to_string(old_adr.path()).unwrap();
+    assert!(
+        !old_content.starts_with("---"),
+        "Old compatible-mode ADR should remain without frontmatter"
+    );
+    assert!(
+        old_content.contains("Superseded"),
+        "Old ADR should be marked superseded"
+    );
+
+    temp.close().unwrap();
+}
+
 /// Config mode = "ng" with the alias "nextgen" also works for tags.
 #[test]
 fn scenario_config_nextgen_alias_enables_tags() {

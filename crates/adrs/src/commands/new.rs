@@ -1,7 +1,7 @@
 //! New ADR command.
 
 use adrs_core::{
-    AdrStatus, Config, LinkKind, Repository, Template, TemplateFormat, TemplateVariant,
+    AdrStatus, Config, ConfigMode, LinkKind, Repository, Template, TemplateFormat, TemplateVariant,
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -53,6 +53,11 @@ pub fn new(
         .context("ADR repository not found. Run 'adrs init' first.")?
         .with_template_format(template_format)
         .with_template_variant(template_variant);
+
+    // Override mode if --ng flag is passed
+    if ng {
+        repo = repo.with_mode(ConfigMode::NextGen);
+    }
 
     // Load custom template from config if set (and no format/variant CLI override)
     if format.is_none()
