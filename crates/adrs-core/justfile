@@ -1,0 +1,13 @@
+# crates/adrs-core/justfile - Core library recipes
+
+# Build core library
+build:
+    cargo build --package adrs-core
+
+# Run library tests
+test:
+    cargo nextest run --package adrs-core
+
+# Run doctests
+doc:
+    cargo test --doc --package adrs-core

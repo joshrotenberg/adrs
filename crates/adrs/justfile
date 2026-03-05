@@ -1,0 +1,13 @@
+# crates/adrs/justfile - CLI crate recipes
+
+# Run CLI binary
+run *args:
+    cargo run --package adrs -- {{args}}
+
+# Build CLI binary
+build:
+    cargo build --package adrs
+
+# Run CLI tests
+test:
+    cargo nextest run --package adrs
