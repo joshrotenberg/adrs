@@ -1,24 +1,70 @@
 //! Custom Figment providers for ADR configuration.
 //!
 //! This module provides custom configuration providers that integrate with
-//! figment's layered configuration system.
+//! [figment](https://docs.rs/figment)'s layered configuration system.
+//!
+//! # Providers
+//!
+//! | Provider | Source | Priority |
+//! |----------|--------|----------|
+//! | [`AdrDirFile`] | `.adr-dir` file | Layer 3 (legacy) |
+//!
+//! # Architecture
+//!
+//! These providers implement [`figment::Provider`] to participate in
+//! figment's configuration merging. Each provider returns a
+//! `Map<Profile, Dict>` containing its configuration values.
+//!
+//! When a file doesn't exist or is empty, providers return an empty map
+//! (not an error), allowing higher-priority sources to provide values.
 
 use figment::value::{Dict, Map, Value};
 use figment::{Metadata, Profile, Provider};
 use std::path::PathBuf;
 
-/// Provider that reads legacy `.adr-dir` files.
+/// Figment provider that reads legacy `.adr-dir` files.
 ///
 /// The `.adr-dir` file format is a single line containing the path to the
-/// ADR directory, compatible with the original adr-tools.
+/// ADR directory. This format is compatible with the original
+/// [adr-tools](https://github.com/npryce/adr-tools).
 ///
-/// # Example
+/// # File Format
 ///
 /// ```text
 /// doc/adr
 /// ```
 ///
-/// This provider reads the file and maps it to `{ adr_dir: "<contents>" }`.
+/// The file contains a single line with the relative path to the ADR directory.
+/// Leading/trailing whitespace and newlines are trimmed.
+///
+/// # Behavior
+///
+/// | File State | Result |
+/// |------------|--------|
+/// | Exists with content | Returns `{ adr_dir: "<content>", mode: "compatible" }` |
+/// | Exists but empty | Returns empty map (falls back to other sources) |
+/// | Does not exist | Returns empty map (falls back to other sources) |
+/// | Whitespace only | Returns empty map (falls back to other sources) |
+///
+/// # Mode Inference
+///
+/// When a `.adr-dir` file is present, it implies `ConfigMode::Compatible`
+/// since this is the legacy adr-tools format. The provider automatically
+/// sets `mode: "compatible"` in the returned configuration.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use figment::Figment;
+/// use figment::providers::Serialized;
+/// use adrs_core::config::providers::AdrDirFile;
+///
+/// let figment = Figment::new()
+///     .merge(Serialized::defaults(Config::default()))
+///     .merge(AdrDirFile::new("/project/.adr-dir"));
+///
+/// let config: Config = figment.extract()?;
+/// ```
 #[derive(Debug, Clone)]
 pub struct AdrDirFile {
     path: PathBuf,
@@ -26,16 +72,45 @@ pub struct AdrDirFile {
 
 impl AdrDirFile {
     /// Create a new provider for the given `.adr-dir` file path.
+    ///
+    /// The path should point to the `.adr-dir` file location. It does not
+    /// need to exist - a missing file results in an empty configuration map.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use adrs_core::config::providers::AdrDirFile;
+    ///
+    /// let provider = AdrDirFile::new("/path/to/project/.adr-dir");
+    /// ```
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
 }
 
 impl Provider for AdrDirFile {
+    /// Returns metadata describing this provider.
+    ///
+    /// The metadata includes:
+    /// - Name: "adr-dir file"
+    /// - Source: The file path being read
     fn metadata(&self) -> Metadata {
         Metadata::named("adr-dir file").source(self.path.display().to_string())
     }
 
+    /// Reads the `.adr-dir` file and returns its contents as configuration data.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Map)` with config values if file exists and has content
+    /// - `Ok(Map::new())` (empty) if file doesn't exist or is empty
+    /// - `Err` if file exists but cannot be read (permissions, etc.)
+    ///
+    /// # Configuration Keys
+    ///
+    /// When the file has content, the returned map contains:
+    /// - `adr_dir`: The trimmed file contents (the ADR directory path)
+    /// - `mode`: Always "compatible" (legacy format implies compatible mode)
     fn data(&self) -> Result<Map<Profile, Dict>, figment::Error> {
         // If file doesn't exist, return empty (not an error)
         if !self.path.exists() {

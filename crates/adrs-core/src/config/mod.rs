@@ -112,10 +112,54 @@ impl Default for Config {
 impl Config {
     /// Load configuration from the given directory.
     ///
-    /// Searches for configuration in the following order:
-    /// 1. `adrs.toml` (new format)
-    /// 2. `.adr-dir` (legacy adr-tools format)
-    /// 3. Default configuration
+    /// Searches for configuration files in the following precedence order
+    /// (highest to lowest):
+    ///
+    /// 1. Environment variable `ADR_DIRECTORY` (overrides `adr_dir` only)
+    /// 2. `adrs.toml` (new TOML format)
+    /// 3. `.adr-dir` (legacy adr-tools format)
+    /// 4. Default configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::AdrDirNotFound`] if no configuration file exists
+    /// and the default `doc/adr` directory doesn't exist.
+    ///
+    /// Returns [`Error::ConfigError`] if the configuration file is malformed
+    /// or contains invalid values (e.g., empty `adr_dir`).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Config;
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    ///
+    /// // Create a legacy .adr-dir config
+    /// std::fs::write(temp.path().join(".adr-dir"), "decisions").unwrap();
+    ///
+    /// let config = Config::load(temp.path()).unwrap();
+    /// assert_eq!(config.adr_dir.to_str(), Some("decisions"));
+    /// ```
+    ///
+    /// With `adrs.toml`:
+    ///
+    /// ```rust
+    /// use adrs_core::{Config, ConfigMode};
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// std::fs::write(
+    ///     temp.path().join("adrs.toml"),
+    ///     r#"adr_dir = "docs/adr"
+    /// mode = "ng"
+    /// "#
+    /// ).unwrap();
+    ///
+    /// let config = Config::load(temp.path()).unwrap();
+    /// assert_eq!(config.mode, ConfigMode::NextGen);
+    /// ```
     pub fn load(root: &Path) -> Result<Self> {
         let figment = build_figment_for_root(root);
         let config: Config = figment
@@ -138,11 +182,81 @@ impl Config {
     }
 
     /// Load configuration, or return default if not found.
+    ///
+    /// This is a convenience method that never fails. Use [`Config::load`]
+    /// if you need to handle errors explicitly.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Config;
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// // Empty directory - no config exists
+    ///
+    /// let config = Config::load_or_default(temp.path());
+    /// assert_eq!(config.adr_dir.to_str(), Some("doc/adr")); // Default
+    /// ```
     pub fn load_or_default(root: &Path) -> Self {
         Self::load(root).unwrap_or_default()
     }
 
     /// Save configuration to the given directory.
+    ///
+    /// The output format depends on the current [`ConfigMode`]:
+    ///
+    /// - [`ConfigMode::Compatible`]: Writes `.adr-dir` (single line with directory path)
+    /// - [`ConfigMode::NextGen`]: Writes `adrs.toml` (full TOML configuration)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file cannot be written (permissions, disk full, etc.)
+    /// - TOML serialization fails (should not happen with valid config)
+    ///
+    /// # Examples
+    ///
+    /// Save in Compatible mode (creates `.adr-dir`):
+    ///
+    /// ```rust
+    /// use adrs_core::{Config, ConfigMode};
+    /// use tempfile::TempDir;
+    /// use std::path::PathBuf;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// let config = Config {
+    ///     adr_dir: PathBuf::from("decisions"),
+    ///     mode: ConfigMode::Compatible,
+    ///     ..Default::default()
+    /// };
+    ///
+    /// config.save(temp.path()).unwrap();
+    ///
+    /// let content = std::fs::read_to_string(temp.path().join(".adr-dir")).unwrap();
+    /// assert_eq!(content, "decisions");
+    /// ```
+    ///
+    /// Save in NextGen mode (creates `adrs.toml`):
+    ///
+    /// ```rust
+    /// use adrs_core::{Config, ConfigMode};
+    /// use tempfile::TempDir;
+    /// use std::path::PathBuf;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// let config = Config {
+    ///     adr_dir: PathBuf::from("docs/decisions"),
+    ///     mode: ConfigMode::NextGen,
+    ///     ..Default::default()
+    /// };
+    ///
+    /// config.save(temp.path()).unwrap();
+    ///
+    /// let content = std::fs::read_to_string(temp.path().join("adrs.toml")).unwrap();
+    /// assert!(content.contains("docs/decisions"));
+    /// assert!(content.contains("ng")); // mode serializes as "ng"
+    /// ```
     pub fn save(&self, root: &Path) -> Result<()> {
         match self.mode {
             ConfigMode::Compatible => {
@@ -162,16 +276,75 @@ impl Config {
     }
 
     /// Returns the full path to the ADR directory.
+    ///
+    /// Combines the project root with the configured `adr_dir` to produce
+    /// an absolute path.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Config;
+    /// use std::path::{Path, PathBuf};
+    ///
+    /// let config = Config {
+    ///     adr_dir: PathBuf::from("docs/decisions"),
+    ///     ..Default::default()
+    /// };
+    ///
+    /// let full_path = config.adr_path(Path::new("/home/user/project"));
+    /// assert_eq!(full_path, PathBuf::from("/home/user/project/docs/decisions"));
+    /// ```
     pub fn adr_path(&self, root: &Path) -> PathBuf {
         root.join(&self.adr_dir)
     }
 
     /// Returns true if running in next-gen mode.
+    ///
+    /// NextGen mode enables YAML frontmatter, structured links, and tags.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Config, ConfigMode};
+    ///
+    /// let compatible = Config::default();
+    /// assert!(!compatible.is_next_gen());
+    ///
+    /// let nextgen = Config {
+    ///     mode: ConfigMode::NextGen,
+    ///     ..Default::default()
+    /// };
+    /// assert!(nextgen.is_next_gen());
+    /// ```
     pub fn is_next_gen(&self) -> bool {
         matches!(self.mode, ConfigMode::NextGen)
     }
 
-    /// Merge another config into this one (other takes precedence for set values).
+    /// Merge another config into this one.
+    ///
+    /// Values from `other` take precedence, except:
+    /// - `adr_dir` is only overwritten if `other` differs from the default
+    /// - `None` values in templates do not overwrite existing values
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Config, ConfigMode};
+    /// use std::path::PathBuf;
+    ///
+    /// let mut base = Config::default();
+    ///
+    /// let overlay = Config {
+    ///     adr_dir: PathBuf::from("custom/path"),
+    ///     mode: ConfigMode::NextGen,
+    ///     ..Default::default()
+    /// };
+    ///
+    /// base.merge(&overlay);
+    ///
+    /// assert_eq!(base.adr_dir, PathBuf::from("custom/path"));
+    /// assert_eq!(base.mode, ConfigMode::NextGen);
+    /// ```
     pub fn merge(&mut self, other: &Config) {
         // adr_dir: use other if it differs from default
         if other.adr_dir.as_os_str() != DEFAULT_ADR_DIR {
@@ -196,6 +369,28 @@ impl Config {
 ///
 /// Returned by [`discover`] with the resolved configuration,
 /// the project root directory, and the source of the configuration.
+///
+/// # Examples
+///
+/// ```rust
+/// # use adrs_core::doctest_helpers::temp_repo;
+/// use adrs_core::{discover, ConfigSource};
+///
+/// let (temp, _repo) = temp_repo().unwrap();
+///
+/// let discovered = discover(temp.path()).unwrap();
+///
+/// // Access the resolved configuration
+/// println!("ADR directory: {}", discovered.config.adr_dir.display());
+///
+/// // Check where it was loaded from
+/// match discovered.source {
+///     ConfigSource::Project(path) => println!("From project: {}", path.display()),
+///     ConfigSource::Global(path) => println!("From global: {}", path.display()),
+///     ConfigSource::Environment => println!("From environment variable"),
+///     ConfigSource::Default => println!("Using defaults"),
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct DiscoveredConfig {
     /// The resolved configuration.
@@ -476,17 +671,66 @@ pub enum ConfigMode {
     NextGen,
 }
 
-/// Template configuration.
+/// Template configuration for ADR creation.
+///
+/// Controls the default template format, variant, and custom template path
+/// used when creating new ADRs.
+///
+/// # Supported Formats
+///
+/// | Format | Description |
+/// |--------|-------------|
+/// | `nygard` | Classic Michael Nygard format (default) |
+/// | `madr` | MADR 4.0.0 format with structured sections |
+///
+/// # Supported Variants
+///
+/// | Variant | Description |
+/// |---------|-------------|
+/// | `full` | Complete template with all sections (default) |
+/// | `minimal` | Condensed template for quick decisions |
+/// | `bare` | Just the essential structure |
+///
+/// # Examples
+///
+/// In `adrs.toml`:
+///
+/// ```toml
+/// [templates]
+/// format = "madr"
+/// variant = "minimal"
+/// # custom = "templates/my-adr.md"  # Optional custom template
+/// ```
+///
+/// Programmatically:
+///
+/// ```rust
+/// use adrs_core::Config;
+///
+/// let config = Config::default();
+///
+/// // Templates are None by default (uses built-in defaults)
+/// assert!(config.templates.format.is_none());
+/// assert!(config.templates.variant.is_none());
+/// assert!(config.templates.custom.is_none());
+/// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TemplateConfig {
-    /// The default template format to use.
+    /// The default template format to use (e.g., "nygard", "madr").
+    ///
+    /// When `None`, defaults to "nygard".
     pub format: Option<String>,
 
-    /// The default template variant to use.
+    /// The default template variant to use (e.g., "full", "minimal", "bare").
+    ///
+    /// When `None`, defaults to "full".
     pub variant: Option<String>,
 
     /// Path to a custom template file.
+    ///
+    /// When set, this template is used instead of built-in templates.
+    /// The path is relative to the project root.
     pub custom: Option<PathBuf>,
 }
 
