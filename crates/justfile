@@ -1,0 +1,32 @@
+# crates/justfile - Crate build recipes
+# See ADR-0014 for justfile conventions
+
+set working-directory := ".."
+
+# CLI binary (adrs) recipes
+mod cli './adrs/justfile'
+
+# Core library (adrs-core) recipes
+mod lib './adrs-core/justfile'
+
+# ============================================================================
+# Build Recipes
+# ============================================================================
+
+# Build workspace (debug, release, or all)
+[default]
+build profile="debug":
+    @case "{{ profile }}" in \
+        debug) cargo build --workspace ;; \
+        release) cargo build --workspace --release ;; \
+        all) cargo build --workspace && cargo build --workspace --release ;; \
+        *) echo "Unknown profile: {{ profile }}. Options: debug, release, all" && exit 1 ;; \
+    esac
+
+# Build all crates (debug)
+debug:
+    cargo build --workspace
+
+# Build release binaries
+release:
+    cargo build --workspace --release

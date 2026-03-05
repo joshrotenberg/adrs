@@ -1,0 +1,46 @@
+# docs/justfile - Documentation recipes
+# See ADR-0014 for justfile conventions
+
+set working-directory := ".."
+
+# ============================================================================
+# Documentation Recipes
+# ============================================================================
+
+# Serve mdbook locally (default)
+[default]
+serve:
+    mdbook serve docs --open
+
+# ============================================================================
+# Rustdoc
+# ============================================================================
+
+# Check documentation (missing docs, broken links)
+check:
+    RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" \
+        cargo doc --package adrs-core --no-deps
+
+# Build API documentation
+build:
+    cargo doc --package adrs-core --no-deps
+
+# Build and open API documentation
+open:
+    cargo doc --package adrs-core --no-deps --open
+
+# Count doctests
+count:
+    @cargo test --doc --package adrs-core 2>&1 | grep "running" || echo "No doctests found"
+
+# ============================================================================
+# mdBook
+# ============================================================================
+
+# Build mdbook
+book:
+    mdbook build docs
+
+# Full docs check
+all: check book
+    @echo "Documentation checks passed!"

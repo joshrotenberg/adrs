@@ -1,10 +1,58 @@
+//! # Health Checks (Deprecated)
+//!
 //! Health checks for ADR repositories.
+//!
+//! > **Deprecated**: This module is deprecated since v0.6.0.
+//! > Use the [`lint`](crate::lint) module instead, which provides
+//! > more comprehensive validation using mdbook-lint rules.
+//!
+//! ## Overview
+//!
+//! This module provides repository health checks:
+//!
+//! | Check | Description |
+//! |-------|-------------|
+//! | [`Check::DuplicateNumbers`] | Detect duplicate ADR numbers |
+//! | [`Check::FileNaming`] | Verify 4-digit padded filenames |
+//! | [`Check::MissingStatus`] | Find ADRs without status |
+//! | [`Check::BrokenLinks`] | Detect links to non-existent ADRs |
+//! | [`Check::NumberingGaps`] | Find gaps in sequential numbering |
+//! | [`Check::SupersededLinks`] | Verify superseded ADRs have links |
+//!
+//! ## Migration
+//!
+//! Replace usage of this module with the `lint` module:
+//!
+//! ```rust,ignore
+//! // Old (deprecated)
+//! use adrs_core::doctor::{check, DoctorReport};
+//! let report = check(&repo)?;
+//!
+//! // New (recommended)
+//! use adrs_core::lint::{check_all, LintReport};
+//! let report = check_all(&repo)?;
+//! ```
 
 use crate::{Adr, Repository, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// The severity level of a diagnostic.
+///
+/// > **Deprecated**: Use [`IssueSeverity`](crate::lint::IssueSeverity) instead.
+///
+/// Ordered from lowest to highest: Info < Warning < Error.
+///
+/// # Examples
+///
+/// ```rust
+/// #[allow(deprecated)]
+/// use adrs_core::doctor::Severity;
+///
+/// assert!(Severity::Error > Severity::Warning);
+/// assert!(Severity::Warning > Severity::Info);
+/// assert_eq!(Severity::Error.to_string(), "error");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
     /// Informational message.
@@ -26,6 +74,30 @@ impl std::fmt::Display for Severity {
 }
 
 /// A diagnostic message from a health check.
+///
+/// > **Deprecated**: Use [`Issue`](crate::lint::Issue) instead.
+///
+/// Represents a single problem found during health checks,
+/// including severity, check type, and location information.
+///
+/// # Examples
+///
+/// ```rust
+/// #[allow(deprecated)]
+/// use adrs_core::doctor::{Diagnostic, Severity, Check};
+/// use std::path::PathBuf;
+///
+/// let diag = Diagnostic::new(
+///     Severity::Error,
+///     Check::BrokenLinks,
+///     "ADR 1 links to non-existent ADR 99"
+/// )
+/// .with_path("doc/adr/0001-test.md")
+/// .with_adr(1);
+///
+/// assert_eq!(diag.severity, Severity::Error);
+/// assert_eq!(diag.adr_number, Some(1));
+/// ```
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     /// The severity of this diagnostic.
@@ -41,7 +113,23 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    /// Create a new diagnostic.
+    /// Creates a new diagnostic.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::{Diagnostic, Severity, Check};
+    ///
+    /// let diag = Diagnostic::new(
+    ///     Severity::Warning,
+    ///     Check::FileNaming,
+    ///     "File should start with 0001-"
+    /// );
+    ///
+    /// assert_eq!(diag.severity, Severity::Warning);
+    /// assert!(diag.path.is_none());
+    /// ```
     pub fn new(severity: Severity, check: Check, message: impl Into<String>) -> Self {
         Self {
             severity,
@@ -52,13 +140,37 @@ impl Diagnostic {
         }
     }
 
-    /// Set the path for this diagnostic.
+    /// Sets the path for this diagnostic.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::{Diagnostic, Severity, Check};
+    ///
+    /// let diag = Diagnostic::new(Severity::Error, Check::BrokenLinks, "Broken link")
+    ///     .with_path("doc/adr/0001-test.md");
+    ///
+    /// assert!(diag.path.is_some());
+    /// ```
     pub fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.path = Some(path.into());
         self
     }
 
-    /// Set the ADR number for this diagnostic.
+    /// Sets the ADR number for this diagnostic.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::{Diagnostic, Severity, Check};
+    ///
+    /// let diag = Diagnostic::new(Severity::Info, Check::NumberingGaps, "Gap found")
+    ///     .with_adr(5);
+    ///
+    /// assert_eq!(diag.adr_number, Some(5));
+    /// ```
     pub fn with_adr(mut self, number: u32) -> Self {
         self.adr_number = Some(number);
         self
@@ -66,6 +178,25 @@ impl Diagnostic {
 }
 
 /// The type of health check.
+///
+/// > **Deprecated**: Use the [`lint`](crate::lint) module with
+/// > ADR010-ADR013 rules instead.
+///
+/// Each variant corresponds to a specific validation check
+/// performed on the repository.
+///
+/// # Examples
+///
+/// ```rust
+/// #[allow(deprecated)]
+/// use adrs_core::doctor::Check;
+///
+/// let check = Check::BrokenLinks;
+/// assert_eq!(check.to_string(), "broken-links");
+///
+/// let check = Check::DuplicateNumbers;
+/// assert_eq!(check.to_string(), "duplicate-numbers");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Check {
     /// Check for duplicate ADR numbers.
@@ -96,6 +227,31 @@ impl std::fmt::Display for Check {
 }
 
 /// Results from running health checks.
+///
+/// > **Deprecated**: Use [`LintReport`](crate::lint::LintReport) instead.
+///
+/// Collects all diagnostics found during health checks and provides
+/// methods for querying the results.
+///
+/// # Examples
+///
+/// ```rust
+/// #[allow(deprecated)]
+/// use adrs_core::doctor::{DoctorReport, Diagnostic, Severity, Check};
+///
+/// let mut report = DoctorReport::new();
+/// assert!(report.is_healthy());
+///
+/// report.add(Diagnostic::new(
+///     Severity::Warning,
+///     Check::FileNaming,
+///     "File naming issue"
+/// ));
+///
+/// assert!(!report.is_healthy());
+/// assert!(report.has_warnings());
+/// assert_eq!(report.count_by_severity(Severity::Warning), 1);
+/// ```
 #[derive(Debug, Default)]
 pub struct DoctorReport {
     /// All diagnostics found.
@@ -103,36 +259,98 @@ pub struct DoctorReport {
 }
 
 impl DoctorReport {
-    /// Create a new empty report.
+    /// Creates a new empty report.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::DoctorReport;
+    ///
+    /// let report = DoctorReport::new();
+    /// assert!(report.diagnostics.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add a diagnostic to the report.
+    /// Adds a diagnostic to the report.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::{DoctorReport, Diagnostic, Severity, Check};
+    ///
+    /// let mut report = DoctorReport::new();
+    /// report.add(Diagnostic::new(Severity::Info, Check::NumberingGaps, "Gap"));
+    ///
+    /// assert_eq!(report.diagnostics.len(), 1);
+    /// ```
     pub fn add(&mut self, diagnostic: Diagnostic) {
         self.diagnostics.push(diagnostic);
     }
 
-    /// Check if there are any errors.
+    /// Returns true if there are any errors.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::DoctorReport;
+    ///
+    /// let report = DoctorReport::new();
+    /// assert!(!report.has_errors());
+    /// ```
     pub fn has_errors(&self) -> bool {
         self.diagnostics
             .iter()
             .any(|d| d.severity == Severity::Error)
     }
 
-    /// Check if there are any warnings.
+    /// Returns true if there are any warnings.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::DoctorReport;
+    ///
+    /// let report = DoctorReport::new();
+    /// assert!(!report.has_warnings());
+    /// ```
     pub fn has_warnings(&self) -> bool {
         self.diagnostics
             .iter()
             .any(|d| d.severity == Severity::Warning)
     }
 
-    /// Check if the report is clean (no warnings or errors).
+    /// Returns true if the report is clean (no warnings or errors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::DoctorReport;
+    ///
+    /// let report = DoctorReport::new();
+    /// assert!(report.is_healthy());
+    /// ```
     pub fn is_healthy(&self) -> bool {
         !self.has_errors() && !self.has_warnings()
     }
 
-    /// Get the count of diagnostics by severity.
+    /// Returns the count of diagnostics by severity.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #[allow(deprecated)]
+    /// use adrs_core::doctor::{DoctorReport, Severity};
+    ///
+    /// let report = DoctorReport::new();
+    /// assert_eq!(report.count_by_severity(Severity::Error), 0);
+    /// ```
     pub fn count_by_severity(&self, severity: Severity) -> usize {
         self.diagnostics
             .iter()
@@ -141,7 +359,34 @@ impl DoctorReport {
     }
 }
 
-/// Run all health checks on a repository.
+/// Runs all health checks on a repository.
+///
+/// > **Deprecated**: Use [`check_all`](crate::lint::check_all) instead.
+///
+/// Performs all available health checks and returns a report
+/// with any issues found, sorted by severity (errors first).
+///
+/// # Examples
+///
+/// ```rust
+/// #[allow(deprecated)]
+/// use adrs_core::Repository;
+/// use adrs_core::doctor::check;
+/// use tempfile::TempDir;
+///
+/// let temp = TempDir::new().unwrap();
+/// let repo = Repository::init(temp.path(), None, false).unwrap();
+///
+/// let report = check(&repo).unwrap();
+///
+/// if report.is_healthy() {
+///     println!("Repository is healthy!");
+/// }
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if ADR files cannot be read.
 pub fn check(repo: &Repository) -> Result<DoctorReport> {
     let adrs = repo.list()?;
     let mut report = DoctorReport::new();
