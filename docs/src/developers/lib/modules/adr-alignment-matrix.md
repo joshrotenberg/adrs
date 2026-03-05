@@ -9,7 +9,7 @@ This document compares the current implementation against ADRs 0004-0007.
 | ADR | Status | Compliance | Notes |
 |-----|--------|------------|-------|
 | [0004: Library-first Architecture](#adr-0004-library-first-architecture) | Accepted | ✅ High | Architecture matches ADR |
-| [0005: Dual-mode Operation](#adr-0005-dual-mode-operation) | Accepted | ✅ High | Both modes fully implemented |
+| [0005: Dual-mode Operation](#adr-0005-dual-mode-operation) | Accepted | ⚠️ Partial | `--ng` flag doesn't override template mode |
 | [0006: YAML Frontmatter](#adr-0006-yaml-frontmatter) | Accepted | ✅ High | All specified fields supported |
 | [0007: Minijinja Templates](#adr-0007-minijinja-templates) | Accepted | ✅ High | Full implementation with extras |
 
@@ -64,7 +64,10 @@ This document compares the current implementation against ADRs 0004-0007.
 | Compatible mode default | ✅ | `config.rs:DEFAULT_MODE` |
 | `.adr-dir` detection | ✅ | `config.rs:discover()` |
 | `adrs.toml` detection | ✅ | `config.rs:discover()` |
-| `--ng` flag | ✅ | `main.rs:Cli` |
+| `--ng` flag defined | ✅ | `main.rs:Cli` |
+| `--ng` used in `init` | ✅ | `commands/init.rs` |
+| `--ng` used in `new` for tags | ✅ | `commands/new.rs:85` |
+| `--ng` overrides template mode | ⚠️ | Gap - uses config mode |
 | Legacy format parsing | ✅ | `parse.rs:parse_legacy()` |
 | NextGen format parsing | ✅ | `parse.rs:parse_frontmatter()` |
 | Auto-format detection | ✅ | `parse.rs:Parser::parse()` |
@@ -76,11 +79,14 @@ This document compares the current implementation against ADRs 0004-0007.
 3. Global (`~/.config/adrs/config.toml`) ✅
 4. Defaults ✅
 
-**Potential Gaps:**
-- [ ] Migration command for compatible → nextgen (verify exists)
-- [ ] Documentation of mode differences could be expanded
+**Gap Found:**
+Per ADR-0005, mode priority should be: `--ng` flag > config > default. However, `adrs --ng new` on an existing Compatible-mode repo does NOT generate YAML frontmatter. The flag only affects tags validation, not template rendering.
 
-**Verdict:** ✅ **Aligned** - Both modes fully implemented as specified
+**Potential Fixes:**
+- Add `Repository::with_mode()` method to override config mode
+- Update CLI to pass override to repository
+
+**Verdict:** ⚠️ **Partial** - Mode handling works but `--ng` flag doesn't fully override
 
 ---
 
