@@ -1,0 +1,21 @@
+# Nextest configuration
+# See: https://nexte.st/book/configuration.html
+
+[profile.default]
+retries = 0
+fail-fast = true
+status-level = "pass"
+final-status-level = "fail"
+
+[profile.ci]
+retries = 2
+fail-fast = false
+status-level = "retry"
+final-status-level = "flaky"
+
+# JUnit output for CI systems
+[profile.ci.junit]
+path = "target/nextest/ci/junit.xml"
+report-name = "adrs-tests"
+store-success-output = true
+store-failure-output = true
