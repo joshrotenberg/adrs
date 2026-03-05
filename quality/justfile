@@ -1,8 +1,27 @@
 # quality/justfile - Code quality, security, and coverage recipes
+# See ADR-0014 for justfile conventions
 
 set working-directory := ".."
 
-# === Coverage ===
+# ============================================================================
+# Quality Recipes
+# ============================================================================
+
+# Run quality checks (coverage, security, unused, outdated, all)
+[default]
+check choice="all":
+    @case "{{ choice }}" in \
+        coverage) just quality::coverage ;; \
+        security) just quality::security ;; \
+        unused) just quality::unused ;; \
+        outdated) just quality::outdated ;; \
+        all) just quality::all ;; \
+        *) echo "Unknown: {{ choice }}. Options: coverage, security, unused, outdated, all" && exit 1 ;; \
+    esac
+
+# ============================================================================
+# Coverage
+# ============================================================================
 
 # Generate coverage report (HTML)
 coverage:
@@ -23,17 +42,21 @@ coverage-text:
     cargo llvm-cov --no-report --doc --package adrs-core
     cargo llvm-cov report --package adrs-core --text
 
-# === Security ===
+# ============================================================================
+# Security
+# ============================================================================
 
 # Run cargo-deny checks (includes security audit)
 deny:
     cargo deny check
 
-# Alias for deny (cargo-deny includes advisories check)
+# Full security check
 security: deny
     @echo "Security checks passed!"
 
-# === Maintenance ===
+# ============================================================================
+# Maintenance
+# ============================================================================
 
 # Check for unused dependencies
 unused:
@@ -43,7 +66,9 @@ unused:
 outdated:
     cargo outdated -R
 
-# === Full Quality ===
+# ============================================================================
+# Full Quality
+# ============================================================================
 
 # Full quality check (use before committing)
 all: security unused

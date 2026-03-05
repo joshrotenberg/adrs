@@ -1,32 +1,52 @@
 # adrs justfile - Task runner for development workflows
-# Run `just --list` to see available recipes
+# See ADR-0014 for justfile conventions
 
+# Global shell settings (ADR-0014)
+set shell := ["/usr/bin/env", "bash", "-eu", "-o", "pipefail", "-c"]
+set tempdir := "/tmp"
+
+# JSON Schema generation and validation
 mod schema './schema/justfile'
+
+# Workspace build recipes (debug, release)
 mod build './crates/justfile'
+
+# CLI binary recipes (run, demo, smoke tests)
 mod cli './crates/adrs/justfile'
+
+# Core library recipes (tests, benchmarks)
 mod lib './crates/adrs-core/justfile'
+
+# Documentation recipes (mdbook, rustdoc)
 mod docs './docs/justfile'
+
+# Test recipes (unit, integration, visual)
 mod test './tests/justfile'
+
+# Code quality recipes (lint, security, coverage)
 mod quality './quality/justfile'
 
-# Remove build artifacts
+# ============================================================================
+# Default and Common Recipes
+# ============================================================================
+
+# Show available recipes
+[default]
+[no-cd]
+list:
+    @just --list --justfile "{{ justfile() }}"
+
+# Remove all build artifacts (workspace-wide)
 clean:
     rm -rf "{{ justfile_directory() }}/target/"
 
-# Run all tests (shortcut for test::all)
-test-all:
-    just test all
+# ============================================================================
+# Installation
+# ============================================================================
 
-# Build debug binary (shortcut for build::debug)
-build-debug:
-    just build debug
-
-# Build release binary (shortcut for build::release)
-build-release:
+# Install binary locally (requires release build)
+install:
     just build release
-
-# Install binary locally
-install: build-release
     cargo install --path crates/adrs
 
 # Publish crates to crates.io
@@ -34,6 +54,10 @@ install: build-release
 publish:
     cargo publish --package adrs-core
     cargo publish --package adrs
+
+# ============================================================================
+# Development Environment Setup
+# ============================================================================
 
 # Install Homebrew package manager
 [macos]

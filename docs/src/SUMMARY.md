@@ -118,6 +118,13 @@
   - [0010: Error Handling Strategy](./reference/adrs/0010-error-handling-strategy.md)
   - [0011: MCP Server Integration](./reference/adrs/0011-mcp-server-integration.md)
   - [0012: MCP Library Selection](./reference/adrs/0012-mcp-server-library-selection.md)
+  - [0013: Figment Configuration](./reference/adrs/0013-adopt-figment-for-configuration.md)
+  - [0014: Justfile Conventions](./reference/adrs/0014-justfile-conventions.md)
+  - [0015: Visual/Snapshot Testing](./reference/adrs/0015-visual-snapshot-testing.md)
+  - [0016: Justfile Module Organization](./reference/adrs/0016-justfile-module-organization.md)
+  - [0017: Justfile Global Settings](./reference/adrs/0017-justfile-global-settings.md)
+  - [0018: Justfile Recipe Conventions](./reference/adrs/0018-justfile-recipe-conventions.md)
+  - [0019: Justfile Argument Attributes](./reference/adrs/0019-justfile-argument-attributes.md)
 - [Glossary](./reference/glossary.md)
 
 ---

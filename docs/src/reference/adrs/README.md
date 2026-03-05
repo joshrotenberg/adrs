@@ -29,10 +29,16 @@ For more background, see [ADR-0001](./0001-record-architecture-decisions.md) and
 | [0011](./0011-mcp-server-integration.md) | MCP Server Integration | Accepted | 2026-03-04 |
 | [0012](./0012-mcp-server-library-selection.md) | MCP Server Library Selection | Proposed | 2026-03-04 |
 | [0013](./0013-adopt-figment-for-configuration.md) | Adopt Figment for Configuration | Proposed | 2026-03-05 |
+| [0014](./0014-justfile-conventions.md) | Justfile Conventions | Accepted | 2026-03-05 |
+| [0015](./0015-visual-snapshot-testing.md) | Visual/Snapshot Testing | Accepted | 2026-03-05 |
+| [0016](./0016-justfile-module-organization.md) | Justfile Module Organization | Accepted | 2026-03-05 |
+| [0017](./0017-justfile-global-settings.md) | Justfile Global Settings | Accepted | 2026-03-05 |
+| [0018](./0018-justfile-recipe-conventions.md) | Justfile Recipe Conventions | Accepted | 2026-03-05 |
+| [0019](./0019-justfile-argument-attributes.md) | Justfile Argument Attributes | Accepted | 2026-03-05 |
 
 ## Status Summary
 
-- **Accepted**: 11
+- **Accepted**: 17
 - **Proposed**: 2
 - **Superseded**: 0
 - **Deprecated**: 0
