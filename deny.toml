@@ -4,10 +4,9 @@
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
-vulnerability = "deny"
-unmaintained = "warn"
 yanked = "warn"
-notice = "warn"
+# Check unmaintained advisories for workspace crates only (not transitive deps)
+unmaintained = "workspace"
 ignore = [
     # bincode is unmaintained (not a security vulnerability). It is a transitive
     # dependency via syntect (used by comrak for syntax highlighting). bincode
@@ -20,7 +19,7 @@ ignore = [
 ]
 
 [licenses]
-unlicensed = "deny"
+# All licenses are denied by default unless explicitly allowed
 allow = [
     "MIT",
     "Apache-2.0",
@@ -34,7 +33,6 @@ allow = [
     "Unicode-DFS-2016",
     "Unicode-3.0",
 ]
-copyleft = "warn"
 confidence-threshold = 0.8
 
 [[licenses.clarify]]

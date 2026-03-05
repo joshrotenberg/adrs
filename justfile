@@ -35,6 +35,18 @@ publish:
     cargo publish --package adrs-core
     cargo publish --package adrs
 
+# Install Homebrew package manager
+[macos]
+[confirm("Install Homebrew? This will run a script from the internet.")]
+homebrew:
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Homebrew package manager
+[linux]
+[confirm("Install Homebrew? This will run a script from the internet.")]
+homebrew:
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
 # Initialize development environment
 [macos]
 init:

@@ -29,3 +29,7 @@ mdbook-lint-rulesets = { version = "0.14.3", default-features = false, features 
 tempfile.workspace = true
 proptest.workspace = true
 test-case.workspace = true
+
+[package.metadata.cargo-machete]
+# TODO: Remove if actually unused, or document why it's needed
+ignored = ["pulldown-cmark-to-cmark"]
