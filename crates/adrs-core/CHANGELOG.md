@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-03-05
+
+### Bug Fixes
+
+- --ng flag now overrides template mode for existing repos
+
+
 ## [0.7.3] - 2026-03-04
 
 ### Bug Fixes
