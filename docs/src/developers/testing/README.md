@@ -1,5 +1,7 @@
 # Testing Guide
 
+<!-- toc -->
+
 This guide covers testing strategies and practices for the `adrs` project.
 
 ## Test Organization
@@ -7,7 +9,7 @@ This guide covers testing strategies and practices for the `adrs` project.
 ```
 crates/
 ├── adrs-core/
-│   ├── src/           # Source code
+│   ├── src/           # Unit tests in modules
 │   └── tests/         # Integration tests
 │       ├── fixtures/  # Test ADR files
 │       └── *.rs       # Test modules
@@ -15,57 +17,6 @@ crates/
 │   └── tests/         # CLI integration tests
 └── adrs-mcp/
     └── tests/         # MCP server tests
-```
-
-## Test Types
-
-### Unit Tests
-
-Located in source files with `#[cfg(test)]` modules:
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_something() {
-        // ...
-    }
-}
-```
-
-### Integration Tests
-
-Located in `tests/` directories:
-
-```rust
-// tests/repository_tests.rs
-use adrs_core::Repository;
-use tempfile::tempdir;
-
-#[test]
-fn test_create_adr() {
-    let dir = tempdir().unwrap();
-    let repo = Repository::init(dir.path()).unwrap();
-    // ...
-}
-```
-
-### Property-Based Tests
-
-Using `proptest` for generating test cases:
-
-```rust
-use proptest::prelude::*;
-
-proptest! {
-    #[test]
-    fn test_slug_generation(title in "[a-zA-Z ]+") {
-        let slug = generate_slug(&title);
-        assert!(!slug.contains(' '));
-    }
-}
 ```
 
 ## Running Tests
@@ -82,20 +33,9 @@ cargo test test_name
 
 # Run tests in a specific crate
 cargo test -p adrs-core
-```
 
-## Test Fixtures
-
-Test fixtures are ADR files used for testing:
-
-```
-tests/fixtures/
-├── valid/
-│   ├── 0001-simple.md
-│   └── 0002-with-links.md
-└── invalid/
-    ├── missing-status.md
-    └── bad-frontmatter.md
+# Run tests matching pattern
+cargo test parse::
 ```
 
 ## Coverage
@@ -103,7 +43,14 @@ tests/fixtures/
 Generate coverage reports:
 
 ```sh
+# Install tarpaulin
+cargo install cargo-tarpaulin
+
+# Generate HTML report
 cargo tarpaulin --out html
+
+# Generate lcov for CI
+cargo tarpaulin --out lcov
 ```
 
 ## Best Practices
@@ -111,5 +58,16 @@ cargo tarpaulin --out html
 1. **Use tempdir**: Create temporary directories for file-based tests
 2. **Test both modes**: Test Compatible and NextGen modes
 3. **Test edge cases**: Empty files, malformed content, missing fields
-4. **Clean assertions**: Clear failure messages
+4. **Clear assertions**: Use descriptive assertion messages
 5. **Isolate tests**: No shared state between tests
+6. **Fast tests**: Keep unit tests fast, use integration tests for I/O
+
+## Documentation
+
+- [Test Types](./types/README.md) - Unit, integration, property-based tests
+- [Fixtures](./fixtures.md) - Test data management
+- [Goals](./goals.md) - Coverage and quality goals
+
+## See Also
+
+- [Contributing](../contributing.md) - Testing requirements for PRs

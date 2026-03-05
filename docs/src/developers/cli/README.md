@@ -31,18 +31,18 @@ adrs-cli/
 
 1. **Thin wrapper**: CLI code should only handle I/O and formatting
 2. **No business logic**: All logic belongs in `adrs-core`
-3. **Clear errors**: User-friendly error messages
+3. **Clear errors**: User-friendly error messages with suggestions
 4. **Consistent output**: Uniform formatting across commands
 
-## Adding a New Command
+## Documentation
 
-1. Create `src/commands/mycommand.rs`
-2. Add command struct with clap derive macros
-3. Implement the command logic calling `adrs-core`
-4. Register in `src/commands/mod.rs`
-5. Add to `src/main.rs` command enum
+- [Examples](./examples/README.md) - Code examples
+  - [Adding a Command](./examples/add-command.md)
+- [Requirements](./requirements/README.md) - Design requirements
 
-Example:
+## Command Structure
+
+Each command follows this pattern:
 
 ```rust
 use adrs_core::Repository;
@@ -64,6 +64,7 @@ impl MyCommand {
 }
 ```
 
-## Requirements
+## See Also
 
-See [CLI Requirements](./requirements/README.md) for detailed specifications.
+- [Commands Reference](../../users/commands/README.md) - User documentation
+- [Library Guide](../lib/README.md) - Using adrs-core

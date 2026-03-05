@@ -37,14 +37,42 @@
 
 - [Developer Guide](./developers/README.md)
   - [Introduction](./developers/introduction/README.md)
+  - [Concepts](./developers/introduction/concepts.md)
   - [Testing](./developers/testing/README.md)
+    - [Test Types](./developers/testing/types/README.md)
+      - [Unit Tests](./developers/testing/types/unit-tests.md)
+      - [Integration Tests](./developers/testing/types/integration-tests.md)
+      - [Property-Based Tests](./developers/testing/types/property-based-tests.md)
+    - [Fixtures](./developers/testing/fixtures.md)
+    - [Goals](./developers/testing/goals.md)
 - [Library (adrs-core)](./developers/lib/README.md)
+  - [Modules](./developers/lib/modules/README.md)
+    - [Core Types](./developers/lib/modules/types-core.md)
+  - [Templates](./developers/lib/templates.md)
+  - [Linting](./developers/lib/linting.md)
+  - [Import/Export](./developers/lib/import-export.md)
+  - [Error Handling](./developers/lib/errors.md)
   - [Requirements](./developers/lib/requirements/README.md)
+    - [API](./developers/lib/requirements/api.md)
+    - [Types](./developers/lib/requirements/types.md)
+    - [Errors](./developers/lib/requirements/errors.md)
+    - [Compatibility](./developers/lib/requirements/compatibility.md)
 - [CLI (adrs)](./developers/cli/README.md)
+  - [Examples](./developers/cli/examples/README.md)
+    - [Adding a Command](./developers/cli/examples/add-command.md)
   - [Requirements](./developers/cli/requirements/README.md)
+    - [Commands](./developers/cli/requirements/commands.md)
+    - [Compatibility](./developers/cli/requirements/compatibility.md)
+    - [UX](./developers/cli/requirements/ux.md)
 - [MCP Server](./developers/mcp/README.md)
+  - [Tools](./developers/mcp/tools/README.md)
+  - [Examples](./developers/mcp/examples/usage.md)
+    - [Adding Tools](./developers/mcp/examples/add-tools.md)
   - [Requirements](./developers/mcp/requirements/README.md)
-- [Project Requirements](./developers/requirements/README.md)
+    - [Protocol](./developers/mcp/requirements/protocol.md)
+    - [Tools](./developers/mcp/requirements/tools.md)
+    - [Safety](./developers/mcp/requirements/safety.md)
+    - [Performance](./developers/mcp/requirements/performance.md)
 - [Contributing](./developers/contributing.md)
 - [Code of Conduct](./developers/code-of-conduct.md)
 
@@ -56,6 +84,16 @@
 - [Skills](./ai/skills/README.md)
   - [Development](./ai/skills/development/SKILL.md)
   - [Operations](./ai/skills/operations/SKILL.md)
+- [Rules](./ai/rules/README.md)
+- [Hooks](./ai/hooks/README.md)
+
+---
+
+# Requirements
+
+- [Project Requirements](./requirements/project/README.md)
+  - [Functional](./requirements/project/functional.md)
+  - [Non-Functional](./requirements/project/non-functional.md)
 
 ---
 

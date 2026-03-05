@@ -1,61 +1,15 @@
 # Developer Introduction
 
-This guide provides an overview of the `adrs` project architecture for developers.
-
-## Project Structure
-
-```
-adrs/
-├── crates/
-│   ├── adrs-core/        # Core library
-│   │   ├── src/
-│   │   │   ├── adr.rs          # ADR type definitions
-│   │   │   ├── config.rs       # Configuration handling
-│   │   │   ├── repository.rs   # Repository operations
-│   │   │   ├── template.rs     # Template engine
-│   │   │   └── ...
-│   │   └── tests/
-│   ├── adrs-cli/         # CLI application
-│   │   └── src/
-│   │       ├── main.rs
-│   │       └── commands/
-│   └── adrs-mcp/         # MCP server
-│       └── src/
-├── docs/                 # Documentation (this book)
-└── Cargo.toml            # Workspace manifest
-```
-
-## Key Design Decisions
-
-The project's architecture is documented in ADRs:
-
-- [ADR-0004: Library-first Architecture](../../reference/adrs/0004-library-first-architecture.md)
-- [ADR-0005: Dual Mode Operation](../../reference/adrs/0005-dual-mode-compatible-and-nextgen.md)
-- [ADR-0006: YAML Frontmatter](../../reference/adrs/0006-yaml-frontmatter-for-metadata.md)
-- [ADR-0007: minijinja Templates](../../reference/adrs/0007-use-minijinja-for-templates.md)
-
-## Core Concepts
-
-### Library-First
-
-All business logic lives in `adrs-core`. The CLI and MCP server are thin wrappers that handle:
-- CLI: Argument parsing, user interaction, output formatting
-- MCP: JSON-RPC handling, tool registration
-
-### Dual Mode
-
-The tool operates in two modes:
-- **Compatible**: Full adr-tools compatibility
-- **NextGen**: Enhanced features with YAML frontmatter
-
-### Template System
-
-Templates use minijinja (Jinja2 syntax) with:
-- Built-in formats: Nygard, MADR
-- Variants: full, minimal, bare, bare-minimal
-- Custom template support
+This guide provides an overview of the `adrs` project for developers.
 
 ## Development Setup
+
+### Prerequisites
+
+- Rust toolchain (stable, 1.70+)
+- Git
+
+### Getting Started
 
 ```sh
 # Clone the repository
@@ -72,11 +26,61 @@ cargo test --all
 cargo clippy --all-targets
 
 # Build docs
-cd docs && mdbook build
+mdbook build docs
 ```
+
+### Running Locally
+
+```sh
+# Run CLI
+cargo run -- --help
+cargo run -- list
+
+# Run with features
+cargo run --features mcp-http -- mcp serve --http 127.0.0.1:3000
+```
+
+## Project Structure
+
+```
+adrs/
+├── crates/
+│   ├── adrs-core/        # Core library
+│   │   ├── src/
+│   │   │   ├── config.rs       # Configuration handling
+│   │   │   ├── repository.rs   # Repository operations
+│   │   │   ├── template.rs     # Template engine
+│   │   │   ├── parse.rs        # ADR file parsing
+│   │   │   ├── types.rs        # Core types
+│   │   │   ├── lint.rs         # Validation
+│   │   │   ├── export.rs       # JSON-ADR support
+│   │   │   └── error.rs        # Error types
+│   │   └── tests/
+│   ├── adrs-cli/         # CLI application
+│   │   └── src/
+│   │       ├── main.rs
+│   │       └── commands/
+│   └── adrs-mcp/         # MCP server
+│       └── src/
+├── docs/                 # Documentation (this book)
+│   ├── src/
+│   └── book.toml
+├── tests/                # Workspace-level tests
+└── Cargo.toml            # Workspace manifest
+```
+
+## Core Concepts
+
+See [Concepts](./concepts.md) for detailed explanations of:
+
+- Library-first architecture
+- Dual mode operation
+- Template system
 
 ## Next Steps
 
+- [Concepts](./concepts.md) - Understand the architecture
 - [Library Guide](../lib/README.md) - Using adrs-core
+- [CLI Guide](../cli/README.md) - Extending the CLI
 - [Testing Guide](../testing/README.md) - Testing strategies
 - [Contributing](../contributing.md) - Contribution guidelines

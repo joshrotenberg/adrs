@@ -1,112 +1,46 @@
 # Library Requirements
 
-Requirements for the `adrs-core` library.
+## What Are Requirements?
 
-## API Requirements
+Requirements define what a system must do (functional) and how well it must do it (non-functional). They serve as:
 
-### LIB-1: Repository API
+- **Contract**: Agreement between developers and users about behavior
+- **Validation**: Criteria for testing and acceptance
+- **Documentation**: Reference for understanding design decisions
+- **Planning**: Basis for estimating and prioritizing work
 
-```rust
-// Open existing repository
-Repository::open(path) -> Result<Repository>
+## Who Should Read This?
 
-// Open or create with defaults
-Repository::open_or_default(path) -> Result<Repository>
+- **Contributors**: Understand expected behavior before making changes
+- **Reviewers**: Validate that changes meet requirements
+- **Users**: Understand library capabilities and guarantees
+- **Architects**: Evaluate fitness for their use case
 
-// Initialize new repository
-Repository::init(path, config) -> Result<Repository>
-```
+## How Requirements Are Used
 
-### LIB-2: ADR Operations
+1. **Design**: Requirements inform API design decisions
+2. **Implementation**: Code must satisfy requirements
+3. **Testing**: Tests verify requirements are met
+4. **Documentation**: API docs reference requirements
 
-```rust
-// CRUD operations
-repo.list() -> Result<Vec<AdrSummary>>
-repo.get(number) -> Result<Option<Adr>>
-repo.create(adr) -> Result<PathBuf>
-repo.update(adr) -> Result<()>
+## Requirement Identifiers
 
-// Search
-repo.find(query) -> Result<Option<Adr>>
-repo.search(query) -> Result<Vec<Adr>>
-```
+Each requirement has a unique identifier:
 
-### LIB-3: Template API
+- `LIB-*`: Library requirements (this section)
+- `CLI-*`: CLI requirements
+- `MCP-*`: MCP server requirements
+- `FR-*`: Project functional requirements
+- `NFR-*`: Project non-functional requirements
 
-```rust
-// Built-in templates
-TemplateEngine::new(format, variant) -> TemplateEngine
+## Sections
 
-// Custom templates
-TemplateEngine::from_file(path) -> Result<TemplateEngine>
+- [API Requirements](./api.md) - Public API contracts
+- [Type Requirements](./types.md) - Core type specifications
+- [Error Requirements](./errors.md) - Error handling expectations
+- [Compatibility Requirements](./compatibility.md) - Format compatibility
 
-// Render
-engine.render(adr) -> Result<String>
-```
+## See Also
 
-### LIB-4: Configuration API
-
-```rust
-// Discover configuration
-discover(path) -> Result<Discovered>
-
-// Access configuration
-config.adr_dir -> PathBuf
-config.mode -> ConfigMode
-```
-
-## Error Handling
-
-### LIB-5: Error Types
-
-- Library MUST define typed errors
-- Library MUST NOT panic
-- Library MUST NOT use `unwrap()` in public code paths
-- Errors MUST be informative
-
-```rust
-pub enum Error {
-    NotFound(PathBuf),
-    ParseError { path: PathBuf, line: usize, message: String },
-    ConfigError(String),
-    // ...
-}
-```
-
-## Type Requirements
-
-### LIB-6: Core Types
-
-```rust
-pub struct Adr {
-    pub number: u32,
-    pub title: String,
-    pub date: Option<NaiveDate>,
-    pub status: AdrStatus,
-    pub links: Vec<Link>,
-    pub tags: Vec<String>,
-    pub content: String,
-}
-
-pub enum AdrStatus {
-    Proposed,
-    Accepted,
-    Deprecated,
-    Superseded,
-    Custom(String),
-}
-```
-
-## Compatibility
-
-### LIB-7: Parsing
-
-- MUST parse adr-tools format
-- MUST parse MADR 4.0.0 format
-- MUST auto-detect format
-- MUST handle malformed files gracefully
-
-### LIB-8: Generation
-
-- MUST generate adr-tools compatible output in Compatible mode
-- MUST generate YAML frontmatter in NextGen mode
+- [Project Requirements](../../../requirements/project/README.md) - High-level requirements
+- [ADR-0004: Library-first Architecture](../../../reference/adrs/0004-library-first-architecture.md)
