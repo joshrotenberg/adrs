@@ -1,4 +1,35 @@
+//! # Configuration
+//!
 //! Configuration handling for ADR repositories.
+//!
+//! ## Overview
+//!
+//! This module manages ADR repository configuration, supporting both
+//! legacy adr-tools compatibility and the newer `adrs.toml` format.
+//!
+//! | Mode | Config File | Features |
+//! |------|-------------|----------|
+//! | Compatible | `.adr-dir` | Basic directory, adr-tools compatible |
+//! | NextGen | `adrs.toml` | Full features, YAML frontmatter |
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! # use adrs_core::doctest_helpers::temp_repo;
+//! let (_temp, repo) = temp_repo().unwrap();
+//!
+//! // Access configuration via repository
+//! let config = repo.config();
+//! assert!(!config.is_next_gen()); // Compatible mode by default
+//! ```
+//!
+//! ## Configuration Discovery
+//!
+//! The [`discover`] function searches for configuration in order:
+//! 1. Environment variable `ADRS_CONFIG`
+//! 2. Search upward for `.adr-dir` or `adrs.toml`
+//! 3. Global config at `~/.config/adrs/config.toml`
+//! 4. Default configuration
 
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
@@ -23,6 +54,32 @@ pub const ENV_ADR_DIRECTORY: &str = "ADR_DIRECTORY";
 pub const ENV_ADRS_CONFIG: &str = "ADRS_CONFIG";
 
 /// Configuration for an ADR repository.
+///
+/// # Creating Configuration
+///
+/// Configuration is typically loaded automatically via [`Repository::open`](crate::Repository::open),
+/// but can also be created directly:
+///
+/// ```rust
+/// use adrs_core::{Config, ConfigMode};
+/// use std::path::PathBuf;
+///
+/// let config = Config {
+///     adr_dir: PathBuf::from("docs/decisions"),
+///     mode: ConfigMode::NextGen,
+///     ..Default::default()
+/// };
+///
+/// assert!(config.is_next_gen());
+/// ```
+///
+/// # Defaults
+///
+/// | Field | Default |
+/// |-------|---------|
+/// | `adr_dir` | `doc/adr` |
+/// | `mode` | `ConfigMode::Compatible` |
+/// | `templates` | None |
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -149,6 +206,9 @@ impl Config {
 }
 
 /// Result of discovering configuration.
+///
+/// Returned by [`discover`] with the resolved configuration,
+/// the project root directory, and the source of the configuration.
 #[derive(Debug, Clone)]
 pub struct DiscoveredConfig {
     /// The resolved configuration.
@@ -159,7 +219,20 @@ pub struct DiscoveredConfig {
     pub source: ConfigSource,
 }
 
-/// Where the configuration was loaded from.
+/// Indicates where the configuration was loaded from.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::ConfigSource;
+/// use std::path::PathBuf;
+///
+/// let source = ConfigSource::Project(PathBuf::from(".adr-dir"));
+/// assert!(matches!(source, ConfigSource::Project(_)));
+///
+/// let default = ConfigSource::Default;
+/// assert_eq!(default, ConfigSource::Default);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigSource {
     /// Loaded from project config file.
@@ -172,7 +245,7 @@ pub enum ConfigSource {
     Default,
 }
 
-/// Discover configuration by searching up the directory tree.
+/// Discovers configuration by searching up the directory tree.
 ///
 /// Search order:
 /// 1. Environment variable `ADRS_CONFIG` (explicit config path)
@@ -181,6 +254,19 @@ pub enum ConfigSource {
 /// 4. Default configuration
 ///
 /// Environment variable `ADR_DIRECTORY` overrides the ADR directory.
+///
+/// # Examples
+///
+/// ```rust
+/// # use adrs_core::doctest_helpers::temp_repo;
+/// use adrs_core::{discover, ConfigSource};
+///
+/// let (temp, _repo) = temp_repo().unwrap();
+///
+/// let discovered = discover(temp.path()).unwrap();
+/// assert_eq!(discovered.root, temp.path());
+/// assert!(matches!(discovered.source, ConfigSource::Project(_)));
+/// ```
 pub fn discover(start_dir: &Path) -> Result<DiscoveredConfig> {
     // Check for explicit config path from environment
     if let Ok(config_path) = std::env::var(ENV_ADRS_CONFIG) {
@@ -321,6 +407,27 @@ fn apply_env_overrides(config: &mut Config) {
 }
 
 /// The mode of operation for the ADR tool.
+///
+/// # Comparison
+///
+/// | Feature | Compatible | NextGen |
+/// |---------|------------|---------|
+/// | Config file | `.adr-dir` | `adrs.toml` |
+/// | Frontmatter | No | YAML |
+/// | Structured links | No | Yes |
+/// | Tags | No | Yes |
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::ConfigMode;
+///
+/// let mode: ConfigMode = Default::default();
+/// assert_eq!(mode, ConfigMode::Compatible);
+///
+/// // Parse from string (for TOML deserialization)
+/// assert_eq!(ConfigMode::Compatible, ConfigMode::Compatible);
+/// ```
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConfigMode {
