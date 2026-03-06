@@ -1,7 +1,57 @@
-//! JSON-ADR export functionality.
+//! # JSON-ADR Export
 //!
-//! Provides types and functions for exporting ADRs to the JSON-ADR format,
+//! Types and functions for importing and exporting ADRs using the JSON-ADR format,
 //! a machine-readable interchange format for Architecture Decision Records.
+//!
+//! ## Overview
+//!
+//! The JSON-ADR format enables ADR interchange between tools and systems.
+//! This module provides:
+//!
+//! | Function | Purpose |
+//! |----------|---------|
+//! | [`export_repository`] | Export all ADRs from a repository |
+//! | [`export_adr`] | Export a single ADR |
+//! | [`export_directory`] | Export ADRs from a directory (no repo required) |
+//! | [`import_to_directory`] | Import ADRs from JSON-ADR data |
+//!
+//! ## Format Support
+//!
+//! | Type | Description |
+//! |------|-------------|
+//! | [`JsonAdr`] | Single ADR in JSON-ADR format |
+//! | [`JsonAdrSingle`] | Wrapper for single ADR export |
+//! | [`JsonAdrBulkExport`] | Collection of ADRs with metadata |
+//!
+//! ## Examples
+//!
+//! ### Exporting a repository
+//!
+//! ```rust
+//! use adrs_core::Repository;
+//! use adrs_core::export::export_repository;
+//! use tempfile::TempDir;
+//!
+//! let temp = TempDir::new().unwrap();
+//! let repo = Repository::init(temp.path(), None, false).unwrap();
+//!
+//! let export = export_repository(&repo).unwrap();
+//! assert_eq!(export.version, "1.0.0");
+//! assert_eq!(export.adrs.len(), 1); // Initial ADR
+//! ```
+//!
+//! ### Converting ADR to JSON
+//!
+//! ```rust
+//! use adrs_core::Adr;
+//! use adrs_core::export::JsonAdr;
+//!
+//! let adr = Adr::new(1, "Use Rust");
+//! let json_adr = JsonAdr::from(&adr);
+//!
+//! assert_eq!(json_adr.number, 1);
+//! assert_eq!(json_adr.title, "Use Rust");
+//! ```
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -12,13 +62,62 @@ use crate::{
 };
 
 /// JSON-ADR schema version.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::export::JSON_ADR_VERSION;
+///
+/// assert_eq!(JSON_ADR_VERSION, "1.0.0");
+/// ```
 pub const JSON_ADR_VERSION: &str = "1.0.0";
 
 /// JSON-ADR schema URL.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::export::JSON_ADR_SCHEMA;
+///
+/// assert!(JSON_ADR_SCHEMA.contains("json-adr"));
+/// ```
 pub const JSON_ADR_SCHEMA: &str =
     "https://raw.githubusercontent.com/joshrotenberg/adrs/main/schema/json-adr/v1.json";
 
 /// A single ADR in JSON-ADR format.
+///
+/// This is the core data structure for the JSON-ADR interchange format.
+/// It captures all standard ADR fields plus optional extended fields.
+///
+/// # Examples
+///
+/// ## Creating from an Adr
+///
+/// ```rust
+/// use adrs_core::Adr;
+/// use adrs_core::export::JsonAdr;
+///
+/// let adr = Adr::new(1, "Use PostgreSQL");
+/// let json_adr = JsonAdr::from(&adr);
+///
+/// assert_eq!(json_adr.number, 1);
+/// assert_eq!(json_adr.title, "Use PostgreSQL");
+/// assert_eq!(json_adr.status, "Proposed");
+/// ```
+///
+/// ## Serialization
+///
+/// ```rust
+/// use adrs_core::Adr;
+/// use adrs_core::export::JsonAdr;
+///
+/// let adr = Adr::new(1, "Use Rust");
+/// let json_adr = JsonAdr::from(&adr);
+/// let json = serde_json::to_string(&json_adr).unwrap();
+///
+/// assert!(json.contains("\"number\":1"));
+/// assert!(json.contains("\"title\":\"Use Rust\""));
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonAdr {
     /// Unique identifier for the ADR.
@@ -91,6 +190,25 @@ pub struct JsonAdr {
 }
 
 /// A considered option with pros and cons.
+///
+/// Represents an alternative that was evaluated during decision-making,
+/// along with its advantages and disadvantages.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::export::ConsideredOption;
+///
+/// let option = ConsideredOption {
+///     name: "PostgreSQL".to_string(),
+///     description: Some("Open source relational database".to_string()),
+///     pros: vec!["Mature".to_string(), "Feature-rich".to_string()],
+///     cons: vec!["Complex setup".to_string()],
+/// };
+///
+/// assert_eq!(option.name, "PostgreSQL");
+/// assert_eq!(option.pros.len(), 2);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsideredOption {
     /// Name of the option.
@@ -110,6 +228,24 @@ pub struct ConsideredOption {
 }
 
 /// A link between ADRs in JSON-ADR format.
+///
+/// Represents a relationship between two ADRs, such as supersession
+/// or amendment.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::export::JsonAdrLink;
+///
+/// let link = JsonAdrLink {
+///     link_type: "supersedes".to_string(),
+///     target: 2,
+///     description: Some("Replaces old approach".to_string()),
+/// };
+///
+/// assert_eq!(link.link_type, "supersedes");
+/// assert_eq!(link.target, 2);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonAdrLink {
     /// Link type.
@@ -125,6 +261,21 @@ pub struct JsonAdrLink {
 }
 
 /// Tool metadata for bulk exports.
+///
+/// Records which tool generated the export and its version.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::export::ToolInfo;
+///
+/// let tool = ToolInfo {
+///     name: "adrs".to_string(),
+///     version: "0.7.0".to_string(),
+/// };
+///
+/// assert_eq!(tool.name, "adrs");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolInfo {
     /// Tool name.
@@ -135,6 +286,21 @@ pub struct ToolInfo {
 }
 
 /// Repository metadata for bulk exports.
+///
+/// Records the source repository name and ADR directory path.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::export::RepositoryInfo;
+///
+/// let repo_info = RepositoryInfo {
+///     name: Some("my-project".to_string()),
+///     adr_directory: "doc/adr".to_string(),
+/// };
+///
+/// assert_eq!(repo_info.adr_directory, "doc/adr");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepositoryInfo {
     /// Repository/project name.
@@ -146,6 +312,40 @@ pub struct RepositoryInfo {
 }
 
 /// Bulk export of multiple ADRs.
+///
+/// Contains a collection of ADRs along with metadata about the export,
+/// including schema version, generation timestamp, and tool information.
+///
+/// # Examples
+///
+/// ## Creating an export
+///
+/// ```rust
+/// use adrs_core::export::{JsonAdrBulkExport, JsonAdr, JSON_ADR_VERSION};
+/// use adrs_core::Adr;
+///
+/// let adr = Adr::new(1, "Use Rust");
+/// let json_adr = JsonAdr::from(&adr);
+///
+/// let export = JsonAdrBulkExport::new(vec![json_adr]);
+///
+/// assert_eq!(export.version, JSON_ADR_VERSION);
+/// assert_eq!(export.adrs.len(), 1);
+/// assert!(export.generated_at.is_some());
+/// ```
+///
+/// ## Adding repository metadata
+///
+/// ```rust
+/// use adrs_core::export::JsonAdrBulkExport;
+///
+/// let export = JsonAdrBulkExport::new(vec![])
+///     .with_repository(Some("my-project".to_string()), "doc/adr".to_string());
+///
+/// let repo = export.repository.unwrap();
+/// assert_eq!(repo.name, Some("my-project".to_string()));
+/// assert_eq!(repo.adr_directory, "doc/adr");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonAdrBulkExport {
     /// JSON Schema reference.
@@ -172,7 +372,24 @@ pub struct JsonAdrBulkExport {
 }
 
 impl JsonAdrBulkExport {
-    /// Create a new bulk export with default metadata.
+    /// Creates a new bulk export with default metadata.
+    ///
+    /// Automatically populates:
+    /// - Schema URL
+    /// - Version string
+    /// - Generation timestamp
+    /// - Tool information (name and version)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::export::JsonAdrBulkExport;
+    ///
+    /// let export = JsonAdrBulkExport::new(vec![]);
+    ///
+    /// assert!(export.schema.is_some());
+    /// assert!(export.tool.is_some());
+    /// ```
     pub fn new(adrs: Vec<JsonAdr>) -> Self {
         Self {
             schema: Some(JSON_ADR_SCHEMA.to_string()),
@@ -191,7 +408,18 @@ impl JsonAdrBulkExport {
         }
     }
 
-    /// Set repository metadata.
+    /// Sets repository metadata.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::export::JsonAdrBulkExport;
+    ///
+    /// let export = JsonAdrBulkExport::new(vec![])
+    ///     .with_repository(Some("my-app".to_string()), "doc/adr".to_string());
+    ///
+    /// assert!(export.repository.is_some());
+    /// ```
     pub fn with_repository(mut self, name: Option<String>, adr_directory: String) -> Self {
         self.repository = Some(RepositoryInfo {
             name,
@@ -262,7 +490,30 @@ fn link_kind_to_string(kind: &LinkKind) -> String {
     }
 }
 
-/// Export all ADRs from a repository to JSON-ADR format.
+/// Exports all ADRs from a repository to JSON-ADR format.
+///
+/// Returns a bulk export containing all ADRs in the repository,
+/// along with repository metadata and export information.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::Repository;
+/// use adrs_core::export::export_repository;
+/// use tempfile::TempDir;
+///
+/// let temp = TempDir::new().unwrap();
+/// let repo = Repository::init(temp.path(), None, false).unwrap();
+///
+/// let export = export_repository(&repo).unwrap();
+///
+/// assert_eq!(export.version, "1.0.0");
+/// assert!(!export.adrs.is_empty());
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if the repository cannot be read.
 pub fn export_repository(repo: &Repository) -> Result<JsonAdrBulkExport> {
     let adrs = repo.list()?;
     let json_adrs: Vec<JsonAdr> = adrs.iter().map(JsonAdr::from).collect();
@@ -272,12 +523,50 @@ pub fn export_repository(repo: &Repository) -> Result<JsonAdrBulkExport> {
     Ok(JsonAdrBulkExport::new(json_adrs).with_repository(None, adr_dir))
 }
 
-/// Export a single ADR to JSON-ADR format.
+/// Exports a single ADR to JSON-ADR format.
+///
+/// Converts an [`Adr`] to a [`JsonAdr`] for serialization.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::Adr;
+/// use adrs_core::export::export_adr;
+///
+/// let adr = Adr::new(1, "Use Rust");
+/// let json_adr = export_adr(&adr);
+///
+/// assert_eq!(json_adr.number, 1);
+/// assert_eq!(json_adr.title, "Use Rust");
+///
+/// // Serialize to JSON
+/// let json = serde_json::to_string(&json_adr).unwrap();
+/// assert!(json.contains("\"number\":1"));
+/// ```
 pub fn export_adr(adr: &Adr) -> JsonAdr {
     JsonAdr::from(adr)
 }
 
-/// Single ADR wrapper for JSON-ADR format (used for single ADR import/export).
+/// Single ADR wrapper for JSON-ADR format.
+///
+/// A wrapper type for exporting or importing a single ADR with schema
+/// and version information.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::Adr;
+/// use adrs_core::export::{JsonAdrSingle, JsonAdr, JSON_ADR_VERSION};
+///
+/// let adr = Adr::new(1, "Use Rust");
+/// let single = JsonAdrSingle {
+///     schema: None,
+///     version: JSON_ADR_VERSION.to_string(),
+///     adr: JsonAdr::from(&adr),
+/// };
+///
+/// assert_eq!(single.adr.number, 1);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonAdrSingle {
     /// JSON Schema reference.
@@ -292,6 +581,38 @@ pub struct JsonAdrSingle {
 }
 
 /// Options for importing ADRs.
+///
+/// Controls how ADRs are imported from JSON-ADR format, including
+/// conflict handling, renumbering, and preview modes.
+///
+/// # Examples
+///
+/// ## Default options
+///
+/// ```rust
+/// use adrs_core::export::ImportOptions;
+///
+/// let options = ImportOptions::default();
+///
+/// assert!(!options.overwrite);
+/// assert!(!options.renumber);
+/// assert!(!options.dry_run);
+/// ```
+///
+/// ## Import with renumbering
+///
+/// ```rust
+/// use adrs_core::export::ImportOptions;
+///
+/// let options = ImportOptions {
+///     overwrite: false,
+///     renumber: true,  // Renumber to next available
+///     dry_run: false,
+///     ng_mode: false,
+/// };
+///
+/// assert!(options.renumber);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct ImportOptions {
     /// Overwrite existing files.
@@ -308,6 +629,25 @@ pub struct ImportOptions {
 }
 
 /// Result of an import operation.
+///
+/// Contains statistics about the import, including how many ADRs
+/// were imported, skipped, and any warnings generated.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::export::{import_to_directory, ImportOptions};
+/// use tempfile::TempDir;
+///
+/// let temp = TempDir::new().unwrap();
+/// let json = r#"{"number": 1, "title": "Test", "status": "Proposed", "date": "2024-01-15"}"#;
+///
+/// let result = import_to_directory(json, temp.path(), &ImportOptions::default()).unwrap();
+///
+/// assert_eq!(result.imported, 1);
+/// assert_eq!(result.skipped, 0);
+/// assert_eq!(result.files.len(), 1);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ImportResult {
     /// Number of ADRs successfully imported.
@@ -326,11 +666,36 @@ pub struct ImportResult {
     pub renumber_map: Vec<(u32, u32)>,
 }
 
-/// Export all ADRs from a directory to JSON-ADR format.
+/// Exports all ADRs from a directory to JSON-ADR format.
 ///
-/// This function scans a directory for markdown files that look like ADRs
-/// (files matching `NNNN-*.md` pattern) and parses them. Unlike `export_repository`,
-/// this does not require an initialized adrs repository.
+/// Scans a directory for markdown files matching the `NNNN-*.md` pattern
+/// and parses them. Unlike [`export_repository`], this does not require
+/// an initialized adrs repository.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::export::export_directory;
+/// use tempfile::TempDir;
+/// use std::fs;
+///
+/// let temp = TempDir::new().unwrap();
+///
+/// // Create an ADR file
+/// fs::write(
+///     temp.path().join("0001-use-rust.md"),
+///     "# 1. Use Rust\n\nDate: 2024-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nContext.\n\n## Decision\n\nDecision.\n\n## Consequences\n\nConsequences.\n"
+/// ).unwrap();
+///
+/// let export = export_directory(temp.path()).unwrap();
+///
+/// assert_eq!(export.adrs.len(), 1);
+/// assert_eq!(export.adrs[0].title, "Use Rust");
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be read.
 pub fn export_directory(dir: &Path) -> Result<JsonAdrBulkExport> {
     let parser = Parser::new();
     let mut adrs = Vec::new();
@@ -417,10 +782,60 @@ fn string_to_link_kind(s: &str) -> LinkKind {
     }
 }
 
-/// Import ADRs from a JSON-ADR bulk export into a directory.
+/// Imports ADRs from JSON-ADR data into a directory.
 ///
-/// This creates markdown files from the JSON-ADR data. It can be used
-/// to populate a new ADR directory or migrate ADRs between projects.
+/// Creates markdown files from JSON-ADR data. Can be used to populate
+/// a new ADR directory or migrate ADRs between projects.
+///
+/// # Supported Formats
+///
+/// - Single ADR (bare `JsonAdr`)
+/// - Single ADR wrapper (`JsonAdrSingle`)
+/// - Bulk export (`JsonAdrBulkExport`)
+///
+/// # Examples
+///
+/// ## Basic import
+///
+/// ```rust
+/// use adrs_core::export::{import_to_directory, ImportOptions};
+/// use tempfile::TempDir;
+///
+/// let temp = TempDir::new().unwrap();
+/// let json = r#"{"number": 1, "title": "Use Rust", "status": "Accepted", "date": "2024-01-15"}"#;
+///
+/// let result = import_to_directory(json, temp.path(), &ImportOptions::default()).unwrap();
+///
+/// assert_eq!(result.imported, 1);
+/// assert!(temp.path().join("0001-use-rust.md").exists());
+/// ```
+///
+/// ## Dry run preview
+///
+/// ```rust
+/// use adrs_core::export::{import_to_directory, ImportOptions};
+/// use tempfile::TempDir;
+///
+/// let temp = TempDir::new().unwrap();
+/// let json = r#"{"number": 1, "title": "Test", "status": "Proposed", "date": "2024-01-15"}"#;
+///
+/// let options = ImportOptions {
+///     dry_run: true,
+///     ..Default::default()
+/// };
+///
+/// let result = import_to_directory(json, temp.path(), &options).unwrap();
+///
+/// assert_eq!(result.imported, 1);
+/// // File not created in dry-run mode
+/// assert!(!result.files[0].exists());
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The JSON data is not valid JSON-ADR format
+/// - The target directory cannot be created or written to
 pub fn import_to_directory(
     json_data: &str,
     dir: &Path,
