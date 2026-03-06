@@ -8,6 +8,9 @@ use std::io;
 use std::path::PathBuf;
 
 mod commands;
+mod output;
+
+pub use output::OutputFormat;
 
 #[cfg(feature = "mcp")]
 mod mcp;
@@ -55,6 +58,10 @@ struct Cli {
     /// Run from a different directory
     #[arg(short = 'C', long = "cwd", global = true, value_name = "DIR")]
     working_dir: Option<PathBuf>,
+
+    /// Output format (plain text or JSON for scripting)
+    #[arg(long = "output", global = true, default_value = "plain", value_enum)]
+    output: OutputFormat,
 
     #[command(subcommand)]
     command: Commands,
@@ -666,7 +673,16 @@ fn main() -> Result<()> {
             long,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::list(&discovered.root, status, since, until, decider, tag, long)
+            commands::list(
+                &discovered.root,
+                status,
+                since,
+                until,
+                decider,
+                tag,
+                long,
+                cli.output,
+            )
         }
         Commands::Search {
             query,
@@ -675,7 +691,14 @@ fn main() -> Result<()> {
             case_sensitive,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::search(&discovered.root, &query, title, status, case_sensitive)
+            commands::search(
+                &discovered.root,
+                &query,
+                title,
+                status,
+                case_sensitive,
+                cli.output,
+            )
         }
         Commands::Link {
             source,
@@ -700,10 +723,10 @@ fn main() -> Result<()> {
             let discovered = discover(&start_dir).ok();
             match command {
                 None | Some(ConfigCommands::Show { verbose: false }) => {
-                    commands::config_show(&start_dir, discovered, false)
+                    commands::config_show(&start_dir, discovered, false, cli.output)
                 }
                 Some(ConfigCommands::Show { verbose: true }) => {
-                    commands::config_show(&start_dir, discovered, true)
+                    commands::config_show(&start_dir, discovered, true, cli.output)
                 }
                 Some(ConfigCommands::Migrate { to, dry_run }) => {
                     let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
@@ -713,7 +736,7 @@ fn main() -> Result<()> {
         }
         Commands::Doctor => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::doctor(&discovered.root)
+            commands::doctor(&discovered.root, cli.output)
         }
         Commands::Generate { command } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;

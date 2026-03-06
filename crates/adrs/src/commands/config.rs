@@ -1,12 +1,148 @@
 //! Config command.
 
 use crate::ConfigFormat;
+use crate::output::{ConfigLayer, ConfigOutput, ConfigValues, OutputFormat, print_json};
 use adrs_core::{Config, ConfigMode, ConfigSource, DiscoveredConfig};
 use anyhow::{Context, Result};
 use std::path::Path;
 
 /// Show configuration with discovery information.
 pub fn config_show(
+    start_dir: &Path,
+    discovered: Option<DiscoveredConfig>,
+    verbose: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => config_show_json(start_dir, discovered, verbose),
+        OutputFormat::Plain => config_show_plain(start_dir, discovered, verbose),
+    }
+}
+
+/// Show configuration as JSON.
+fn config_show_json(
+    start_dir: &Path,
+    discovered: Option<DiscoveredConfig>,
+    verbose: bool,
+) -> Result<()> {
+    match discovered {
+        Some(disc) => {
+            let source_str = match &disc.source {
+                ConfigSource::Project(path) => path.display().to_string(),
+                ConfigSource::Global(path) => format!("{}:global", path.display()),
+                ConfigSource::Environment => "environment".to_string(),
+                ConfigSource::Default => "defaults".to_string(),
+            };
+
+            let mode_str = match disc.config.mode {
+                ConfigMode::Compatible => "compatible",
+                ConfigMode::NextGen => "nextgen",
+            };
+
+            let layers = if verbose {
+                collect_config_layers(&disc.root)
+            } else {
+                Vec::new()
+            };
+
+            let output = ConfigOutput {
+                root: disc.root.display().to_string(),
+                source: source_str,
+                config: ConfigValues {
+                    adr_dir: disc.config.adr_dir.display().to_string(),
+                    mode: mode_str.to_string(),
+                    template_format: disc.config.templates.format.clone(),
+                    template_variant: disc.config.templates.variant.clone(),
+                },
+                layers,
+            };
+
+            print_json(&output)?;
+        }
+        None => {
+            // No repository - output error state as JSON
+            let output = serde_json::json!({
+                "error": {
+                    "code": "REPO_NOT_FOUND",
+                    "message": "No ADR repository found",
+                    "context": {
+                        "search_dir": start_dir.display().to_string()
+                    }
+                }
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+    }
+
+    Ok(())
+}
+
+/// Collect config layer information for verbose JSON output.
+fn collect_config_layers(root: &Path) -> Vec<ConfigLayer> {
+    let mut layers = Vec::new();
+
+    // Layer 1: Environment variables
+    let has_env = std::env::var("ADR_DIRECTORY").is_ok();
+    layers.push(ConfigLayer {
+        source: "environment".to_string(),
+        priority: 1,
+        status: Some(if has_env { "active" } else { "not_set" }.to_string()),
+    });
+
+    // Layer 2: adrs.toml
+    let toml_path = root.join("adrs.toml");
+    layers.push(ConfigLayer {
+        source: "adrs.toml".to_string(),
+        priority: 2,
+        status: Some(
+            if toml_path.exists() {
+                "active"
+            } else {
+                "not_found"
+            }
+            .to_string(),
+        ),
+    });
+
+    // Layer 3: Legacy .adr-dir
+    let adr_dir_path = root.join(".adr-dir");
+    layers.push(ConfigLayer {
+        source: ".adr-dir".to_string(),
+        priority: 3,
+        status: Some(
+            if adr_dir_path.exists() {
+                "active"
+            } else {
+                "not_found"
+            }
+            .to_string(),
+        ),
+    });
+
+    // Layer 4: Global config
+    let global_status = if let Some(path) = get_global_config_path() {
+        if path.exists() { "active" } else { "not_found" }
+    } else {
+        "not_found"
+    };
+    layers.push(ConfigLayer {
+        source: "global:config.toml".to_string(),
+        priority: 4,
+        status: Some(global_status.to_string()),
+    });
+
+    // Layer 5: Defaults
+    layers.push(ConfigLayer {
+        source: "defaults".to_string(),
+        priority: 5,
+        status: Some("active".to_string()),
+    });
+
+    layers
+}
+
+/// Show configuration as plain text.
+fn config_show_plain(
     start_dir: &Path,
     discovered: Option<DiscoveredConfig>,
     verbose: bool,
