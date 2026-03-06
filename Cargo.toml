@@ -20,7 +20,7 @@ toml = "0.8"
 
 # Configuration
 figment = { version = "0.10", features = ["toml", "env"] }
-gix-config = "0.42"
+gix-config = "0.53"
 bstr = "1"
 dirs = "5"
 
