@@ -129,6 +129,7 @@
   - [0020: Configuration Priority](./reference/adrs/0020-config-priority.md)
   - [0021: Testing Strategy](./reference/adrs/0021-testing-strategy.md)
   - [0022: Error Handling Policy](./reference/adrs/0022-error-handling-policy.md)
+  - [0023: Documentation Conventions](./reference/adrs/0023-documentation-conventions.md)
 - [Glossary](./reference/glossary.md)
 
 ---
