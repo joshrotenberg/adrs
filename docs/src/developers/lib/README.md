@@ -41,6 +41,7 @@ fn main() -> adrs_core::Result<()> {
 
 - [Modules Overview](./modules/README.md) - Architecture and module structure
 - [Core Types](./modules/types-core.md) - `Repository`, `Adr`, `AdrStatus`, `Config`
+- [Configuration](./configuration.md) - Figment providers and layered config
 - [Templates](./templates.md) - Template engine usage
 - [Linting](./linting.md) - Validation and linting APIs
 - [Import/Export](./import-export.md) - JSON-ADR format support

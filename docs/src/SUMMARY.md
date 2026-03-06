@@ -49,6 +49,7 @@
     - [Modules](./developers/lib/modules/README.md)
       - [Core Types](./developers/lib/modules/types-core.md)
       - [ADR Alignment](./developers/lib/modules/adr-alignment-matrix.md)
+    - [Configuration](./developers/lib/configuration.md)
     - [Templates](./developers/lib/templates.md)
     - [Linting](./developers/lib/linting.md)
     - [Import/Export](./developers/lib/import-export.md)
