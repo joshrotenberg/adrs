@@ -7,18 +7,20 @@ on:
     paths:
       - "**/Cargo.toml"
       - "**/Cargo.lock"
+      - "deny.toml"
   pull_request:
     paths:
       - "**/Cargo.toml"
       - "**/Cargo.lock"
+      - "deny.toml"
 
 jobs:
-  audit:
-    name: Audit
+  deny:
+    name: Cargo Deny
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-      - name: Run audit
-        run: cargo audit
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Check advisories, licenses, bans, sources
+        run: cargo deny check

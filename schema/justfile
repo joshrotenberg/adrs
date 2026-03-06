@@ -1,0 +1,11 @@
+# schema/justfile - JSON schema recipes
+
+set working-directory := ".."
+
+# Validate schema files
+validate:
+    @echo "Schema validation not yet implemented"
+
+# Generate schema from Rust types
+generate:
+    @echo "Schema generation not yet implemented"

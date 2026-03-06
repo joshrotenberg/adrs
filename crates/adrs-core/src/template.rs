@@ -1,10 +1,66 @@
-//! Template system for generating ADR files.
+//! # Template System
+//!
+//! Template system for generating ADR files using Minijinja.
+//!
+//! ## Built-in Formats
+//!
+//! | Format | Description |
+//! |--------|-------------|
+//! | [`Nygard`](TemplateFormat::Nygard) | Michael Nygard's original format |
+//! | [`Madr`](TemplateFormat::Madr) | Markdown Any Decision Records (MADR 4.0.0) |
+//!
+//! ## Template Variants
+//!
+//! | Variant | Sections | Guidance |
+//! |---------|----------|----------|
+//! | [`Full`](TemplateVariant::Full) | All | Yes |
+//! | [`Minimal`](TemplateVariant::Minimal) | Core only | Yes |
+//! | [`Bare`](TemplateVariant::Bare) | All | No |
+//! | [`BareMinimal`](TemplateVariant::BareMinimal) | Core only | No |
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use adrs_core::{Template, TemplateFormat, TemplateVariant, Adr, Config};
+//! use std::collections::HashMap;
+//!
+//! // Get a built-in template
+//! let template = Template::builtin(TemplateFormat::Nygard);
+//!
+//! // Or with a specific variant
+//! let minimal = Template::builtin_with_variant(
+//!     TemplateFormat::Madr,
+//!     TemplateVariant::Minimal
+//! );
+//!
+//! // Render an ADR
+//! let adr = Adr::new(1, "Use Rust");
+//! let config = Config::default();
+//! let output = template.render(&adr, &config, &HashMap::new()).unwrap();
+//! assert!(output.contains("Use Rust"));
+//! ```
 
 use crate::{Adr, Config, Error, Result};
 use minijinja::{Environment, context};
 use std::path::Path;
 
 /// Built-in template formats.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::TemplateFormat;
+///
+/// // Default is Nygard
+/// assert_eq!(TemplateFormat::default(), TemplateFormat::Nygard);
+///
+/// // Parse from string
+/// let format: TemplateFormat = "madr".parse().unwrap();
+/// assert_eq!(format, TemplateFormat::Madr);
+///
+/// // Display
+/// assert_eq!(format.to_string(), "madr");
+/// ```
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum TemplateFormat {
     /// Michael Nygard's original ADR format.
@@ -43,6 +99,23 @@ impl std::str::FromStr for TemplateFormat {
 /// - **Minimal**: Core sections only, with guidance text
 /// - **Bare**: All sections, but empty (no guidance)
 /// - **BareMinimal**: Core sections only, empty (no guidance)
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::TemplateVariant;
+///
+/// // Default is Full
+/// assert_eq!(TemplateVariant::default(), TemplateVariant::Full);
+///
+/// // Parse from string
+/// let variant: TemplateVariant = "minimal".parse().unwrap();
+/// assert_eq!(variant, TemplateVariant::Minimal);
+///
+/// // Aliases work too
+/// let bare: TemplateVariant = "empty".parse().unwrap();
+/// assert_eq!(bare, TemplateVariant::BareMinimal);
+/// ```
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum TemplateVariant {
     /// Full template with all sections and guidance.
@@ -98,6 +171,43 @@ fn pad_filter(
 }
 
 /// A template for generating ADRs.
+///
+/// Templates use [Minijinja](https://docs.rs/minijinja) syntax.
+///
+/// # Template Variables
+///
+/// | Variable | Type | Description |
+/// |----------|------|-------------|
+/// | `number` | `u32` | ADR number |
+/// | `title` | `String` | ADR title |
+/// | `date` | `String` | Date (YYYY-MM-DD) |
+/// | `status` | `String` | Status text |
+/// | `context` | `String` | Context section |
+/// | `decision` | `String` | Decision section |
+/// | `consequences` | `String` | Consequences section |
+/// | `links` | `Vec` | Link objects |
+/// | `tags` | `Vec<String>` | Tags |
+/// | `is_ng` | `bool` | NextGen mode flag |
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::{Template, Adr, Config};
+/// use std::collections::HashMap;
+///
+/// // Create a custom template
+/// let template = Template::from_string(
+///     "custom",
+///     "# ADR {{ number }}: {{ title }}\n\nStatus: {{ status }}"
+/// );
+///
+/// let adr = Adr::new(1, "Use Rust");
+/// let config = Config::default();
+/// let output = template.render(&adr, &config, &HashMap::new()).unwrap();
+///
+/// assert!(output.contains("ADR 1: Use Rust"));
+/// assert!(output.contains("Status: Proposed"));
+/// ```
 #[derive(Debug, Clone)]
 pub struct Template {
     /// The template content.
@@ -242,6 +352,27 @@ impl Template {
 }
 
 /// Template engine for managing and rendering templates.
+///
+/// Provides a builder-style API for configuring template settings.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::{TemplateEngine, TemplateFormat, TemplateVariant, Adr, Config};
+/// use std::collections::HashMap;
+///
+/// // Create engine with custom settings
+/// let engine = TemplateEngine::new()
+///     .with_format(TemplateFormat::Madr)
+///     .with_variant(TemplateVariant::Minimal);
+///
+/// // Render an ADR
+/// let adr = Adr::new(1, "Use Rust");
+/// let config = Config::default();
+/// let output = engine.render(&adr, &config, &HashMap::new()).unwrap();
+///
+/// assert!(output.contains("Context and Problem Statement"));
+/// ```
 #[derive(Debug)]
 pub struct TemplateEngine {
     /// The default template format.

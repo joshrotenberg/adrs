@@ -1,0 +1,58 @@
+# Pre-commit hooks configuration
+# See: https://pre-commit.com/
+#
+# Install:
+#   pre-commit install
+#   pre-commit install --hook-type pre-push
+#
+# Required tools:
+#   cargo install cargo-nextest cargo-deny cargo-machete
+#
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      # Fast checks (run on every commit)
+      - id: fmt
+        name: cargo fmt
+        entry: cargo fmt --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      # Slower checks (run on push only)
+      - id: nextest
+        name: cargo nextest (unit tests)
+        entry: cargo nextest run
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: doctest
+        name: cargo test --doc
+        entry: cargo test --doc --package adrs-core
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: deny
+        name: cargo deny (security, licenses)
+        entry: cargo deny check
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: machete
+        name: cargo machete (unused deps)
+        entry: cargo machete
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

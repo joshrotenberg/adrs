@@ -68,13 +68,23 @@ EXAMPLES:
   adrs init                    Initialize in doc/adr (default)
   adrs init docs/decisions     Use custom directory
   adrs --ng init               Initialize with NextGen mode (YAML frontmatter)
+  adrs init --git-config       Store config in .git/config instead of file
 
 Creates the ADR directory and an initial ADR documenting the use of ADRs.
-If ADRs already exist in the directory, they are preserved.")]
+If ADRs already exist in the directory, they are preserved.
+
+CONFIG STORAGE:
+  By default, configuration is stored in adrs.toml (NextGen) or .adr-dir (Compatible).
+  Use --git-config to store in the local git config instead, which keeps your
+  repository cleaner and allows per-worktree configuration.")]
     Init {
         /// Directory to store ADRs [default: doc/adr]
         #[arg(default_value = "doc/adr")]
         directory: PathBuf,
+
+        /// Store configuration in .git/config instead of adrs.toml/.adr-dir
+        #[arg(long, help = "Store config in local gitconfig [adrs] section")]
+        git_config: bool,
     },
 
     /// Create a new ADR
@@ -261,8 +271,11 @@ Note: Use --by with 'superseded' to create a link to the replacing ADR.")]
         by: Option<u32>,
     },
 
-    /// Show configuration
-    Config,
+    /// Show or manage configuration
+    Config {
+        #[command(subcommand)]
+        command: Option<ConfigCommands>,
+    },
 
     /// Check repository health
     Doctor,
@@ -564,6 +577,57 @@ enum TemplateCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// Show resolved configuration (default if no subcommand)
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs config show                       Show current configuration
+  adrs config show --verbose             Show all config layers
+  adrs config                            Same as 'config show'
+
+The verbose output shows the precedence of configuration sources:
+  - Environment variables (highest priority)
+  - adrs.toml
+  - .adr-dir (legacy)
+  - Global config (~/.config/adrs/config.toml)
+  - Defaults (lowest priority)")]
+    Show {
+        /// Show all configuration layers and their sources
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Migrate configuration between formats
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs config migrate --to toml          Convert .adr-dir to adrs.toml
+  adrs config migrate --to adr-dir       Convert adrs.toml to .adr-dir
+  adrs config migrate --to toml --dry-run  Preview without writing
+
+NOTE: Converting to .adr-dir is lossy - only adr_dir is preserved.
+Mode, templates, and other settings will be lost.")]
+    Migrate {
+        /// Target format
+        #[arg(long, value_enum)]
+        to: ConfigFormat,
+
+        /// Preview migration without writing files
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+/// Configuration file format
+#[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
+enum ConfigFormat {
+    /// Modern TOML format (adrs.toml)
+    Toml,
+    /// Legacy adr-tools format (.adr-dir)
+    #[value(name = "adr-dir")]
+    AdrDir,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -573,7 +637,10 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
     match cli.command {
-        Commands::Init { directory } => commands::init(&start_dir, directory, cli.ng),
+        Commands::Init {
+            directory,
+            git_config,
+        } => commands::init(&start_dir, directory, cli.ng, git_config),
         Commands::New {
             title,
             supersedes,
@@ -642,9 +709,20 @@ fn main() -> Result<()> {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
             commands::status(&discovered.root, adr, &status, by)
         }
-        Commands::Config => {
+        Commands::Config { command } => {
             let discovered = discover(&start_dir).ok();
-            commands::config_with_discovery(&start_dir, discovered)
+            match command {
+                None | Some(ConfigCommands::Show { verbose: false }) => {
+                    commands::config_show(&start_dir, discovered, false)
+                }
+                Some(ConfigCommands::Show { verbose: true }) => {
+                    commands::config_show(&start_dir, discovered, true)
+                }
+                Some(ConfigCommands::Migrate { to, dry_run }) => {
+                    let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+                    commands::config_migrate(&discovered, to, dry_run)
+                }
+            }
         }
         Commands::Doctor => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;

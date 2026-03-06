@@ -1,4 +1,31 @@
-//! ADR parsing - supports both legacy markdown and YAML frontmatter formats.
+//! # ADR Parsing
+//!
+//! Supports both legacy markdown and YAML frontmatter formats.
+//!
+//! ## Supported Formats
+//!
+//! | Format | Detection | Example |
+//! |--------|-----------|---------|
+//! | Legacy | No `---` prefix | `# 1. Title` |
+//! | Frontmatter | Starts with `---\n` | YAML metadata block |
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use adrs_core::{Parser, AdrStatus};
+//!
+//! let parser = Parser::new();
+//!
+//! // Parse legacy format
+//! let content = "# 1. Use Rust\n\n## Status\n\nAccepted\n";
+//! let adr = parser.parse(content).unwrap();
+//! assert_eq!(adr.title, "Use Rust");
+//! assert_eq!(adr.status, AdrStatus::Accepted);
+//! ```
+//!
+//! ## Date Utilities
+//!
+//! The module also provides [`today`] and [`format_date`] for date handling.
 
 use crate::{Adr, AdrLink, AdrStatus, Error, LinkKind, Result};
 use pulldown_cmark::{Event, HeadingLevel, Parser as MdParser, Tag, TagEnd};
@@ -16,18 +43,64 @@ static LINK_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 static NUMBER_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\d{4})-.*\.md$").unwrap());
 
 /// Parser for ADR files.
+///
+/// Automatically detects and parses both legacy markdown and YAML
+/// frontmatter formats.
+///
+/// # Examples
+///
+/// ```rust
+/// use adrs_core::{Parser, AdrStatus};
+///
+/// let parser = Parser::new();
+///
+/// // Legacy format (adr-tools compatible)
+/// let legacy = "# 1. Use Rust\n\n## Status\n\nAccepted\n\n## Context\n\nContext.\n";
+///
+/// let adr = parser.parse(legacy).unwrap();
+/// assert_eq!(adr.number, 1);
+/// assert_eq!(adr.title, "Use Rust");
+/// assert_eq!(adr.status, AdrStatus::Accepted);
+/// ```
 #[derive(Debug, Default)]
 pub struct Parser {
     _private: (),
 }
 
 impl Parser {
-    /// Create a new parser.
+    /// Creates a new parser.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Parser;
+    ///
+    /// let parser = Parser::new();
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Parse an ADR from a file.
+    /// Parses an ADR from a file path.
+    ///
+    /// Extracts the ADR number from the filename if not present in content.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// use adrs_core::Parser;
+    ///
+    /// let (temp, repo) = temp_repo().unwrap();
+    /// let parser = Parser::new();
+    ///
+    /// // Parse the ADR created by init
+    /// let adr_path = repo.adr_path().join("0001-record-architecture-decisions.md");
+    /// let adr = parser.parse_file(&adr_path).unwrap();
+    ///
+    /// assert_eq!(adr.number, 1);
+    /// assert_eq!(adr.path, Some(adr_path));
+    /// ```
     pub fn parse_file(&self, path: &Path) -> Result<Adr> {
         let content = std::fs::read_to_string(path)?;
         let mut adr = self.parse(&content)?;
@@ -41,7 +114,37 @@ impl Parser {
         Ok(adr)
     }
 
-    /// Parse an ADR from a string.
+    /// Parses an ADR from a string.
+    ///
+    /// Automatically detects format based on content:
+    /// - Starts with `---\n`: YAML frontmatter format
+    /// - Otherwise: Legacy markdown format
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Parser, AdrStatus};
+    ///
+    /// let parser = Parser::new();
+    ///
+    /// // Frontmatter format
+    /// let frontmatter = r#"---
+    /// number: 2
+    /// title: Use PostgreSQL
+    /// date: 2024-01-15
+    /// status: accepted
+    /// ---
+    ///
+    /// ## Context
+    ///
+    /// We need a database.
+    /// "#;
+    ///
+    /// let adr = parser.parse(frontmatter).unwrap();
+    /// assert_eq!(adr.number, 2);
+    /// assert_eq!(adr.title, "Use PostgreSQL");
+    /// assert_eq!(adr.status, AdrStatus::Accepted);
+    /// ```
     pub fn parse(&self, content: &str) -> Result<Adr> {
         // Check for YAML frontmatter
         if content.starts_with("---\n") {
@@ -305,7 +408,9 @@ fn extract_number_from_path(path: &Path) -> Result<u32> {
         })
 }
 
-/// Get today's date.
+/// Returns today's date in UTC.
+///
+/// Used internally for setting the date on new ADRs.
 pub fn today() -> Date {
     let now = OffsetDateTime::now_utc();
     Date::from_calendar_date(now.year(), now.month(), now.day()).unwrap_or_else(|_| {
@@ -314,7 +419,7 @@ pub fn today() -> Date {
     })
 }
 
-/// Format a date as YYYY-MM-DD.
+/// Formats a date as `YYYY-MM-DD`.
 pub fn format_date(date: Date) -> String {
     format!(
         "{:04}-{:02}-{:02}",

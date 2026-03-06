@@ -1,0 +1,173 @@
+# tests/justfile - Test recipes
+# See ADR-0014 for justfile conventions
+
+set working-directory := ".."
+
+# ============================================================================
+# Test Recipes
+# ============================================================================
+
+# Run tests (unit, doc, integration, all, or smoke)
+[default]
+test choice="unit":
+    @case "{{ choice }}" in \
+        unit) cargo nextest run ;; \
+        doc) cargo test --doc --package adrs-core ;; \
+        integration) cargo test --test '*' ;; \
+        all) cargo nextest run && cargo test --doc --package adrs-core ;; \
+        smoke) just test::smoke ;; \
+        *) echo "Unknown: {{ choice }}. Options: unit, doc, integration, all, smoke" && exit 1 ;; \
+    esac
+
+# Run all tests with nextest
+unit:
+    cargo nextest run
+
+# Run doctests only
+doc:
+    cargo test --doc --package adrs-core
+
+# Run all tests including doctests
+all: unit doc
+    @echo "All tests passed!"
+
+# Run tests with coverage
+cov:
+    cargo llvm-cov clean --workspace
+    cargo llvm-cov --no-report --package adrs-core
+    cargo llvm-cov --no-report --doc --package adrs-core
+    cargo llvm-cov report --package adrs-core --text
+
+# Run specific package tests
+core:
+    cargo nextest run --package adrs-core
+
+# Run CLI tests
+cli:
+    cargo nextest run --package adrs
+
+# ============================================================================
+# Smoke Tests
+# ============================================================================
+
+# Quick verification that CLI commands work
+[unix]
+smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Build first
+    cargo build --package adrs
+
+    ADRS="$(pwd)/target/debug/adrs"
+    SMOKE_DIR=$(mktemp -d)
+    trap "rm -rf $SMOKE_DIR" EXIT
+    cd "$SMOKE_DIR"
+
+    echo "Running smoke tests..."
+
+    # Basic commands that don't need init
+    echo -n "  help... " && $ADRS --help > /dev/null && echo "✓"
+    echo -n "  cheatsheet... " && $ADRS cheatsheet > /dev/null && echo "✓"
+    echo -n "  template list... " && $ADRS template list > /dev/null && echo "✓"
+    echo -n "  completions bash... " && $ADRS completions bash > /dev/null && echo "✓"
+
+    # Init and basic workflow
+    echo -n "  init... " && $ADRS init > /dev/null && echo "✓"
+    echo -n "  config... " && $ADRS config > /dev/null && echo "✓"
+    echo -n "  config show... " && $ADRS config show > /dev/null && echo "✓"
+    echo -n "  config show --verbose... " && $ADRS config show --verbose > /dev/null && echo "✓"
+    echo -n "  new... " && $ADRS new --no-edit "Test ADR" > /dev/null && echo "✓"
+    echo -n "  list... " && $ADRS list > /dev/null && echo "✓"
+    echo -n "  list -l... " && $ADRS list -l > /dev/null && echo "✓"
+    echo -n "  search... " && $ADRS search test > /dev/null && echo "✓"
+    echo -n "  doctor... " && $ADRS doctor > /dev/null && echo "✓"
+    echo -n "  generate toc... " && $ADRS generate toc > /dev/null && echo "✓"
+    echo -n "  export json... " && $ADRS export json > /dev/null && echo "✓"
+
+    # Status change
+    echo -n "  status... " && $ADRS status 2 accepted > /dev/null && echo "✓"
+
+    # Second ADR for linking
+    $ADRS new --no-edit "Second ADR" > /dev/null
+    echo -n "  link... " && $ADRS link 2 "Relates to" 3 > /dev/null && echo "✓"
+
+    # Migrate (dry-run)
+    echo -n "  config migrate --dry-run... " && $ADRS config migrate --to toml --dry-run > /dev/null && echo "✓"
+
+    echo ""
+    echo "All smoke tests passed! ✓"
+
+# ============================================================================
+# Visual Tests
+# ============================================================================
+
+# Run visual/snapshot tests comparing output against expected files
+[unix]
+visual command case="default":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    COMMAND="{{ command }}"
+    EXPECTED="tests/visual/$COMMAND/{{ case }}.txt"
+    if [ ! -f "$EXPECTED" ]; then
+        echo "Error: Expected output file not found: $EXPECTED"
+        exit 1
+    fi
+
+    # Build first
+    cargo build --package adrs --quiet
+
+    ADRS="$(pwd)/target/debug/adrs"
+    ACTUAL=$(mktemp)
+    trap "rm -f $ACTUAL" EXIT
+
+    # Run the command and capture output
+    if [[ "$COMMAND" == "help" ]]; then
+        $ADRS --help > "$ACTUAL" 2>&1 || true
+    elif [[ "$COMMAND" == help-* ]]; then
+        subcommand="${COMMAND#help-}"
+        $ADRS "$subcommand" --help > "$ACTUAL" 2>&1 || true
+    else
+        echo "Unknown visual test command: $COMMAND"
+        exit 1
+    fi
+
+    # Compare
+    if diff -u "$EXPECTED" "$ACTUAL"; then
+        echo "✓ Visual test passed: $COMMAND/{{ case }}"
+    else
+        echo "✗ Visual test failed: $COMMAND/{{ case }}"
+        echo ""
+        echo "To update expected output:"
+        echo "  cp $ACTUAL $EXPECTED"
+        exit 1
+    fi
+
+# Update expected output for a visual test
+[unix]
+visual-update command case="default":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    COMMAND="{{ command }}"
+    EXPECTED="tests/visual/$COMMAND/{{ case }}.txt"
+    mkdir -p "$(dirname "$EXPECTED")"
+
+    # Build first
+    cargo build --package adrs --quiet
+
+    ADRS="$(pwd)/target/debug/adrs"
+
+    # Run the command and capture output
+    if [[ "$COMMAND" == "help" ]]; then
+        $ADRS --help > "$EXPECTED" 2>&1 || true
+    elif [[ "$COMMAND" == help-* ]]; then
+        subcommand="${COMMAND#help-}"
+        $ADRS "$subcommand" --help > "$EXPECTED" 2>&1 || true
+    else
+        echo "Unknown visual test command: $COMMAND"
+        exit 1
+    fi
+
+    echo "Updated: $EXPECTED"

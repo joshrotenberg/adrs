@@ -1,4 +1,31 @@
-//! Repository operations for managing ADRs.
+//! # Repository Operations
+//!
+//! The [`Repository`] struct is the main entry point for ADR operations.
+//!
+//! ## Overview
+//!
+//! A repository represents a collection of ADRs stored in a directory.
+//! It provides methods for:
+//!
+//! | Category | Methods |
+//! |----------|---------|
+//! | **Lifecycle** | [`open`](Repository::open), [`init`](Repository::init) |
+//! | **Query** | [`list`](Repository::list), [`get`](Repository::get), [`find`](Repository::find) |
+//! | **Mutation** | [`new_adr`](Repository::new_adr), [`supersede`](Repository::supersede), [`link`](Repository::link) |
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! # use adrs_core::doctest_helpers::temp_repo;
+//! # let (_temp, repo) = temp_repo().unwrap();
+//! // List all ADRs
+//! let adrs = repo.list().unwrap();
+//! println!("Found {} ADRs", adrs.len());
+//!
+//! // Create a new ADR
+//! let (adr, path) = repo.new_adr("Use PostgreSQL for persistence").unwrap();
+//! println!("Created ADR #{} at {}", adr.number, path.display());
+//! ```
 
 use crate::{
     Adr, AdrLink, AdrStatus, Config, ConfigMode, Error, LinkKind, Parser, Result, Template,
@@ -25,6 +52,28 @@ static FM_TAGS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^tags:\n(?:(?:  .+\n)*)").unwrap());
 
 /// A repository of Architecture Decision Records.
+///
+/// The `Repository` is the main entry point for all ADR operations.
+/// It manages ADR files in a directory and provides methods for
+/// creating, reading, updating, and querying ADRs.
+///
+/// # Creating a Repository
+///
+/// ```rust
+/// # use adrs_core::doctest_helpers::temp_repo;
+/// // Open existing or create new
+/// let (_temp, repo) = temp_repo().unwrap();
+///
+/// // The repository has one ADR created by init
+/// assert_eq!(repo.list().unwrap().len(), 1);
+/// ```
+///
+/// # Thread Safety
+///
+/// `Repository` is `Send` but not `Sync`. Each thread should have
+/// its own `Repository` instance. File operations are not internally
+/// locked; use external coordination if multiple processes access
+/// the same repository.
 #[derive(Debug)]
 pub struct Repository {
     /// The root directory of the project.
@@ -41,7 +90,31 @@ pub struct Repository {
 }
 
 impl Repository {
-    /// Open an existing repository at the given root.
+    /// Opens an existing repository at the given root.
+    ///
+    /// Searches for `.adr-dir` (Compatible mode) or `adrs.toml` (NextGen mode)
+    /// in the root directory to locate the ADR configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::AdrDirNotFound`] if no configuration file is found.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Repository;
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    ///
+    /// // First initialize a repository
+    /// let repo = Repository::init(temp.path(), None, false).unwrap();
+    /// drop(repo);
+    ///
+    /// // Now open it
+    /// let repo = Repository::open(temp.path()).unwrap();
+    /// assert_eq!(repo.list().unwrap().len(), 1);
+    /// ```
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         let config = Config::load(&root)?;
@@ -55,7 +128,24 @@ impl Repository {
         })
     }
 
-    /// Open a repository, or create default config if not found.
+    /// Opens a repository, or uses default configuration if not found.
+    ///
+    /// Unlike [`open`](Self::open), this method never fails. If no
+    /// configuration file exists, it uses default settings without
+    /// creating any files.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Repository;
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    ///
+    /// // Works even without initialization
+    /// let repo = Repository::open_or_default(temp.path());
+    /// assert_eq!(repo.config().adr_dir.to_str(), Some("doc/adr"));
+    /// ```
     pub fn open_or_default(root: impl Into<PathBuf>) -> Self {
         let root = root.into();
         let config = Config::load_or_default(&root);
@@ -69,7 +159,31 @@ impl Repository {
         }
     }
 
-    /// Initialize a new repository at the given root.
+    /// Initializes a new repository at the given root.
+    ///
+    /// Creates the ADR directory and configuration file, then creates
+    /// an initial ADR documenting the decision to use ADRs.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` - The project root directory
+    /// * `adr_dir` - Custom ADR directory (default: `doc/adr`)
+    /// * `ng` - If true, use NextGen mode with `adrs.toml`; otherwise Compatible mode
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::Repository;
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// let repo = Repository::init(temp.path(), None, false).unwrap();
+    ///
+    /// // Init creates the first ADR automatically
+    /// let adrs = repo.list().unwrap();
+    /// assert_eq!(adrs.len(), 1);
+    /// assert_eq!(adrs[0].title, "Record architecture decisions");
+    /// ```
     pub fn init(root: impl Into<PathBuf>, adr_dir: Option<PathBuf>, ng: bool) -> Result<Self> {
         let root = root.into();
         let adr_dir = adr_dir.unwrap_or_else(|| PathBuf::from(crate::config::DEFAULT_ADR_DIR));
@@ -119,17 +233,41 @@ impl Repository {
         Ok(repo)
     }
 
-    /// Get the repository root path.
+    /// Returns the repository root path.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// let (temp, repo) = temp_repo().unwrap();
+    /// assert_eq!(repo.root(), temp.path());
+    /// ```
     pub fn root(&self) -> &Path {
         &self.root
     }
 
-    /// Get the configuration.
+    /// Returns the repository configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo_nextgen;
+    /// let (_temp, repo) = temp_repo_nextgen().unwrap();
+    /// assert!(repo.config().is_next_gen());
+    /// ```
     pub fn config(&self) -> &Config {
         &self.config
     }
 
-    /// Get the full path to the ADR directory.
+    /// Returns the full path to the ADR directory.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// let (temp, repo) = temp_repo().unwrap();
+    /// assert_eq!(repo.adr_path(), temp.path().join("doc/adr"));
+    /// ```
     pub fn adr_path(&self) -> PathBuf {
         self.config.adr_path(&self.root)
     }
@@ -145,31 +283,100 @@ impl Repository {
         engine
     }
 
-    /// Set the template format.
+    /// Sets the template format for new ADRs.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Repository, TemplateFormat};
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// let repo = Repository::init(temp.path(), None, false)
+    ///     .unwrap()
+    ///     .with_template_format(TemplateFormat::Madr);
+    ///
+    /// let (_, path) = repo.new_adr("Use MADR format").unwrap();
+    /// let content = std::fs::read_to_string(path).unwrap();
+    /// assert!(content.contains("Context and Problem Statement"));
+    /// ```
     pub fn with_template_format(mut self, format: TemplateFormat) -> Self {
         self.template_engine = self.template_engine.with_format(format);
         self
     }
 
-    /// Set the template variant.
+    /// Sets the template variant (full, minimal, or bare).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Repository, TemplateVariant};
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// let repo = Repository::init(temp.path(), None, false)
+    ///     .unwrap()
+    ///     .with_template_variant(TemplateVariant::Minimal);
+    ///
+    /// // Minimal variant has essential sections only
+    /// let (_, path) = repo.new_adr("Quick decision").unwrap();
+    /// assert!(path.exists());
+    /// ```
     pub fn with_template_variant(mut self, variant: TemplateVariant) -> Self {
         self.template_engine = self.template_engine.with_variant(variant);
         self
     }
 
     /// Override the configuration mode.
+    ///
+    /// This allows overriding the mode from configuration (e.g., when `--ng` flag is passed).
     pub fn with_mode(mut self, mode: ConfigMode) -> Self {
         self.config.mode = mode;
         self
     }
 
-    /// Set a custom template.
+    /// Sets a custom template for new ADRs.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use adrs_core::{Repository, Template};
+    /// use tempfile::TempDir;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// let custom = Template::from_string("custom", "# ADR {{ number }}: {{ title }}");
+    /// let repo = Repository::init(temp.path(), None, false)
+    ///     .unwrap()
+    ///     .with_custom_template(custom);
+    ///
+    /// let (_, path) = repo.new_adr("Custom format").unwrap();
+    /// let content = std::fs::read_to_string(path).unwrap();
+    /// assert_eq!(content, "# ADR 2: Custom format");
+    /// ```
     pub fn with_custom_template(mut self, template: Template) -> Self {
         self.template_engine = self.template_engine.with_custom_template(template);
         self
     }
 
-    /// List all ADRs in the repository.
+    /// Lists all ADRs in the repository.
+    ///
+    /// Returns ADRs sorted by number in ascending order.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// // Create some ADRs
+    /// repo.new_adr("Use Rust").unwrap();
+    /// repo.new_adr("Use PostgreSQL").unwrap();
+    ///
+    /// let adrs = repo.list().unwrap();
+    /// assert_eq!(adrs.len(), 3); // 1 from init + 2 new
+    /// assert_eq!(adrs[1].title, "Use Rust");
+    /// assert_eq!(adrs[2].title, "Use PostgreSQL");
+    /// ```
     pub fn list(&self) -> Result<Vec<Adr>> {
         let adr_path = self.adr_path();
         if !adr_path.exists() {
@@ -194,13 +401,44 @@ impl Repository {
         Ok(adrs)
     }
 
-    /// Get the next available ADR number.
+    /// Returns the next available ADR number.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// // After init, next number is 2
+    /// assert_eq!(repo.next_number().unwrap(), 2);
+    ///
+    /// repo.new_adr("Second ADR").unwrap();
+    /// assert_eq!(repo.next_number().unwrap(), 3);
+    /// ```
     pub fn next_number(&self) -> Result<u32> {
         let adrs = self.list()?;
         Ok(adrs.last().map(|a| a.number + 1).unwrap_or(1))
     }
 
-    /// Find an ADR by number.
+    /// Finds an ADR by number.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::AdrNotFound`] if no ADR with the given number exists.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// // ADR 1 is created by init
+    /// let adr = repo.get(1).unwrap();
+    /// assert_eq!(adr.number, 1);
+    ///
+    /// // Non-existent ADR returns error
+    /// assert!(repo.get(999).is_err());
+    /// ```
     pub fn get(&self, number: u32) -> Result<Adr> {
         let adrs = self.list()?;
         adrs.into_iter()
@@ -208,7 +446,31 @@ impl Repository {
             .ok_or_else(|| Error::AdrNotFound(number.to_string()))
     }
 
-    /// Find an ADR by query (number or fuzzy title match).
+    /// Finds an ADR by query (number or fuzzy title match).
+    ///
+    /// First tries to parse the query as a number. If that fails,
+    /// performs fuzzy matching on ADR titles.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::AdrNotFound`] if no matching ADR is found
+    /// - [`Error::AmbiguousAdr`] if multiple ADRs match equally well
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    /// repo.new_adr("Use PostgreSQL for persistence").unwrap();
+    ///
+    /// // Find by number
+    /// let adr = repo.find("2").unwrap();
+    /// assert_eq!(adr.number, 2);
+    ///
+    /// // Find by fuzzy title match
+    /// let adr = repo.find("postgres").unwrap();
+    /// assert_eq!(adr.title, "Use PostgreSQL for persistence");
+    /// ```
     pub fn find(&self, query: &str) -> Result<Adr> {
         // Try parsing as number first
         if let Ok(number) = query.parse::<u32>() {
@@ -280,7 +542,27 @@ impl Repository {
         Ok(path)
     }
 
-    /// Create a new ADR with the given title.
+    /// Creates a new ADR with the given title.
+    ///
+    /// Automatically assigns the next available number and creates the file.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of the created [`Adr`] and the path to the file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// # use adrs_core::AdrStatus;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// let (adr, path) = repo.new_adr("Use Rust for implementation").unwrap();
+    ///
+    /// assert_eq!(adr.number, 2); // 1 is from init
+    /// assert_eq!(adr.status, AdrStatus::Proposed);
+    /// assert!(path.exists());
+    /// ```
     pub fn new_adr(&self, title: impl Into<String>) -> Result<(Adr, PathBuf)> {
         let number = self.next_number()?;
         let adr = Adr::new(number, title);
@@ -288,7 +570,30 @@ impl Repository {
         Ok((adr, path))
     }
 
-    /// Create a new ADR that supersedes another.
+    /// Creates a new ADR that supersedes another.
+    ///
+    /// The new ADR gets a "Supersedes" link to the old ADR, and the old
+    /// ADR's status is changed to Superseded with a "Superseded by" link.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// # use adrs_core::{AdrStatus, LinkKind};
+    /// let (_temp, repo) = temp_repo().unwrap();
+    /// repo.new_adr("Use MySQL").unwrap();
+    ///
+    /// // Supersede ADR 2 with a new decision
+    /// let (new_adr, _) = repo.supersede("Use PostgreSQL instead", 2).unwrap();
+    ///
+    /// // New ADR links to old
+    /// assert_eq!(new_adr.links[0].target, 2);
+    /// assert_eq!(new_adr.links[0].kind, LinkKind::Supersedes);
+    ///
+    /// // Old ADR is now superseded
+    /// let old_adr = repo.get(2).unwrap();
+    /// assert_eq!(old_adr.status, AdrStatus::Superseded);
+    /// ```
     pub fn supersede(&self, title: impl Into<String>, superseded: u32) -> Result<(Adr, PathBuf)> {
         let number = self.next_number()?;
         let mut adr = Adr::new(number, title);
@@ -308,10 +613,24 @@ impl Repository {
         Ok((adr, path))
     }
 
-    /// Change the status of an ADR.
+    /// Changes the status of an ADR.
     ///
     /// If the new status is `Superseded` and `superseded_by` is provided,
-    /// a superseded-by link will be added automatically.
+    /// a "Superseded by" link will be added automatically.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// # use adrs_core::AdrStatus;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// // Change status from Accepted to Deprecated
+    /// repo.set_status(1, AdrStatus::Deprecated, None).unwrap();
+    ///
+    /// let adr = repo.get(1).unwrap();
+    /// assert_eq!(adr.status, AdrStatus::Deprecated);
+    /// ```
     pub fn set_status(
         &self,
         number: u32,
@@ -339,7 +658,31 @@ impl Repository {
         self.update_metadata(&adr)
     }
 
-    /// Link two ADRs together.
+    /// Links two ADRs together with bidirectional references.
+    ///
+    /// Creates a link from `source` to `target` with `source_kind`,
+    /// and a reverse link from `target` to `source` with `target_kind`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// # use adrs_core::LinkKind;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    /// repo.new_adr("API Design").unwrap();
+    /// repo.new_adr("API Implementation").unwrap();
+    ///
+    /// // ADR 3 amends ADR 2
+    /// repo.link(3, 2, LinkKind::Amends, LinkKind::AmendedBy).unwrap();
+    ///
+    /// let adr3 = repo.get(3).unwrap();
+    /// assert_eq!(adr3.links[0].target, 2);
+    /// assert_eq!(adr3.links[0].kind, LinkKind::Amends);
+    ///
+    /// let adr2 = repo.get(2).unwrap();
+    /// assert_eq!(adr2.links[0].target, 3);
+    /// assert_eq!(adr2.links[0].kind, LinkKind::AmendedBy);
+    /// ```
     pub fn link(
         &self,
         source: u32,
@@ -359,7 +702,28 @@ impl Repository {
         Ok(())
     }
 
-    /// Update an existing ADR.
+    /// Updates an existing ADR by re-rendering it completely.
+    ///
+    /// This rewrites the entire ADR file using the current template.
+    /// For partial updates that preserve custom content, use
+    /// [`update_metadata`](Self::update_metadata) instead.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// # use adrs_core::AdrStatus;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// let mut adr = repo.get(1).unwrap();
+    /// adr.context = "Updated context explaining the decision.".into();
+    /// adr.status = AdrStatus::Deprecated;
+    ///
+    /// let path = repo.update(&adr).unwrap();
+    /// let content = std::fs::read_to_string(path).unwrap();
+    /// assert!(content.contains("Updated context"));
+    /// assert!(content.contains("Deprecated"));
+    /// ```
     pub fn update(&self, adr: &Adr) -> Result<PathBuf> {
         let path = adr
             .path
@@ -375,7 +739,24 @@ impl Repository {
         Ok(path)
     }
 
-    /// Read the content of an ADR file.
+    /// Reads the raw content of an ADR file.
+    ///
+    /// Returns the complete file content as a string. Use this when you
+    /// need access to the raw markdown, including custom sections not
+    /// captured in the [`Adr`] struct.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// let adr = repo.get(1).unwrap();
+    /// let content = repo.read_content(&adr).unwrap();
+    ///
+    /// assert!(content.contains("Record architecture decisions"));
+    /// assert!(content.contains("## Status"));
+    /// ```
     pub fn read_content(&self, adr: &Adr) -> Result<String> {
         let path = adr
             .path
@@ -386,7 +767,25 @@ impl Repository {
         Ok(fs::read_to_string(path)?)
     }
 
-    /// Write content to an ADR file.
+    /// Writes raw content to an ADR file.
+    ///
+    /// Overwrites the file with the given content. Use this for direct
+    /// file manipulation when the standard update methods don't suffice.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// let adr = repo.get(1).unwrap();
+    /// let new_content = "# 1. Modified Title\n\n## Status\n\nAccepted\n";
+    ///
+    /// repo.write_content(&adr, new_content).unwrap();
+    ///
+    /// let content = repo.read_content(&adr).unwrap();
+    /// assert!(content.contains("Modified Title"));
+    /// ```
     pub fn write_content(&self, adr: &Adr, content: &str) -> Result<PathBuf> {
         let path = adr
             .path
@@ -398,8 +797,28 @@ impl Repository {
         Ok(path)
     }
 
-    /// Update only the metadata (status, links, tags) of an existing ADR file,
-    /// preserving all other content byte-for-byte.
+    /// Updates only the metadata (status, links, tags) of an ADR file.
+    ///
+    /// Unlike [`update`](Self::update), this method preserves all other
+    /// content byte-for-byte, including custom sections, formatting,
+    /// and comments.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use adrs_core::doctest_helpers::temp_repo;
+    /// # use adrs_core::AdrStatus;
+    /// let (_temp, repo) = temp_repo().unwrap();
+    ///
+    /// let mut adr = repo.get(1).unwrap();
+    /// adr.status = AdrStatus::Deprecated;
+    /// adr.set_tags(vec!["legacy".into()]);
+    ///
+    /// repo.update_metadata(&adr).unwrap();
+    ///
+    /// let updated = repo.get(1).unwrap();
+    /// assert_eq!(updated.status, AdrStatus::Deprecated);
+    /// ```
     pub fn update_metadata(&self, adr: &Adr) -> Result<PathBuf> {
         let path = adr
             .path
