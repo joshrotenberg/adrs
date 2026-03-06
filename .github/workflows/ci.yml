@@ -143,7 +143,8 @@ jobs:
         run: |
           cargo llvm-cov clean --workspace
           cargo llvm-cov --no-report --package adrs-core
-          cargo llvm-cov --no-report --doc --package adrs-core
+          # Note: --doc coverage requires nightly Rust, so we skip it
+          # Doctests are still tested in the test job, just not coverage-tracked
           cargo llvm-cov report --package adrs-core --lcov --output-path lcov.info
 
       - name: Upload to Codecov
