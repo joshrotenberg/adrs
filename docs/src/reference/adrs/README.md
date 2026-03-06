@@ -35,11 +35,14 @@ For more background, see [ADR-0001](./0001-record-architecture-decisions.md) and
 | [0017](./0017-justfile-global-settings.md) | Justfile Global Settings | Accepted | 2026-03-05 |
 | [0018](./0018-justfile-recipe-conventions.md) | Justfile Recipe Conventions | Accepted | 2026-03-05 |
 | [0019](./0019-justfile-argument-attributes.md) | Justfile Argument Attributes | Accepted | 2026-03-05 |
+| [0020](./0020-config-priority.md) | Configuration Priority | Proposed | 2026-03-05 |
+| [0021](./0021-testing-strategy.md) | Testing Strategy | Proposed | 2026-03-05 |
+| [0022](./0022-error-handling-policy.md) | Error Handling Policy | Proposed | 2026-03-05 |
 
 ## Status Summary
 
 - **Accepted**: 17
-- **Proposed**: 2
+- **Proposed**: 5
 - **Superseded**: 0
 - **Deprecated**: 0
 

@@ -125,6 +125,9 @@
   - [0017: Justfile Global Settings](./reference/adrs/0017-justfile-global-settings.md)
   - [0018: Justfile Recipe Conventions](./reference/adrs/0018-justfile-recipe-conventions.md)
   - [0019: Justfile Argument Attributes](./reference/adrs/0019-justfile-argument-attributes.md)
+  - [0020: Configuration Priority](./reference/adrs/0020-config-priority.md)
+  - [0021: Testing Strategy](./reference/adrs/0021-testing-strategy.md)
+  - [0022: Error Handling Policy](./reference/adrs/0022-error-handling-policy.md)
 - [Glossary](./reference/glossary.md)
 
 ---
