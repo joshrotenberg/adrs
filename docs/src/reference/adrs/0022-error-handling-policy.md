@@ -91,7 +91,11 @@ On error → Warn → Log → Fall back to defaults → Log fallback used
 | Unknown keys | Ignore + Debug log | Forward compatibility; configurable to warn/error |
 | Case sensitivity | Case-insensitive | Git convention |
 | Empty values | Treat as unset | Skip key, no warning |
-| Type coercion | Error (invalid type) | Strict typing prevents subtle bugs |
+| Type mismatch | Warn + skip key | Graceful degradation; use default for that key |
+
+**Note:** "Type mismatch" means a value that parses but is the wrong type for the field
+(e.g., `mode = 123` instead of `mode = "ng"`). The key is skipped with a warning,
+and the default value is used. This aligns with Policy Principle #3.
 
 ### Verbose Mode
 
