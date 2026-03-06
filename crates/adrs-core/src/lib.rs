@@ -75,7 +75,10 @@ mod repository;
 mod template;
 mod types;
 
-pub use config::{Config, ConfigMode, ConfigSource, DiscoveredConfig, discover};
+pub use config::{
+    AdrDirFile, AdrsConfigEnv, AdrsEnv, Config, ConfigMode, ConfigSource, ConfigWriteTarget,
+    DiscoveredConfig, GitConfig, GitConfigScope, discover, global_config_dir,
+};
 pub use error::{Error, Result};
 pub use export::{
     ConsideredOption, ImportOptions, ImportResult, JSON_ADR_SCHEMA, JSON_ADR_VERSION, JsonAdr,

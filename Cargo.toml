@@ -20,6 +20,12 @@ toml = "0.8"
 
 # Configuration
 figment = { version = "0.10", features = ["toml", "env"] }
+gix-config = "0.42"
+bstr = "1"
+dirs = "5"
+
+# Logging/Tracing
+tracing = "0.1"
 
 # Markdown
 pulldown-cmark = "0.12"

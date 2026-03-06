@@ -68,13 +68,23 @@ EXAMPLES:
   adrs init                    Initialize in doc/adr (default)
   adrs init docs/decisions     Use custom directory
   adrs --ng init               Initialize with NextGen mode (YAML frontmatter)
+  adrs init --git-config       Store config in .git/config instead of file
 
 Creates the ADR directory and an initial ADR documenting the use of ADRs.
-If ADRs already exist in the directory, they are preserved.")]
+If ADRs already exist in the directory, they are preserved.
+
+CONFIG STORAGE:
+  By default, configuration is stored in adrs.toml (NextGen) or .adr-dir (Compatible).
+  Use --git-config to store in the local git config instead, which keeps your
+  repository cleaner and allows per-worktree configuration.")]
     Init {
         /// Directory to store ADRs [default: doc/adr]
         #[arg(default_value = "doc/adr")]
         directory: PathBuf,
+
+        /// Store configuration in .git/config instead of adrs.toml/.adr-dir
+        #[arg(long, help = "Store config in local gitconfig [adrs] section")]
+        git_config: bool,
     },
 
     /// Create a new ADR
@@ -627,7 +637,10 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
     match cli.command {
-        Commands::Init { directory } => commands::init(&start_dir, directory, cli.ng),
+        Commands::Init {
+            directory,
+            git_config,
+        } => commands::init(&start_dir, directory, cli.ng, git_config),
         Commands::New {
             title,
             supersedes,

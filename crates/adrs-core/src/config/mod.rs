@@ -32,11 +32,14 @@
 //! 4. Default configuration
 
 mod providers;
+pub mod xdg;
+
+pub use providers::{AdrDirFile, AdrsConfigEnv, AdrsEnv, GitConfig, GitConfigScope};
+pub use xdg::global_config_dir;
 
 use crate::{Error, Result};
 use figment::Figment;
 use figment::providers::{Env, Format, Serialized, Toml};
-use providers::AdrDirFile;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -202,12 +205,90 @@ impl Config {
         Self::load(root).unwrap_or_default()
     }
 
+    /// Save configuration to the specified target.
+    ///
+    /// This is the general-purpose save method that allows explicit control
+    /// over where configuration is written.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` - The project root directory
+    /// * `target` - Where to write the configuration
+    ///
+    /// # Examples
+    ///
+    /// Write to `adrs.toml`:
+    ///
+    /// ```rust
+    /// use adrs_core::{Config, ConfigMode, ConfigWriteTarget};
+    /// use tempfile::TempDir;
+    /// use std::path::PathBuf;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// let config = Config {
+    ///     adr_dir: PathBuf::from("docs/decisions"),
+    ///     mode: ConfigMode::NextGen,
+    ///     ..Default::default()
+    /// };
+    ///
+    /// config.save_to(temp.path(), ConfigWriteTarget::Toml).unwrap();
+    /// assert!(temp.path().join("adrs.toml").exists());
+    /// ```
+    ///
+    /// Write to `.adr-dir` (legacy format):
+    ///
+    /// ```rust
+    /// use adrs_core::{Config, ConfigMode, ConfigWriteTarget};
+    /// use tempfile::TempDir;
+    /// use std::path::PathBuf;
+    ///
+    /// let temp = TempDir::new().unwrap();
+    /// let config = Config {
+    ///     adr_dir: PathBuf::from("decisions"),
+    ///     mode: ConfigMode::Compatible,
+    ///     ..Default::default()
+    /// };
+    ///
+    /// config.save_to(temp.path(), ConfigWriteTarget::LegacyAdrDir).unwrap();
+    ///
+    /// let content = std::fs::read_to_string(temp.path().join(".adr-dir")).unwrap();
+    /// assert_eq!(content, "decisions");
+    /// ```
+    ///
+    /// Write to local gitconfig:
+    ///
+    /// ```rust,ignore
+    /// use adrs_core::{Config, ConfigWriteTarget, GitConfigScope};
+    ///
+    /// let config = Config::default();
+    /// config.save_to(root, ConfigWriteTarget::GitConfig(GitConfigScope::Local))?;
+    /// // Creates/updates .git/config with [adrs] section
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The target file/directory cannot be written (permissions, disk full)
+    /// - For `GitConfig(Local)`: not in a git repository
+    /// - For `GitConfig(Global)`: home directory cannot be determined
+    /// - For `GitConfig(System)`: insufficient permissions (usually requires root)
+    pub fn save_to(&self, root: &Path, target: ConfigWriteTarget) -> Result<()> {
+        match target {
+            ConfigWriteTarget::Toml => self.write_toml(root),
+            ConfigWriteTarget::LegacyAdrDir => self.write_adr_dir(root),
+            ConfigWriteTarget::GitConfig(scope) => self.write_gitconfig(root, scope),
+        }
+    }
+
     /// Save configuration to the given directory.
     ///
     /// The output format depends on the current [`ConfigMode`]:
     ///
     /// - [`ConfigMode::Compatible`]: Writes `.adr-dir` (single line with directory path)
     /// - [`ConfigMode::NextGen`]: Writes `adrs.toml` (full TOML configuration)
+    ///
+    /// This is a convenience method. For explicit control over the output
+    /// format, use [`Config::save_to`].
     ///
     /// # Errors
     ///
@@ -258,20 +339,109 @@ impl Config {
     /// assert!(content.contains("ng")); // mode serializes as "ng"
     /// ```
     pub fn save(&self, root: &Path) -> Result<()> {
-        match self.mode {
-            ConfigMode::Compatible => {
-                // Write legacy .adr-dir file
-                let path = root.join(LEGACY_CONFIG_FILE);
-                std::fs::write(&path, self.adr_dir.display().to_string())?;
+        let target = match self.mode {
+            ConfigMode::Compatible => ConfigWriteTarget::LegacyAdrDir,
+            ConfigMode::NextGen => ConfigWriteTarget::Toml,
+        };
+        self.save_to(root, target)
+    }
+
+    /// Write configuration to `adrs.toml`.
+    fn write_toml(&self, root: &Path) -> Result<()> {
+        let path = root.join(CONFIG_FILE);
+        let content =
+            toml::to_string_pretty(self).map_err(|e| Error::ConfigError(e.to_string()))?;
+        std::fs::write(&path, content)?;
+        Ok(())
+    }
+
+    /// Write configuration to `.adr-dir` (legacy format).
+    fn write_adr_dir(&self, root: &Path) -> Result<()> {
+        let path = root.join(LEGACY_CONFIG_FILE);
+        std::fs::write(&path, self.adr_dir.display().to_string())?;
+        Ok(())
+    }
+
+    /// Write configuration to gitconfig `[adrs]` section.
+    fn write_gitconfig(&self, root: &Path, scope: GitConfigScope) -> Result<()> {
+        use bstr::BStr;
+
+        let path = match scope {
+            GitConfigScope::Local => {
+                let git_config = root.join(".git/config");
+                if !git_config.exists() {
+                    return Err(Error::ConfigError(
+                        "Not a git repository (no .git/config)".into(),
+                    ));
+                }
+                git_config
             }
-            ConfigMode::NextGen => {
-                // Write adrs.toml
-                let path = root.join(CONFIG_FILE);
-                let content =
-                    toml::to_string_pretty(self).map_err(|e| Error::ConfigError(e.to_string()))?;
-                std::fs::write(&path, content)?;
+            GitConfigScope::Global => xdg::global_gitconfig_path()?,
+            GitConfigScope::System => xdg::system_gitconfig_path(),
+        };
+
+        // Read existing gitconfig or create new
+        let mut file = if path.exists() {
+            gix_config::File::from_path_no_includes(path.clone(), gix_config::Source::Local)
+                .map_err(|e| Error::ConfigError(format!("Failed to parse gitconfig: {}", e)))?
+        } else {
+            // Create parent directories if needed
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
             }
+            gix_config::File::new(gix_config::file::Metadata::from(gix_config::Source::Local))
+        };
+
+        // Create or get the [adrs] section
+        let section_id = file
+            .section_mut_or_create_new("adrs", None)
+            .map_err(|e| Error::ConfigError(format!("Failed to create [adrs] section: {}", e)))?
+            .id();
+
+        // Set directory
+        let dir_str = self.adr_dir.display().to_string();
+        file.section_mut_by_id(section_id)
+            .ok_or_else(|| Error::ConfigError("Failed to get [adrs] section".into()))?
+            .set(
+                "directory".try_into().unwrap(),
+                BStr::new(dir_str.as_bytes()),
+            );
+
+        // Set mode
+        let mode_str = match self.mode {
+            ConfigMode::Compatible => "compatible",
+            ConfigMode::NextGen => "ng",
+        };
+        file.section_mut_by_id(section_id)
+            .ok_or_else(|| Error::ConfigError("Failed to get [adrs] section".into()))?
+            .set("mode".try_into().unwrap(), BStr::new(mode_str.as_bytes()));
+
+        // Write template settings if present
+        if let Some(ref format) = self.templates.format {
+            let format_str = format.to_string();
+            file.section_mut_by_id(section_id)
+                .ok_or_else(|| Error::ConfigError("Failed to get [adrs] section".into()))?
+                .set(
+                    "template-format".try_into().unwrap(),
+                    BStr::new(format_str.as_bytes()),
+                );
         }
+
+        if let Some(ref variant) = self.templates.variant {
+            file.section_mut_by_id(section_id)
+                .ok_or_else(|| Error::ConfigError("Failed to get [adrs] section".into()))?
+                .set(
+                    "template-variant".try_into().unwrap(),
+                    BStr::new(variant.as_bytes()),
+                );
+        }
+
+        // Write the file
+        let mut output = Vec::new();
+        file.write_to(&mut output)
+            .map_err(|e| Error::ConfigError(format!("Failed to serialize gitconfig: {}", e)))?;
+        std::fs::write(&path, output)?;
+
         Ok(())
     }
 
@@ -374,7 +544,7 @@ impl Config {
 ///
 /// ```rust
 /// # use adrs_core::doctest_helpers::temp_repo;
-/// use adrs_core::{discover, ConfigSource};
+/// use adrs_core::{discover, ConfigSource, GitConfigScope};
 ///
 /// let (temp, _repo) = temp_repo().unwrap();
 ///
@@ -386,8 +556,11 @@ impl Config {
 /// // Check where it was loaded from
 /// match discovered.source {
 ///     ConfigSource::Project(path) => println!("From project: {}", path.display()),
+///     ConfigSource::LegacyProject(path) => println!("From legacy: {}", path.display()),
 ///     ConfigSource::Global(path) => println!("From global: {}", path.display()),
-///     ConfigSource::Environment => println!("From environment variable"),
+///     ConfigSource::GitConfig(scope) => println!("From gitconfig: {:?}", scope),
+///     ConfigSource::Environment => println!("From environment variables"),
+///     ConfigSource::EnvironmentConfig(path) => println!("From ADRS_CONFIG: {}", path.display()),
 ///     ConfigSource::Default => println!("Using defaults"),
 /// }
 /// ```
@@ -409,7 +582,7 @@ pub struct DiscoveredConfig {
 /// use adrs_core::ConfigSource;
 /// use std::path::PathBuf;
 ///
-/// let source = ConfigSource::Project(PathBuf::from(".adr-dir"));
+/// let source = ConfigSource::Project(PathBuf::from("adrs.toml"));
 /// assert!(matches!(source, ConfigSource::Project(_)));
 ///
 /// let default = ConfigSource::Default;
@@ -417,14 +590,77 @@ pub struct DiscoveredConfig {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigSource {
-    /// Loaded from project config file.
-    Project(PathBuf),
-    /// Loaded from global config file.
-    Global(PathBuf),
-    /// Loaded from environment variable.
+    /// Loaded from ADRS_* environment variables (Layer 1).
+    ///
+    /// This is the highest priority source. ADRS_DIR, ADRS_MODE, etc.
     Environment,
-    /// Using defaults (no config found).
+
+    /// Loaded from ADRS_CONFIG environment variable (Layer 2).
+    ///
+    /// Points to a specific config file path.
+    EnvironmentConfig(PathBuf),
+
+    /// Loaded from gitconfig `[adrs]` section (Layers 3, 7, 8).
+    ///
+    /// The scope indicates local (.git/config), global (~/.gitconfig),
+    /// or system (/etc/gitconfig).
+    GitConfig(GitConfigScope),
+
+    /// Loaded from project config file `adrs.toml` (Layer 4).
+    Project(PathBuf),
+
+    /// Loaded from legacy `.adr-dir` file (Layer 5).
+    ///
+    /// This is the adr-tools compatible format.
+    LegacyProject(PathBuf),
+
+    /// Loaded from user global config (Layer 6).
+    ///
+    /// Located at `~/.config/adrs/config.toml` or XDG equivalent.
+    Global(PathBuf),
+
+    /// Using defaults (Layer 9).
+    ///
+    /// No config file found; using built-in defaults.
     Default,
+}
+
+/// Target destination for writing configuration.
+///
+/// Used by [`Config::save_to`] to specify where configuration should be saved.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use adrs_core::{Config, ConfigWriteTarget, GitConfigScope};
+///
+/// let config = Config::default();
+///
+/// // Write to adrs.toml
+/// config.save_to(root, ConfigWriteTarget::Toml)?;
+///
+/// // Write to .adr-dir (legacy)
+/// config.save_to(root, ConfigWriteTarget::LegacyAdrDir)?;
+///
+/// // Write to local gitconfig
+/// config.save_to(root, ConfigWriteTarget::GitConfig(GitConfigScope::Local))?;
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigWriteTarget {
+    /// Write to `adrs.toml` (NextGen mode default).
+    ///
+    /// Version-controlled, TOML format with all fields.
+    Toml,
+
+    /// Write to `.adr-dir` (Compatible mode default).
+    ///
+    /// Version-controlled, plain text with directory path only.
+    LegacyAdrDir,
+
+    /// Write to gitconfig `[adrs]` section.
+    ///
+    /// Not version-controlled (unless using global/system scope).
+    GitConfig(GitConfigScope),
 }
 
 /// Discovers configuration by searching up the directory tree.
@@ -568,20 +804,61 @@ fn find_global_config() -> Option<PathBuf> {
 }
 
 /// Build a figment for a known project root.
+/// Build a Figment with full 9-layer precedence per ADR-0020.
+///
+/// Layers are merged per-key (higher layers override lower layers):
+///
+/// | Layer | Source | Priority |
+/// |-------|--------|----------|
+/// | 9 | Built-in defaults | Lowest |
+/// | 8 | System gitconfig (`/etc/gitconfig`) | |
+/// | 7 | Global gitconfig (`~/.gitconfig`) | |
+/// | 6 | User global config (`~/.config/adrs/config.toml`) | |
+/// | 5 | Legacy `.adr-dir` file | |
+/// | 4 | Project `adrs.toml` | |
+/// | 3 | Local gitconfig (`.git/config`) | |
+/// | 2 | `ADRS_CONFIG` env var (explicit file path) | |
+/// | 1 | `ADRS_*` env vars | Highest |
 fn build_figment_for_root(root: &Path) -> Figment {
-    Figment::new()
-        // Layer 4 (lowest): Defaults
-        .merge(Serialized::defaults(Config::default()))
-        // Layer 3: .adr-dir (legacy)
-        .merge(AdrDirFile::new(root.join(LEGACY_CONFIG_FILE)))
-        // Layer 2: adrs.toml
-        .merge(Toml::file(root.join(CONFIG_FILE)))
-        // Layer 1 (highest): Environment variables
-        .merge(
-            Env::raw()
-                .only(&[ENV_ADR_DIRECTORY])
-                .map(|_| "adr_dir".into()),
-        )
+    // Start with defaults (Layer 9)
+    let mut figment = Figment::new().merge(Serialized::defaults(Config::default()));
+
+    // Layer 8: System gitconfig
+    if let Some(system_git) = GitConfig::system() {
+        figment = figment.merge(system_git);
+    }
+
+    // Layer 7: Global gitconfig
+    if let Some(global_git) = GitConfig::global() {
+        figment = figment.merge(global_git);
+    }
+
+    // Layer 6: User global config (~/.config/adrs/config.toml)
+    if let Some(global_dir) = xdg::global_config_dir() {
+        let global_config_file = global_dir.join("config.toml");
+        if global_config_file.exists() {
+            figment = figment.merge(Toml::file(global_config_file));
+        }
+    }
+
+    // Layer 5: Legacy .adr-dir
+    figment = figment.merge(AdrDirFile::new(root.join(LEGACY_CONFIG_FILE)));
+
+    // Layer 4: Project adrs.toml
+    figment = figment.merge(Toml::file(root.join(CONFIG_FILE)));
+
+    // Layer 3: Local gitconfig (.git/config)
+    if let Some(local_git) = GitConfig::local(root) {
+        figment = figment.merge(local_git);
+    }
+
+    // Layer 2: ADRS_CONFIG env var (explicit file path)
+    figment = figment.merge(AdrsConfigEnv);
+
+    // Layer 1 (highest): ADRS_* env vars
+    figment = figment.merge(AdrsEnv);
+
+    figment
 }
 
 /// Build a figment for an explicit config file path (from ADRS_CONFIG env var).
@@ -1040,6 +1317,115 @@ mode = "nextgen"
         assert_eq!(loaded.adr_dir, original.adr_dir);
         assert_eq!(loaded.mode, ConfigMode::NextGen);
         assert_eq!(loaded.templates.format, Some("markdown".to_string()));
+    }
+
+    // ========== save_to Tests ==========
+
+    #[test]
+    fn test_save_to_toml() {
+        let temp = TempDir::new().unwrap();
+        let config = Config {
+            adr_dir: PathBuf::from("my/adrs"),
+            mode: ConfigMode::Compatible, // Mode doesn't matter for save_to
+            templates: TemplateConfig::default(),
+        };
+
+        config
+            .save_to(temp.path(), ConfigWriteTarget::Toml)
+            .unwrap();
+
+        assert!(temp.path().join("adrs.toml").exists());
+        let content = std::fs::read_to_string(temp.path().join("adrs.toml")).unwrap();
+        assert!(content.contains("my/adrs"));
+    }
+
+    #[test]
+    fn test_save_to_legacy_adr_dir() {
+        let temp = TempDir::new().unwrap();
+        let config = Config {
+            adr_dir: PathBuf::from("docs/decisions"),
+            mode: ConfigMode::NextGen, // Mode doesn't matter for save_to
+            templates: TemplateConfig::default(),
+        };
+
+        config
+            .save_to(temp.path(), ConfigWriteTarget::LegacyAdrDir)
+            .unwrap();
+
+        assert!(temp.path().join(".adr-dir").exists());
+        let content = std::fs::read_to_string(temp.path().join(".adr-dir")).unwrap();
+        assert_eq!(content, "docs/decisions");
+    }
+
+    #[test]
+    fn test_save_to_local_gitconfig() {
+        let temp = TempDir::new().unwrap();
+        // Create .git/config so we're "in a repo"
+        std::fs::create_dir(temp.path().join(".git")).unwrap();
+        std::fs::write(temp.path().join(".git/config"), "[core]\nbare = false\n").unwrap();
+
+        let config = Config {
+            adr_dir: PathBuf::from("docs/adr"),
+            mode: ConfigMode::NextGen,
+            templates: TemplateConfig::default(),
+        };
+
+        config
+            .save_to(
+                temp.path(),
+                ConfigWriteTarget::GitConfig(GitConfigScope::Local),
+            )
+            .unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join(".git/config")).unwrap();
+        assert!(content.contains("[adrs]"));
+        assert!(content.contains("directory = docs/adr"));
+        assert!(content.contains("mode = ng"));
+    }
+
+    #[test]
+    fn test_save_to_gitconfig_with_templates() {
+        let temp = TempDir::new().unwrap();
+        std::fs::create_dir(temp.path().join(".git")).unwrap();
+        std::fs::write(temp.path().join(".git/config"), "[core]\nbare = false\n").unwrap();
+
+        let config = Config {
+            adr_dir: PathBuf::from("decisions"),
+            mode: ConfigMode::Compatible,
+            templates: TemplateConfig {
+                format: Some("madr".to_string()),
+                variant: Some("minimal".to_string()),
+                custom: None,
+            },
+        };
+
+        config
+            .save_to(
+                temp.path(),
+                ConfigWriteTarget::GitConfig(GitConfigScope::Local),
+            )
+            .unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join(".git/config")).unwrap();
+        assert!(content.contains("[adrs]"));
+        assert!(content.contains("template-format = madr"));
+        assert!(content.contains("template-variant = minimal"));
+    }
+
+    #[test]
+    fn test_save_to_gitconfig_fails_without_git_repo() {
+        let temp = TempDir::new().unwrap();
+        // No .git directory
+
+        let config = Config::default();
+        let result = config.save_to(
+            temp.path(),
+            ConfigWriteTarget::GitConfig(GitConfigScope::Local),
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Not a git repository"));
     }
 
     // ========== Helper Method Tests ==========

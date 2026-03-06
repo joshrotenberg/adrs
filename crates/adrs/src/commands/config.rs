@@ -1,7 +1,9 @@
 //! Config command.
 
 use crate::ConfigFormat;
-use adrs_core::{Config, ConfigMode, ConfigSource, DiscoveredConfig};
+use adrs_core::{
+    Config, ConfigMode, ConfigSource, DiscoveredConfig, GitConfigScope, global_config_dir,
+};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -17,9 +19,20 @@ pub fn config_show(
             println!(
                 "Config source: {}",
                 match &disc.source {
+                    ConfigSource::Environment => "ADRS_* environment variables".to_string(),
+                    ConfigSource::EnvironmentConfig(path) => {
+                        format!("ADRS_CONFIG={}", path.display())
+                    }
+                    ConfigSource::GitConfig(scope) => match scope {
+                        GitConfigScope::Local => "gitconfig (local)".to_string(),
+                        GitConfigScope::Global => "gitconfig (global)".to_string(),
+                        GitConfigScope::System => "gitconfig (system)".to_string(),
+                    },
                     ConfigSource::Project(path) => format!("{}", path.display()),
+                    ConfigSource::LegacyProject(path) => {
+                        format!("{} (legacy .adr-dir)", path.display())
+                    }
                     ConfigSource::Global(path) => format!("{} (global)", path.display()),
-                    ConfigSource::Environment => "environment variable".to_string(),
                     ConfigSource::Default => "defaults".to_string(),
                 }
             );
@@ -64,27 +77,79 @@ pub fn config_show(
 }
 
 /// Print verbose information about each configuration layer.
+///
+/// Shows all 9 layers per ADR-0020 precedence order (highest to lowest).
 fn print_verbose_layers(root: &Path) {
-    // Layer 1: Environment variables
-    println!("Layer 1: Environment variables");
+    // Layer 1: ADRS_* environment variables (highest priority)
+    println!("Layer 1: ADRS_* environment variables (highest priority)");
+    let mut has_env = false;
+    if let Ok(val) = std::env::var("ADRS_DIR") {
+        println!("  ADRS_DIR = \"{}\"", val);
+        has_env = true;
+    }
+    if let Ok(val) = std::env::var("ADRS_MODE") {
+        println!("  ADRS_MODE = \"{}\"", val);
+        has_env = true;
+    }
+    if let Ok(val) = std::env::var("ADRS_TEMPLATE_FORMAT") {
+        println!("  ADRS_TEMPLATE_FORMAT = \"{}\"", val);
+        has_env = true;
+    }
+    if let Ok(val) = std::env::var("ADRS_TEMPLATE_VARIANT") {
+        println!("  ADRS_TEMPLATE_VARIANT = \"{}\"", val);
+        has_env = true;
+    }
+    // Check deprecated ADR_DIRECTORY
     if let Ok(val) = std::env::var("ADR_DIRECTORY") {
-        println!("  ADR_DIRECTORY = \"{}\"", val);
+        println!("  ADR_DIRECTORY = \"{}\" (deprecated, use ADRS_DIR)", val);
+        has_env = true;
+    }
+    if !has_env {
+        println!("  (not set)");
+    }
+    println!();
+
+    // Layer 2: ADRS_CONFIG environment variable
+    println!("Layer 2: ADRS_CONFIG (explicit config file)");
+    if let Ok(val) = std::env::var("ADRS_CONFIG") {
+        println!("  ADRS_CONFIG = \"{}\"", val);
+        if std::path::Path::new(&val).exists() {
+            println!("  (file exists)");
+        } else {
+            println!("  (file not found!)");
+        }
     } else {
         println!("  (not set)");
     }
     println!();
 
-    // Layer 2: adrs.toml
+    // Layer 3: Local gitconfig (.git/config [adrs])
+    println!("Layer 3: Local gitconfig (.git/config)");
+    let local_git_config = root.join(".git/config");
+    if local_git_config.exists() {
+        println!("  {}", local_git_config.display());
+        if has_adrs_section(&local_git_config) {
+            print_gitconfig_section(root);
+        } else {
+            println!("    (no [adrs] section)");
+        }
+    } else {
+        println!("  (not a git repository)");
+    }
+    println!();
+
+    // Layer 4: Project adrs.toml
     let toml_path = root.join("adrs.toml");
-    println!("Layer 2: adrs.toml");
+    println!("Layer 4: Project adrs.toml");
     if toml_path.exists() {
+        println!("  {}", toml_path.display());
         if let Ok(content) = std::fs::read_to_string(&toml_path) {
             for line in content.lines().take(10) {
-                println!("  {}", line);
+                println!("    {}", line);
             }
             let line_count = content.lines().count();
             if line_count > 10 {
-                println!("  ... ({} more lines)", line_count - 10);
+                println!("    ... ({} more lines)", line_count - 10);
             }
         }
     } else {
@@ -92,61 +157,114 @@ fn print_verbose_layers(root: &Path) {
     }
     println!();
 
-    // Layer 3: .adr-dir
+    // Layer 5: Legacy .adr-dir
     let adr_dir_path = root.join(".adr-dir");
-    println!("Layer 3: .adr-dir (legacy)");
+    println!("Layer 5: Legacy .adr-dir");
     if adr_dir_path.exists() {
+        println!("  {}", adr_dir_path.display());
         if let Ok(content) = std::fs::read_to_string(&adr_dir_path) {
-            println!("  adr_dir = \"{}\"", content.trim());
+            println!("    directory = \"{}\"", content.trim());
         }
     } else {
         println!("  (not found)");
     }
     println!();
 
-    // Layer 4: Global config
-    let global_path = get_global_config_path();
-    println!("Layer 4: Global config");
-    if let Some(ref path) = global_path {
-        if path.exists() {
-            println!("  {}", path.display());
-            if let Ok(content) = std::fs::read_to_string(path) {
+    // Layer 6: User global config (~/.config/adrs/config.toml)
+    println!("Layer 6: User global config");
+    if let Some(global_dir) = global_config_dir() {
+        let global_path = global_dir.join("config.toml");
+        if global_path.exists() {
+            println!("  {}", global_path.display());
+            if let Ok(content) = std::fs::read_to_string(&global_path) {
                 for line in content.lines().take(5) {
                     println!("    {}", line);
                 }
             }
         } else {
-            println!("  {} (not found)", path.display());
+            println!("  {} (not found)", global_path.display());
         }
     } else {
         println!("  (path not available)");
     }
     println!();
 
-    // Layer 5: Defaults
-    println!("Layer 5: Defaults");
+    // Layer 7: Global gitconfig (~/.gitconfig [adrs])
+    println!("Layer 7: Global gitconfig (~/.gitconfig)");
+    if let Some(home) = dirs::home_dir() {
+        let global_gitconfig = home.join(".gitconfig");
+        if global_gitconfig.exists() {
+            println!("  {}", global_gitconfig.display());
+            if has_adrs_section(&global_gitconfig) {
+                println!("    (has [adrs] section)");
+            } else {
+                println!("    (no [adrs] section)");
+            }
+        } else {
+            println!("  {} (not found)", global_gitconfig.display());
+        }
+    } else {
+        println!("  (home directory not available)");
+    }
+    println!();
+
+    // Layer 8: System gitconfig (/etc/gitconfig [adrs])
+    println!("Layer 8: System gitconfig (/etc/gitconfig)");
+    #[cfg(unix)]
+    let system_gitconfig = std::path::PathBuf::from("/etc/gitconfig");
+    #[cfg(windows)]
+    let system_gitconfig = std::path::PathBuf::from("C:\\ProgramData\\Git\\config");
+    #[cfg(not(any(unix, windows)))]
+    let system_gitconfig = std::path::PathBuf::from("/etc/gitconfig");
+
+    if system_gitconfig.exists() {
+        println!("  {}", system_gitconfig.display());
+        if has_adrs_section(&system_gitconfig) {
+            println!("    (has [adrs] section)");
+        } else {
+            println!("    (no [adrs] section)");
+        }
+    } else {
+        println!("  {} (not found)", system_gitconfig.display());
+    }
+    println!();
+
+    // Layer 9: Defaults (lowest priority)
+    println!("Layer 9: Built-in defaults (lowest priority)");
     println!("  adr_dir = \"doc/adr\"");
     println!("  mode = \"compatible\"");
 }
 
-/// Get the global config path.
-fn get_global_config_path() -> Option<std::path::PathBuf> {
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        return Some(
-            std::path::PathBuf::from(xdg)
-                .join("adrs")
-                .join("config.toml"),
-        );
+/// Check if a gitconfig file has an [adrs] section.
+fn has_adrs_section(path: &std::path::Path) -> bool {
+    if let Ok(content) = std::fs::read_to_string(path) {
+        content
+            .lines()
+            .any(|line| line.trim().to_lowercase().starts_with("[adrs]"))
+    } else {
+        false
     }
-    if let Ok(home) = std::env::var("HOME") {
-        return Some(
-            std::path::PathBuf::from(home)
-                .join(".config")
-                .join("adrs")
-                .join("config.toml"),
-        );
+}
+
+/// Print the [adrs] section from local gitconfig.
+fn print_gitconfig_section(root: &Path) {
+    let git_config_path = root.join(".git/config");
+    if let Ok(content) = std::fs::read_to_string(&git_config_path) {
+        let mut in_adrs_section = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.to_lowercase().starts_with("[adrs]") {
+                in_adrs_section = true;
+                continue;
+            }
+            if trimmed.starts_with('[') && in_adrs_section {
+                break;
+            }
+            if in_adrs_section && !trimmed.is_empty() {
+                println!("    {}", trimmed);
+            }
+        }
     }
-    None
 }
 
 /// Migrate configuration between formats.
