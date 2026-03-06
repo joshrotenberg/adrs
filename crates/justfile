@@ -1,0 +1,14 @@
+# crates/justfile - Crate build recipes
+
+set working-directory := ".."
+
+mod cli './adrs/justfile'
+mod lib './adrs-core/justfile'
+
+# Build all crates
+debug:
+    cargo build --workspace
+
+# Build release binaries
+release:
+    cargo build --workspace --release

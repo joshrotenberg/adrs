@@ -5,20 +5,25 @@ on:
     branches: [main]
     paths-ignore:
       - "docs/**"
-      - "book/**"
       - "**.md"
   pull_request:
     branches: [main]
     paths-ignore:
       - "docs/**"
-      - "book/**"
       - "**.md"
+
+# Cancel in-progress runs on new commits
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  # === Fast checks (run first) ===
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -29,6 +34,8 @@ jobs:
           components: rustfmt
       - name: Format check
         run: cargo fmt --all -- --check
+
+  # === Main checks ===
 
   clippy:
     name: Clippy
@@ -53,5 +60,97 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
+
       - name: Run tests
-        run: cargo test --all-targets --all-features
+        run: cargo nextest run --profile ci
+
+      - name: Run doctests
+        run: cargo test --doc
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check documentation
+        run: |
+          RUSTDOCFLAGS="-D warnings" cargo doc --package adrs-core --no-deps
+
+      - name: Count doctests
+        run: |
+          COUNT=$(cargo test --doc --package adrs-core 2>&1 | grep "running" | grep -oE "[0-9]+" | head -1 || echo "0")
+          echo "Doctest count: $COUNT"
+
+  # === Security ===
+
+  deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check (advisories, licenses, bans, sources)
+        run: cargo deny check
+
+  # === Maintenance ===
+
+  unused-deps:
+    name: Unused Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
+
+      - name: Check unused
+        run: cargo machete
+
+  # === Coverage (PR only) ===
+
+  coverage:
+    name: Coverage
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run coverage
+        run: |
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov --no-report --package adrs-core
+          # Note: --doc coverage requires nightly Rust, so we skip it
+          # Doctests are still tested in the test job, just not coverage-tracked
+          cargo llvm-cov report --package adrs-core --lcov --output-path lcov.info
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

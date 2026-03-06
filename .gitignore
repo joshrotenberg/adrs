@@ -4,3 +4,17 @@
 .claude/
 .mcp.json
 CLAUDE.md
+
+# Coverage reports
+/target/llvm-cov/
+/target/tarpaulin/
+lcov.info
+coverage*.json
+*.profraw
+*.profdata
+
+# Mutation testing
+mutants.out/
+
+# Nextest
+/target/nextest/

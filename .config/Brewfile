@@ -1,0 +1,11 @@
+# Homebrew dependencies for adrs development
+# Install: brew bundle --file=.config/Brewfile
+
+# Development tools
+brew "just"
+brew "pre-commit"
+
+# Cargo tools
+cargo "cargo-nextest"
+cargo "cargo-deny"
+cargo "cargo-machete"

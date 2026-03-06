@@ -134,13 +134,13 @@ adrs link 3 Amends 1
 
 ```sh
 # Table of contents
-adrs generate toc > doc/adr/README.md
+adrs generate toc > docs/src/adrs/README.md
 
 # Graphviz dependency graph
-adrs generate graph | dot -Tsvg > doc/adr/graph.svg
+adrs generate graph | dot -Tsvg > docs/src/adrs/graph.svg
 
 # mdbook
-adrs generate book && cd book && mdbook serve
+adrs generate book && cd docs && mdbook serve
 ```
 
 ### Import/Export

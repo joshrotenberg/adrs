@@ -1,0 +1,52 @@
+# quality/justfile - Code quality, security, and coverage recipes
+
+set working-directory := ".."
+
+# === Coverage ===
+
+# Generate coverage report (HTML)
+coverage:
+    cargo llvm-cov clean --workspace
+    cargo llvm-cov --no-report --package adrs-core
+    cargo llvm-cov --no-report --doc --package adrs-core
+    cargo llvm-cov report --package adrs-core --html
+    @echo "Report: target/llvm-cov/html/index.html"
+
+# Generate doctest-only coverage
+coverage-doc:
+    cargo llvm-cov --doc --package adrs-core --html --open
+
+# Coverage with text summary
+coverage-text:
+    cargo llvm-cov clean --workspace
+    cargo llvm-cov --no-report --package adrs-core
+    cargo llvm-cov --no-report --doc --package adrs-core
+    cargo llvm-cov report --package adrs-core --text
+
+# === Security ===
+
+# Run cargo-deny checks (includes security audit)
+deny:
+    cargo deny check
+
+# Alias for deny (cargo-deny includes advisories check)
+security: deny
+    @echo "Security checks passed!"
+
+# === Maintenance ===
+
+# Check for unused dependencies
+unused:
+    cargo machete
+
+# Check for outdated dependencies
+outdated:
+    cargo outdated -R
+
+# === Full Quality ===
+
+# Full quality check (use before committing)
+all: security unused
+    cargo fmt --check
+    cargo clippy --all-targets --all-features -- -D warnings
+    @echo "All quality checks passed!"

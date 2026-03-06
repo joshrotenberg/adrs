@@ -1,0 +1,30 @@
+# tests/justfile - Test recipes
+
+set working-directory := ".."
+
+# Run all tests with nextest
+run:
+    cargo nextest run
+
+# Run doctests only
+doc:
+    cargo test --doc --package adrs-core
+
+# Run all tests including doctests
+all: run doc
+    @echo "All tests passed!"
+
+# Run tests with coverage
+cov:
+    cargo llvm-cov clean --workspace
+    cargo llvm-cov --no-report --package adrs-core
+    cargo llvm-cov --no-report --doc --package adrs-core
+    cargo llvm-cov report --package adrs-core --text
+
+# Run specific package tests
+core:
+    cargo nextest run --package adrs-core
+
+# Run CLI tests
+cli:
+    cargo nextest run --package adrs
