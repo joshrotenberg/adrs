@@ -1,11 +1,13 @@
 //! List ADRs command.
 
+use crate::output::{ListAdr, ListAdrLink, ListOutput, OutputFormat, print_json};
 use adrs_core::{Adr, AdrStatus, Repository};
 use anyhow::{Context, Result};
 use std::path::Path;
 use time::Date;
 
 /// List ADRs with optional filtering.
+#[allow(clippy::too_many_arguments)]
 pub fn list(
     root: &Path,
     status_filter: Option<String>,
@@ -14,6 +16,7 @@ pub fn list(
     decider: Option<String>,
     tag: Option<String>,
     long_format: bool,
+    format: OutputFormat,
 ) -> Result<()> {
     let repo =
         Repository::open(root).context("ADR repository not found. Run 'adrs init' first.")?;
@@ -42,16 +45,60 @@ pub fn list(
         })
         .collect();
 
-    // Output
-    for adr in filtered {
-        if long_format {
-            print_long_format(adr);
-        } else {
-            print_short_format(adr);
+    // Output based on format
+    match format {
+        OutputFormat::Json => {
+            let output = ListOutput {
+                adrs: filtered.iter().map(|adr| adr_to_list_output(adr)).collect(),
+            };
+            print_json(&output)?;
+        }
+        OutputFormat::Plain => {
+            for adr in filtered {
+                if long_format {
+                    print_long_format(adr);
+                } else {
+                    print_short_format(adr);
+                }
+            }
         }
     }
 
     Ok(())
+}
+
+/// Convert an ADR to list output format.
+fn adr_to_list_output(adr: &Adr) -> ListAdr {
+    let date = adr
+        .date
+        .format(&time::format_description::well_known::Iso8601::DATE)
+        .unwrap_or_default();
+
+    let path = adr
+        .path
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| adr.filename());
+
+    let links: Vec<ListAdrLink> = adr
+        .links
+        .iter()
+        .map(|link| ListAdrLink {
+            kind: link.kind.to_string(),
+            target: link.target,
+        })
+        .collect();
+
+    ListAdr {
+        number: adr.number,
+        title: adr.title.clone(),
+        status: adr.status.to_string().to_lowercase(),
+        date,
+        path,
+        tags: adr.tags.clone(),
+        deciders: adr.decision_makers.clone(),
+        links,
+    }
 }
 
 /// Parse a date string in YYYY-MM-DD format.

@@ -14,7 +14,7 @@ mod search;
 mod status;
 mod template;
 
-pub use config::config_with_discovery;
+pub use config::{config_migrate, config_show};
 pub use doctor::doctor;
 pub use edit::edit;
 pub use export::export_json;

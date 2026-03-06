@@ -1,5 +1,6 @@
 //! Search ADRs command.
 
+use crate::output::{OutputFormat, SearchMatchOutput, SearchOutput, SearchSnippet, print_json};
 use adrs_core::{Adr, AdrStatus, Repository};
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -11,6 +12,7 @@ pub fn search(
     title_only: bool,
     status_filter: Option<String>,
     case_sensitive: bool,
+    format: OutputFormat,
 ) -> Result<()> {
     let repo =
         Repository::open(root).context("ADR repository not found. Run 'adrs init' first.")?;
@@ -27,9 +29,9 @@ pub fn search(
         query.to_lowercase()
     };
 
-    let mut found_any = false;
+    let mut all_matches: Vec<(&Adr, Vec<SearchMatch>)> = Vec::new();
 
-    for adr in adrs {
+    for adr in &adrs {
         // Apply status filter
         if let Some(ref filter_status) = status_filter
             && !status_matches(&adr.status, filter_status)
@@ -38,19 +40,61 @@ pub fn search(
         }
 
         // Search for matches
-        let matches = find_matches(&adr, &query_normalized, title_only, case_sensitive);
+        let matches = find_matches(adr, &query_normalized, title_only, case_sensitive);
 
         if !matches.is_empty() {
-            found_any = true;
-            print_result(&adr, &matches, query);
+            all_matches.push((adr, matches));
         }
     }
 
-    if !found_any {
-        println!("No matches found for '{}'", query);
+    // Output based on format
+    match format {
+        OutputFormat::Json => {
+            let output = SearchOutput {
+                query: query.to_string(),
+                total: all_matches.len(),
+                matches: all_matches
+                    .iter()
+                    .map(|(adr, matches)| adr_to_search_output(adr, matches))
+                    .collect(),
+            };
+            print_json(&output)?;
+        }
+        OutputFormat::Plain => {
+            if all_matches.is_empty() {
+                println!("No matches found for '{}'", query);
+            } else {
+                for (adr, matches) in &all_matches {
+                    print_result(adr, matches, query);
+                }
+            }
+        }
     }
 
     Ok(())
+}
+
+/// Convert an ADR and its matches to search output format.
+fn adr_to_search_output(adr: &Adr, matches: &[SearchMatch]) -> SearchMatchOutput {
+    let path = adr
+        .path
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| adr.filename());
+
+    SearchMatchOutput {
+        number: adr.number,
+        title: adr.title.clone(),
+        status: adr.status.to_string().to_lowercase(),
+        path,
+        snippets: matches
+            .iter()
+            .map(|m| SearchSnippet {
+                section: m.section.clone(),
+                text: m.snippet.clone(),
+            })
+            .collect(),
+    }
 }
 
 /// Find matches in an ADR.

@@ -18,6 +18,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 toml = "0.8"
 
+# Configuration
+figment = { version = "0.10", features = ["toml", "env"] }
+
 # Markdown
 pulldown-cmark = "0.12"
 pulldown-cmark-to-cmark = "17"

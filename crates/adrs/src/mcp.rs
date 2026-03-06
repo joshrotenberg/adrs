@@ -229,7 +229,7 @@ pub struct SuggestTagsParams {
 
 // Response types
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AdrSummary {
     number: u32,
     title: String,
@@ -238,7 +238,7 @@ struct AdrSummary {
     tags: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AdrDetail {
     number: u32,
     title: String,
@@ -249,14 +249,14 @@ struct AdrDetail {
     links: Vec<LinkInfo>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct LinkInfo {
     kind: String,
     target: u32,
     description: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ValidationResult {
     number: u32,
     title: String,
@@ -265,27 +265,27 @@ struct ValidationResult {
     sections: SectionStatus,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ValidationIssue {
     severity: String,
     message: String,
     section: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SectionStatus {
     context: SectionInfo,
     decision: SectionInfo,
     consequences: SectionInfo,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SectionInfo {
     present: bool,
     empty: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AdrSections {
     number: u32,
     title: String,
@@ -298,21 +298,21 @@ struct AdrSections {
     links: Vec<LinkInfo>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct CompareResult {
     source: AdrBrief,
     target: AdrBrief,
     differences: Differences,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AdrBrief {
     number: u32,
     title: String,
     status: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Differences {
     title_changed: bool,
     status_changed: bool,
@@ -321,7 +321,7 @@ struct Differences {
     consequences: SectionDiff,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SectionDiff {
     changed: bool,
     source_empty: bool,
@@ -330,27 +330,27 @@ struct SectionDiff {
     target_length: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct BulkUpdateResult {
     updated: Vec<UpdatedAdr>,
     failed: Vec<FailedAdr>,
     summary: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct UpdatedAdr {
     number: u32,
     old_status: String,
     new_status: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct FailedAdr {
     number: u32,
     error: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SuggestTagsResult {
     number: u32,
     title: String,
@@ -358,7 +358,7 @@ struct SuggestTagsResult {
     suggested_tags: Vec<SuggestedTag>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SuggestedTag {
     tag: String,
     confidence: f32,
@@ -1442,4 +1442,391 @@ pub async fn serve_http(root: PathBuf, addr: std::net::SocketAddr) -> Result<()>
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use adrs_core::Repository;
+    use tempfile::TempDir;
+
+    /// Create a test repository with sample ADRs
+    fn setup_test_repo() -> (TempDir, AdrService) {
+        let temp = TempDir::new().unwrap();
+
+        // Initialize repo
+        Repository::init(temp.path(), None, false).unwrap();
+
+        // Create additional test ADRs
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (mut adr2, _) = repo.new_adr("Use PostgreSQL for persistence").unwrap();
+        adr2.context = "We need a database.".into();
+        adr2.decision = "Use PostgreSQL.".into();
+        adr2.consequences = "Need PostgreSQL expertise.".into();
+        repo.update(&adr2).unwrap();
+
+        let (mut adr3, _) = repo.new_adr("Use Redis for caching").unwrap();
+        adr3.context = "We need caching for performance.".into();
+        adr3.decision = "Use Redis.".into();
+        adr3.consequences = "Need Redis infrastructure.".into();
+        repo.update(&adr3).unwrap();
+
+        let service = AdrService::new(temp.path().to_path_buf());
+        (temp, service)
+    }
+
+    /// Create a NextGen test repository
+    fn setup_nextgen_repo() -> (TempDir, AdrService) {
+        let temp = TempDir::new().unwrap();
+        Repository::init(temp.path(), None, true).unwrap();
+        let service = AdrService::new(temp.path().to_path_buf());
+        (temp, service)
+    }
+
+    // ========== Read Operations ==========
+
+    #[test]
+    fn test_list_adrs() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.list_adrs_impl(ListAdrsParams {
+            status: None,
+            tag: None,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&json).unwrap();
+        assert_eq!(adrs.len(), 3);
+    }
+
+    #[test]
+    fn test_list_adrs_filter_by_status() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.list_adrs_impl(ListAdrsParams {
+            status: Some("accepted".to_string()),
+            tag: None,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&json).unwrap();
+        // ADR 1 "Record architecture decisions" is accepted
+        assert_eq!(adrs.len(), 1);
+        assert_eq!(adrs[0].number, 1);
+    }
+
+    #[test]
+    fn test_get_adr() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.get_adr_impl(GetAdrParams { number: 2 });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let adr: AdrDetail = serde_json::from_str(&json).unwrap();
+        assert_eq!(adr.number, 2);
+        assert_eq!(adr.title, "Use PostgreSQL for persistence");
+    }
+
+    #[test]
+    fn test_get_adr_not_found() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.get_adr_impl(GetAdrParams { number: 999 });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_search_adrs() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.search_adrs_impl(SearchAdrsParams {
+            query: "PostgreSQL".to_string(),
+            title_only: None,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&json).unwrap();
+        assert_eq!(adrs.len(), 1);
+        assert_eq!(adrs[0].number, 2);
+    }
+
+    #[test]
+    fn test_search_adrs_title_only() {
+        let (_temp, service) = setup_test_repo();
+
+        // "database" is in content but not title
+        let result = service.search_adrs_impl(SearchAdrsParams {
+            query: "database".to_string(),
+            title_only: Some(true),
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&json).unwrap();
+        assert_eq!(adrs.len(), 0);
+    }
+
+    #[test]
+    fn test_get_repository_info() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.get_repository_info_impl();
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"mode\": \"compatible\""));
+        assert!(json.contains("\"adr_count\": 3"));
+    }
+
+    #[test]
+    fn test_get_adr_sections() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.get_adr_sections_impl(GetAdrSectionsParams { number: 2 });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let sections: AdrSections = serde_json::from_str(&json).unwrap();
+        assert_eq!(sections.context, "We need a database.");
+        assert_eq!(sections.decision, "Use PostgreSQL.");
+    }
+
+    #[test]
+    fn test_validate_adr_valid() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.validate_adr_impl(ValidateAdrParams { number: 2 });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let validation: ValidationResult = serde_json::from_str(&json).unwrap();
+        assert!(validation.valid);
+        assert!(validation.issues.is_empty());
+    }
+
+    #[test]
+    fn test_compare_adrs() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.compare_adrs_impl(CompareAdrsParams {
+            source: 2,
+            target: 3,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let comparison: CompareResult = serde_json::from_str(&json).unwrap();
+        assert!(comparison.differences.title_changed);
+        assert!(comparison.differences.context.changed);
+    }
+
+    #[test]
+    fn test_get_related_adrs_no_links() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.get_related_adrs_impl(GetRelatedParams { number: 2 });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"related\": []"));
+    }
+
+    // ========== Write Operations ==========
+
+    #[test]
+    fn test_create_adr() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.create_adr_impl(CreateAdrParams {
+            title: "Use Docker for deployment".to_string(),
+            context: Some("We need containerization.".to_string()),
+            decision: Some("Use Docker.".to_string()),
+            consequences: Some("Need Docker knowledge.".to_string()),
+            supersedes: None,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"number\": 4"));
+        assert!(json.contains("\"content_populated\": true"));
+    }
+
+    #[test]
+    fn test_create_adr_supersedes() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.create_adr_impl(CreateAdrParams {
+            title: "Use MySQL instead".to_string(),
+            context: None,
+            decision: None,
+            consequences: None,
+            supersedes: Some(2),
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"number\": 4"));
+    }
+
+    #[test]
+    fn test_update_status() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.update_status_impl(UpdateStatusParams {
+            number: 2,
+            status: "accepted".to_string(),
+            superseded_by: None,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"new_status\": \"Accepted\""));
+    }
+
+    #[test]
+    fn test_link_adrs() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.link_adrs_impl(LinkAdrsParams {
+            source: 2,
+            target: 3,
+            link_type: "Relates to".to_string(),
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"source_link_type\": \"Relates to\""));
+        assert!(json.contains("\"target_link_type\": \"Relates to\""));
+    }
+
+    #[test]
+    fn test_update_content() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.update_content_impl(UpdateContentParams {
+            number: 2,
+            context: Some("Updated context.".to_string()),
+            decision: None,
+            consequences: None,
+        });
+
+        assert!(result.is_ok());
+
+        // Verify the update
+        let sections = service
+            .get_adr_sections_impl(GetAdrSectionsParams { number: 2 })
+            .unwrap();
+        let parsed: AdrSections = serde_json::from_str(&sections).unwrap();
+        assert_eq!(parsed.context, "Updated context.");
+        assert_eq!(parsed.decision, "Use PostgreSQL."); // unchanged
+    }
+
+    #[test]
+    fn test_bulk_update_status() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.bulk_update_status_impl(BulkUpdateStatusParams {
+            numbers: vec![2, 3],
+            status: "accepted".to_string(),
+            superseded_by: None,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let bulk: BulkUpdateResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(bulk.updated.len(), 2);
+        assert!(bulk.failed.is_empty());
+    }
+
+    #[test]
+    fn test_bulk_update_status_with_failures() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.bulk_update_status_impl(BulkUpdateStatusParams {
+            numbers: vec![2, 999], // 999 doesn't exist
+            status: "accepted".to_string(),
+            superseded_by: None,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let bulk: BulkUpdateResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(bulk.updated.len(), 1);
+        assert_eq!(bulk.failed.len(), 1);
+    }
+
+    // ========== NextGen-only Operations ==========
+
+    #[test]
+    fn test_update_tags_requires_nextgen() {
+        let (_temp, service) = setup_test_repo(); // Compatible mode
+
+        let result = service.update_tags_impl(UpdateTagsParams {
+            number: 2,
+            tags: vec!["database".to_string()],
+            replace: None,
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("NextGen mode"));
+    }
+
+    #[test]
+    fn test_update_tags_in_nextgen() {
+        let (_temp, service) = setup_nextgen_repo();
+
+        let result = service.update_tags_impl(UpdateTagsParams {
+            number: 1,
+            tags: vec!["documentation".to_string()],
+            replace: None,
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"documentation\""));
+    }
+
+    // ========== Analysis Operations ==========
+
+    #[test]
+    fn test_suggest_tags() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.suggest_tags_impl(SuggestTagsParams {
+            number: 2,
+            max_tags: Some(3),
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let suggestions: SuggestTagsResult = serde_json::from_str(&json).unwrap();
+        // Should suggest "database" based on content
+        assert!(
+            suggestions
+                .suggested_tags
+                .iter()
+                .any(|t| t.tag == "database")
+        );
+    }
+
+    #[test]
+    fn test_suggest_tags_max_limit() {
+        let (_temp, service) = setup_test_repo();
+
+        let result = service.suggest_tags_impl(SuggestTagsParams {
+            number: 2,
+            max_tags: Some(1),
+        });
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        let suggestions: SuggestTagsResult = serde_json::from_str(&json).unwrap();
+        assert!(suggestions.suggested_tags.len() <= 1);
+    }
 }

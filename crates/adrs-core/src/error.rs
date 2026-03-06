@@ -1,11 +1,82 @@
-//! Error types for adrs-core.
+//! # Error Types
+//!
+//! Error types and result aliases for `adrs-core` operations.
+//!
+//! ## Overview
+//!
+//! All fallible operations in this crate return [`Result<T>`], which is
+//! an alias for `std::result::Result<T, Error>`.
+//!
+//! ## Error Variants
+//!
+//! | Variant | Cause | Recovery |
+//! |---------|-------|----------|
+//! | [`Error::AdrDirNotFound`] | No `.adr-dir` or `adrs.toml` | Run `adrs init` |
+//! | [`Error::AdrNotFound`] | ADR doesn't exist | Check valid numbers with `list` |
+//! | [`Error::InvalidFormat`] | Malformed ADR content | Fix file syntax |
+//! | [`Error::Io`] | File system error | Check path and permissions |
+//! | [`Error::TemplateError`] | Template rendering failed | Check template syntax |
+//!
+//! ## Examples
+//!
+//! ### Handling specific errors
+//!
+//! ```rust
+//! use adrs_core::{Repository, Error};
+//!
+//! fn open_repo(path: &str) -> Result<(), String> {
+//!     match Repository::open(path) {
+//!         Ok(repo) => {
+//!             println!("Opened repository with {} ADRs", repo.list().unwrap().len());
+//!             Ok(())
+//!         }
+//!         Err(Error::AdrDirNotFound) => {
+//!             Err("No repository found. Run 'adrs init' first.".into())
+//!         }
+//!         Err(e) => Err(format!("Failed to open repository: {}", e)),
+//!     }
+//! }
+//!
+//! // This path doesn't exist, so we get AdrDirNotFound
+//! let result = open_repo("/nonexistent/path");
+//! assert!(result.is_err());
+//! ```
+//!
+//! ### Converting to standard errors
+//!
+//! ```rust
+//! use adrs_core::{Repository, Error};
+//!
+//! fn example() -> std::result::Result<(), Box<dyn std::error::Error>> {
+//!     // Error implements std::error::Error, so it works with ?
+//!     let result = Repository::open("/nonexistent");
+//!     assert!(result.is_err());
+//!     Ok(())
+//! }
+//! # example().unwrap();
+//! ```
 
 use std::path::PathBuf;
 
-/// Result type alias using the library's error type.
+/// A specialized Result type for ADR operations.
+///
+/// This is defined as `std::result::Result<T, Error>` for convenience.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Errors that can occur when working with ADRs.
+/// Errors that can occur during ADR operations.
+///
+/// This enum represents all possible errors returned by `adrs-core`
+/// functions. Each variant includes context about what went wrong.
+///
+/// # Display
+///
+/// All variants implement [`Display`](std::fmt::Display) with
+/// human-readable messages suitable for showing to users.
+///
+/// # Source
+///
+/// Variants that wrap other errors (like [`Io`](Self::Io)) provide
+/// access to the underlying error via [`std::error::Error::source`].
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// The ADR directory was not found.

@@ -1,0 +1,396 @@
+# crates/adrs/justfile - CLI crate recipes
+
+set working-directory := "../.."
+
+# Binary path (relative to working directory which is project root)
+adrs_bin := "target/debug/adrs"
+
+# ============================================================================
+# Build & Run
+# ============================================================================
+
+# Run CLI binary with arguments
+run *args:
+    cargo run --package adrs -- {{args}}
+
+# Build CLI binary (debug)
+build:
+    cargo build --package adrs
+
+# Build CLI binary (release)
+build-release:
+    cargo build --package adrs --release
+
+# Run automated CLI tests
+test:
+    cargo nextest run --package adrs
+
+# ============================================================================
+# Manual Testing - Individual Commands
+# ============================================================================
+
+# Show help for all commands
+help-all:
+    @echo "=== Main Help ===" && cargo run -q --package adrs -- --help
+    @echo "\n=== init ===" && cargo run -q --package adrs -- init --help
+    @echo "\n=== new ===" && cargo run -q --package adrs -- new --help
+    @echo "\n=== edit ===" && cargo run -q --package adrs -- edit --help
+    @echo "\n=== list ===" && cargo run -q --package adrs -- list --help
+    @echo "\n=== search ===" && cargo run -q --package adrs -- search --help
+    @echo "\n=== link ===" && cargo run -q --package adrs -- link --help
+    @echo "\n=== status ===" && cargo run -q --package adrs -- status --help
+    @echo "\n=== config ===" && cargo run -q --package adrs -- config --help
+    @echo "\n=== doctor ===" && cargo run -q --package adrs -- doctor --help
+    @echo "\n=== generate ===" && cargo run -q --package adrs -- generate --help
+    @echo "\n=== export ===" && cargo run -q --package adrs -- export --help
+    @echo "\n=== import ===" && cargo run -q --package adrs -- import --help
+    @echo "\n=== template ===" && cargo run -q --package adrs -- template --help
+    @echo "\n=== completions ===" && cargo run -q --package adrs -- completions --help
+    @echo "\n=== cheatsheet ===" && cargo run -q --package adrs -- cheatsheet
+
+# ============================================================================
+# Interactive Demo - Full Workflow in Temp Directory
+# ============================================================================
+
+# Run interactive demo workflow in temp directory
+[unix]
+demo: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Get absolute path to binary before cd'ing
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DEMO_DIR=$(mktemp -d)
+    trap "rm -rf $DEMO_DIR" EXIT
+    cd "$DEMO_DIR"
+
+    echo "╔════════════════════════════════════════════════════════════════╗"
+    echo "║  ADRS Interactive Demo                                        ║"
+    echo "║  Working directory: $DEMO_DIR"
+    echo "╚════════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    echo "▶ Step 1: Initialize repository"
+    echo "$ adrs init"
+    $ADRS init
+    echo ""
+
+    echo "▶ Step 2: Show config"
+    echo "$ adrs config"
+    $ADRS config
+    echo ""
+
+    echo "▶ Step 3: Create first ADR"
+    echo "$ adrs new --no-edit 'Use Rust for implementation'"
+    $ADRS new --no-edit "Use Rust for implementation"
+    echo ""
+
+    echo "▶ Step 4: Create second ADR (MADR format)"
+    echo "$ adrs new --no-edit --format madr 'Use PostgreSQL for persistence'"
+    $ADRS new --no-edit --format madr "Use PostgreSQL for persistence"
+    echo ""
+
+    echo "▶ Step 5: List ADRs"
+    echo "$ adrs list"
+    $ADRS list
+    echo ""
+
+    echo "▶ Step 6: List ADRs (detailed)"
+    echo "$ adrs list -l"
+    $ADRS list -l
+    echo ""
+
+    echo "▶ Step 7: Change status"
+    echo "$ adrs status 2 accepted"
+    $ADRS status 2 accepted
+    echo ""
+
+    echo "▶ Step 8: Create superseding ADR"
+    echo "$ adrs new --no-edit --supersedes 3 'Use MySQL instead'"
+    $ADRS new --no-edit --supersedes 3 "Use MySQL instead"
+    echo ""
+
+    echo "▶ Step 9: Link ADRs"
+    echo "$ adrs link 2 'Relates to' 1"
+    $ADRS link 2 "Relates to" 1
+    echo ""
+
+    echo "▶ Step 10: Search ADRs"
+    echo "$ adrs search implementation"
+    $ADRS search implementation
+    echo ""
+
+    echo "▶ Step 11: Run doctor"
+    echo "$ adrs doctor"
+    $ADRS doctor
+    echo ""
+
+    echo "▶ Step 12: Generate TOC"
+    echo "$ adrs generate toc"
+    $ADRS generate toc
+    echo ""
+
+    echo "▶ Step 13: Export to JSON"
+    echo "$ adrs export json --pretty"
+    $ADRS export json --pretty
+    echo ""
+
+    echo "▶ Step 14: Show templates"
+    echo "$ adrs template list"
+    $ADRS template list
+    echo ""
+
+    echo "▶ Step 15: Config verbose"
+    echo "$ adrs config show --verbose"
+    $ADRS config show --verbose
+    echo ""
+
+    echo "════════════════════════════════════════════════════════════════"
+    echo "Demo complete! Directory contents:"
+    find . -type f | head -20
+    echo "════════════════════════════════════════════════════════════════"
+
+# ============================================================================
+# Smoke Tests - Quick Verification
+# ============================================================================
+
+# Run smoke tests (quick verification that commands work)
+[unix]
+smoke: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Get absolute path to binary before cd'ing
+    ADRS="$(pwd)/{{adrs_bin}}"
+    SMOKE_DIR=$(mktemp -d)
+    trap "rm -rf $SMOKE_DIR" EXIT
+    cd "$SMOKE_DIR"
+
+    echo "Running smoke tests..."
+
+    # Basic commands that don't need init
+    echo -n "  help... " && $ADRS --help > /dev/null && echo "✓"
+    echo -n "  cheatsheet... " && $ADRS cheatsheet > /dev/null && echo "✓"
+    echo -n "  template list... " && $ADRS template list > /dev/null && echo "✓"
+    echo -n "  completions bash... " && $ADRS completions bash > /dev/null && echo "✓"
+
+    # Init and basic workflow
+    echo -n "  init... " && $ADRS init > /dev/null && echo "✓"
+    echo -n "  config... " && $ADRS config > /dev/null && echo "✓"
+    echo -n "  config show... " && $ADRS config show > /dev/null && echo "✓"
+    echo -n "  config show --verbose... " && $ADRS config show --verbose > /dev/null && echo "✓"
+    echo -n "  new... " && $ADRS new --no-edit "Test ADR" > /dev/null && echo "✓"
+    echo -n "  list... " && $ADRS list > /dev/null && echo "✓"
+    echo -n "  list -l... " && $ADRS list -l > /dev/null && echo "✓"
+    echo -n "  search... " && $ADRS search test > /dev/null && echo "✓"
+    echo -n "  doctor... " && $ADRS doctor > /dev/null && echo "✓"
+    echo -n "  generate toc... " && $ADRS generate toc > /dev/null && echo "✓"
+    echo -n "  export json... " && $ADRS export json > /dev/null && echo "✓"
+
+    # Status change
+    echo -n "  status... " && $ADRS status 2 accepted > /dev/null && echo "✓"
+
+    # Second ADR for linking
+    $ADRS new --no-edit "Second ADR" > /dev/null
+    echo -n "  link... " && $ADRS link 2 "Relates to" 3 > /dev/null && echo "✓"
+
+    # Migrate (dry-run)
+    echo -n "  config migrate --dry-run... " && $ADRS config migrate --to toml --dry-run > /dev/null && echo "✓"
+
+    echo ""
+    echo "All smoke tests passed! ✓"
+
+# ============================================================================
+# Individual Command Tests (for manual verification)
+# ============================================================================
+
+# Test: init command
+[unix]
+test-init: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    echo "Testing: adrs init"
+    $ADRS init
+    echo "---"
+    ls -la doc/adr/
+
+# Test: init with custom directory
+[unix]
+test-init-custom: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    echo "Testing: adrs init decisions"
+    $ADRS init decisions
+    echo "---"
+    ls -la decisions/
+
+# Test: new command
+[unix]
+test-new: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    echo "Testing: adrs new --no-edit 'Use Rust'"
+    $ADRS new --no-edit "Use Rust"
+    echo "---"
+    cat doc/adr/0002-use-rust.md
+
+# Test: new with MADR format
+[unix]
+test-new-madr: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    echo "Testing: adrs new --no-edit --format madr 'Use MADR'"
+    $ADRS new --no-edit --format madr "Use MADR"
+    echo "---"
+    cat doc/adr/0002-use-madr.md
+
+# Test: list command
+[unix]
+test-list: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    $ADRS new --no-edit "First" > /dev/null
+    $ADRS new --no-edit "Second" > /dev/null
+    echo "Testing: adrs list"
+    $ADRS list
+    echo "---"
+    echo "Testing: adrs list -l"
+    $ADRS list -l
+
+# Test: config commands
+[unix]
+test-config: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    echo "Testing: adrs config"
+    $ADRS config
+    echo "---"
+    echo "Testing: adrs config show --verbose"
+    $ADRS config show --verbose
+    echo "---"
+    echo "Testing: adrs config migrate --to toml --dry-run"
+    $ADRS config migrate --to toml --dry-run
+
+# Test: doctor command
+[unix]
+test-doctor: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    $ADRS new --no-edit "Test" > /dev/null
+    echo "Testing: adrs doctor"
+    $ADRS doctor
+
+# Test: generate commands
+[unix]
+test-generate: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    $ADRS new --no-edit "First" > /dev/null
+    $ADRS new --no-edit "Second" > /dev/null
+    echo "Testing: adrs generate toc"
+    $ADRS generate toc
+    echo "---"
+    echo "Testing: adrs generate graph"
+    $ADRS generate graph
+
+# Test: export/import
+[unix]
+test-export-import: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    $ADRS new --no-edit "Test" > /dev/null
+    echo "Testing: adrs export json --pretty"
+    $ADRS export json --pretty
+    echo "---"
+    echo "Exporting to file and reimporting..."
+    $ADRS export json > export.json
+    mkdir import-test && cd import-test
+    $ADRS import json --dir . ../export.json --dry-run
+
+# Test: template commands
+[unix]
+test-template: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    echo "Testing: adrs template list"
+    $ADRS template list
+    echo "---"
+    echo "Testing: adrs template show nygard"
+    $ADRS template show nygard
+    echo "---"
+    echo "Testing: adrs template show madr --variant minimal"
+    $ADRS template show madr --variant minimal
+
+# Test: search command
+[unix]
+test-search: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    $ADRS new --no-edit "Use PostgreSQL for database" > /dev/null
+    $ADRS new --no-edit "Use Redis for caching" > /dev/null
+    echo "Testing: adrs search postgres"
+    $ADRS search postgres
+    echo "---"
+    echo "Testing: adrs search -t database"
+    $ADRS search -t database
+
+# Test: link and status commands
+[unix]
+test-link-status: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ADRS="$(pwd)/{{adrs_bin}}"
+    DIR=$(mktemp -d) && trap "rm -rf $DIR" EXIT && cd "$DIR"
+    $ADRS init > /dev/null
+    $ADRS new --no-edit "First" > /dev/null
+    $ADRS new --no-edit "Second" > /dev/null
+    echo "Testing: adrs status 2 accepted"
+    $ADRS status 2 accepted
+    echo "---"
+    echo "Testing: adrs link 2 'Amends' 3"
+    $ADRS link 2 "Amends" 3
+    echo "---"
+    echo "ADR 2 after changes:"
+    cat doc/adr/0002-first.md
+    echo "---"
+    echo "ADR 3 after changes:"
+    cat doc/adr/0003-second.md
+
+# ============================================================================
+# All Manual Tests
+# ============================================================================
+
+# Run all individual test recipes
+[unix]
+test-all-manual: test-init test-init-custom test-new test-new-madr test-list test-config test-doctor test-generate test-export-import test-template test-search test-link-status
+    @echo ""
+    @echo "All manual tests completed!"

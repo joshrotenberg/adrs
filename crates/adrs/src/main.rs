@@ -8,6 +8,9 @@ use std::io;
 use std::path::PathBuf;
 
 mod commands;
+mod output;
+
+pub use output::OutputFormat;
 
 #[cfg(feature = "mcp")]
 mod mcp;
@@ -55,6 +58,10 @@ struct Cli {
     /// Run from a different directory
     #[arg(short = 'C', long = "cwd", global = true, value_name = "DIR")]
     working_dir: Option<PathBuf>,
+
+    /// Output format (plain text or JSON for scripting)
+    #[arg(long = "output", global = true, default_value = "plain", value_enum)]
+    output: OutputFormat,
 
     #[command(subcommand)]
     command: Commands,
@@ -261,8 +268,11 @@ Note: Use --by with 'superseded' to create a link to the replacing ADR.")]
         by: Option<u32>,
     },
 
-    /// Show configuration
-    Config,
+    /// Show or manage configuration
+    Config {
+        #[command(subcommand)]
+        command: Option<ConfigCommands>,
+    },
 
     /// Check repository health
     Doctor,
@@ -564,6 +574,57 @@ enum TemplateCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// Show resolved configuration (default if no subcommand)
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs config show                       Show current configuration
+  adrs config show --verbose             Show all config layers
+  adrs config                            Same as 'config show'
+
+The verbose output shows the precedence of configuration sources:
+  - Environment variables (highest priority)
+  - adrs.toml
+  - .adr-dir (legacy)
+  - Global config (~/.config/adrs/config.toml)
+  - Defaults (lowest priority)")]
+    Show {
+        /// Show all configuration layers and their sources
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Migrate configuration between formats
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs config migrate --to toml          Convert .adr-dir to adrs.toml
+  adrs config migrate --to adr-dir       Convert adrs.toml to .adr-dir
+  adrs config migrate --to toml --dry-run  Preview without writing
+
+NOTE: Converting to .adr-dir is lossy - only adr_dir is preserved.
+Mode, templates, and other settings will be lost.")]
+    Migrate {
+        /// Target format
+        #[arg(long, value_enum)]
+        to: ConfigFormat,
+
+        /// Preview migration without writing files
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+/// Configuration file format
+#[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
+enum ConfigFormat {
+    /// Modern TOML format (adrs.toml)
+    Toml,
+    /// Legacy adr-tools format (.adr-dir)
+    #[value(name = "adr-dir")]
+    AdrDir,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -612,7 +673,16 @@ fn main() -> Result<()> {
             long,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::list(&discovered.root, status, since, until, decider, tag, long)
+            commands::list(
+                &discovered.root,
+                status,
+                since,
+                until,
+                decider,
+                tag,
+                long,
+                cli.output,
+            )
         }
         Commands::Search {
             query,
@@ -621,7 +691,14 @@ fn main() -> Result<()> {
             case_sensitive,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::search(&discovered.root, &query, title, status, case_sensitive)
+            commands::search(
+                &discovered.root,
+                &query,
+                title,
+                status,
+                case_sensitive,
+                cli.output,
+            )
         }
         Commands::Link {
             source,
@@ -642,13 +719,24 @@ fn main() -> Result<()> {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
             commands::status(&discovered.root, adr, &status, by)
         }
-        Commands::Config => {
+        Commands::Config { command } => {
             let discovered = discover(&start_dir).ok();
-            commands::config_with_discovery(&start_dir, discovered)
+            match command {
+                None | Some(ConfigCommands::Show { verbose: false }) => {
+                    commands::config_show(&start_dir, discovered, false, cli.output)
+                }
+                Some(ConfigCommands::Show { verbose: true }) => {
+                    commands::config_show(&start_dir, discovered, true, cli.output)
+                }
+                Some(ConfigCommands::Migrate { to, dry_run }) => {
+                    let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+                    commands::config_migrate(&discovered, to, dry_run)
+                }
+            }
         }
         Commands::Doctor => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::doctor(&discovered.root)
+            commands::doctor(&discovered.root, cli.output)
         }
         Commands::Generate { command } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
