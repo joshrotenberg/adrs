@@ -482,4 +482,62 @@ Some consequences.
             "Expected ADR002 (missing status) violation"
         );
     }
+
+    #[test]
+    fn test_check_all_reports_parse_errors() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        // Write an ADR with invalid YAML (bad date)
+        let bad_content =
+            "---\nnumber: 2\nstatus: accepted\ndate: not-a-date\n---\n\n# 2. Bad Date\n";
+        std::fs::write(repo.adr_path().join("0002-bad-date.md"), bad_content).unwrap();
+
+        let report = check_all(&repo).unwrap();
+
+        let parse_errors: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "parse-error")
+            .collect();
+
+        assert_eq!(parse_errors.len(), 1, "should report 1 parse error");
+        assert_eq!(parse_errors[0].severity, IssueSeverity::Error);
+        assert!(
+            parse_errors[0]
+                .path
+                .as_ref()
+                .unwrap()
+                .to_string_lossy()
+                .contains("0002-bad-date.md")
+        );
+    }
+
+    #[test]
+    fn test_check_all_no_parse_errors_for_string_decision_makers() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        // Issue #216: decision-makers as string should not cause a parse error
+        let content = "---\nnumber: 2\nstatus: accepted\ndate: 2026-03-18\ndecision-makers: alice\n---\n\n# 2. Test\n\n## Context\n\nContext.\n\n## Decision\n\nDecision.\n\n## Consequences\n\nConsequences.\n";
+        std::fs::write(repo.adr_path().join("0002-test.md"), content).unwrap();
+
+        let report = check_all(&repo).unwrap();
+
+        let parse_errors: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "parse-error")
+            .collect();
+
+        assert!(
+            parse_errors.is_empty(),
+            "string decision-makers should not cause parse error, got: {:?}",
+            parse_errors.iter().map(|i| &i.message).collect::<Vec<_>>()
+        );
+    }
 }

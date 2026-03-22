@@ -4,6 +4,7 @@
 //! catching integration issues that unit tests might miss.
 
 use assert_cmd::{Command, cargo_bin_cmd};
+use assert_fs::TempDir;
 use assert_fs::prelude::*;
 use predicates::prelude::*;
 use std::fs;
@@ -1300,6 +1301,93 @@ fn scenario_config_ng_multiple_tagged_adrs() {
         .success()
         .stdout(predicate::str::contains("0003-auth-design.md"))
         .stdout(predicate::str::contains("0002-use-postgresql.md").not());
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
+// Scenario: String-valued frontmatter fields (issue #216)
+// ============================================================================
+
+/// User writes decision-makers as a plain string instead of a YAML list.
+/// The ADR should still appear in list and doctor should not report parse errors.
+#[test]
+fn scenario_string_decision_makers_visible_in_list() {
+    let temp = TempDir::new().unwrap();
+
+    // Init with --ng for frontmatter mode
+    adrs()
+        .current_dir(temp.path())
+        .args(["init", "--ng"])
+        .assert()
+        .success();
+
+    // Write an ADR with decision-makers as a plain string (the reporter's case)
+    let content = r#"---
+number: 2
+status: accepted
+date: 2026-03-18
+decision-makers: mschoettle
+---
+
+# 2. Use Markdown Architectural Decision Records
+
+## Context
+
+We need to record decisions.
+
+## Decision
+
+Use MADR format.
+
+## Consequences
+
+Decisions are recorded.
+"#;
+    let adr_dir = temp.path().join("doc/adr");
+    fs::write(adr_dir.join("0002-use-markdown-adrs.md"), content).unwrap();
+
+    // list should show this ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-use-markdown-adrs.md"));
+
+    // doctor should not report parse-error (other lint rules may still fire)
+    adrs()
+        .current_dir(temp.path())
+        .args(["doctor"])
+        .assert()
+        .stdout(predicate::str::contains("parse-error").not());
+
+    temp.close().unwrap();
+}
+
+/// Doctor reports files with completely unparseable YAML frontmatter.
+#[test]
+fn scenario_doctor_reports_invalid_frontmatter() {
+    let temp = TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init", "--ng"])
+        .assert()
+        .success();
+
+    // Write an ADR with completely broken YAML that fails our parser
+    let content = "---\n: :\n---\n\n# 2. Broken\n";
+    let adr_dir = temp.path().join("doc/adr");
+    fs::write(adr_dir.join("0002-broken.md"), content).unwrap();
+
+    // doctor should report the parse error
+    adrs()
+        .current_dir(temp.path())
+        .args(["doctor"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("parse-error"));
 
     temp.close().unwrap();
 }
