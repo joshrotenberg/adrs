@@ -1853,4 +1853,75 @@ Context.
         // Body preserved
         assert!(result.contains("## Context\n\nContext."));
     }
+
+    // ========== list_with_errors Tests ==========
+
+    #[test]
+    fn test_list_with_errors_all_valid() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        repo.new_adr("Valid ADR").unwrap();
+
+        let (adrs, errors) = repo.list_with_errors().unwrap();
+        assert_eq!(adrs.len(), 2); // init ADR + new one
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_list_with_errors_captures_invalid_frontmatter() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        // Write a file with invalid YAML frontmatter (bad date format)
+        let bad_content =
+            "---\nnumber: 2\nstatus: accepted\ndate: not-a-date\n---\n\n# 2. Bad ADR\n";
+        fs::write(repo.adr_path().join("0002-bad-adr.md"), bad_content).unwrap();
+
+        let (adrs, errors) = repo.list_with_errors().unwrap();
+        assert_eq!(adrs.len(), 1); // Only the init ADR
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].0.to_string_lossy().contains("0002-bad-adr.md"));
+    }
+
+    #[test]
+    fn test_list_with_errors_mixed_valid_and_invalid() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        // Valid ADR
+        repo.new_adr("Good ADR").unwrap();
+
+        // Invalid ADR (completely broken YAML)
+        let bad_content = "---\n: :\n---\n\n# 3. Broken\n";
+        fs::write(repo.adr_path().join("0003-broken.md"), bad_content).unwrap();
+
+        let (adrs, errors) = repo.list_with_errors().unwrap();
+        assert_eq!(adrs.len(), 2); // init + good
+        assert_eq!(errors.len(), 1); // broken
+    }
+
+    #[test]
+    fn test_list_with_errors_string_decision_makers_is_valid() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        // This is the exact case from issue #216
+        let content = r#"---
+number: 2
+status: accepted
+date: 2026-03-18
+decision-makers: mschoettle
+---
+
+# 2. Use Markdown Architectural Decision Records
+"#;
+        fs::write(repo.adr_path().join("0002-use-markdown-adrs.md"), content).unwrap();
+
+        let (adrs, errors) = repo.list_with_errors().unwrap();
+        assert!(errors.is_empty(), "string decision-makers should parse");
+        assert_eq!(adrs.len(), 2);
+
+        let adr = adrs.iter().find(|a| a.number == 2).unwrap();
+        assert_eq!(adr.decision_makers, vec!["mschoettle"]);
+    }
 }
