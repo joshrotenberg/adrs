@@ -194,6 +194,45 @@ impl Repository {
         Ok(adrs)
     }
 
+    /// List all ADRs, also returning parse errors for files that look like ADRs
+    /// but failed to parse.
+    ///
+    /// This is used by the `doctor` command to report files that could not be
+    /// parsed (e.g., invalid frontmatter).
+    #[allow(clippy::type_complexity)]
+    pub fn list_with_errors(&self) -> Result<(Vec<Adr>, Vec<(PathBuf, crate::Error)>)> {
+        let adr_path = self.adr_path();
+        if !adr_path.exists() {
+            return Err(Error::AdrDirNotFound);
+        }
+
+        let mut adrs = Vec::new();
+        let mut errors = Vec::new();
+
+        let candidates: Vec<_> = WalkDir::new(&adr_path)
+            .max_depth(1)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path().extension().is_some_and(|ext| ext == "md")
+                    && e.path()
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.chars().next().is_some_and(|c| c.is_ascii_digit()))
+            })
+            .collect();
+
+        for entry in candidates {
+            match self.parser.parse_file(entry.path()) {
+                Ok(adr) => adrs.push(adr),
+                Err(e) => errors.push((entry.path().to_path_buf(), e)),
+            }
+        }
+
+        adrs.sort_by_key(|a| a.number);
+        Ok((adrs, errors))
+    }
+
     /// Get the next available ADR number.
     pub fn next_number(&self) -> Result<u32> {
         let adrs = self.list()?;

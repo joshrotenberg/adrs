@@ -315,10 +315,41 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
 }
 
 /// Run all checks: per-file lint + repository-level checks.
+///
+/// Also reports files that look like ADRs (digit-prefixed `.md` files in the
+/// ADR directory) but could not be parsed (e.g., invalid YAML frontmatter).
 pub fn check_all(repo: &Repository) -> Result<LintReport> {
-    let mut report = lint_all(repo)?;
+    let mut report = LintReport::new();
+
+    // Use list_with_errors to capture parse failures
+    let (adrs, parse_errors) = repo.list_with_errors()?;
+
+    // Report parse errors as lint issues
+    for (path, error) in &parse_errors {
+        report.add(Issue {
+            rule_id: "parse-error".to_string(),
+            rule_name: "adr-parse-error".to_string(),
+            severity: IssueSeverity::Error,
+            message: format!("Failed to parse ADR: {error}"),
+            path: Some(path.clone()),
+            line: None,
+            column: None,
+            adr_number: None,
+            related_adrs: Vec::new(),
+        });
+    }
+
+    // Run per-file lint on successfully parsed ADRs
+    for adr in &adrs {
+        let adr_report = lint_adr(adr)?;
+        report.issues.extend(adr_report.issues);
+    }
+
+    // Run repository-level checks (these still use repo.list() internally,
+    // which is fine — they only need successfully parsed ADRs)
     let repo_report = check_repository(repo)?;
     report.issues.extend(repo_report.issues);
+
     report.sort();
     Ok(report)
 }
