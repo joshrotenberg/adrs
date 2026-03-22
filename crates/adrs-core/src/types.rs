@@ -29,22 +29,35 @@ pub struct Adr {
     #[serde(
         default,
         skip_serializing_if = "Vec::is_empty",
-        rename = "decision-makers"
+        rename = "decision-makers",
+        deserialize_with = "string_or_vec::deserialize"
     )]
     pub decision_makers: Vec<String>,
 
     /// People consulted for input (MADR 4.0.0).
     /// Two-way communication - their opinions are sought.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "string_or_vec::deserialize"
+    )]
     pub consulted: Vec<String>,
 
     /// People kept informed (MADR 4.0.0).
     /// One-way communication - they are kept up-to-date.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "string_or_vec::deserialize"
+    )]
     pub informed: Vec<String>,
 
     /// Tags for categorization.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "string_or_vec::deserialize"
+    )]
     pub tags: Vec<String>,
 
     /// The context section (why this decision was needed).
@@ -322,6 +335,37 @@ fn slug(title: &str) -> String {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("-")
+}
+
+/// Flexible deserialization for fields that accept either a single string or a list.
+///
+/// In MADR frontmatter, fields like `decision-makers` can be written as either:
+/// ```yaml
+/// decision-makers: alice        # single string
+/// decision-makers:              # list
+///   - alice
+///   - bob
+/// ```
+/// This module handles both forms, always deserializing into `Vec<String>`.
+mod string_or_vec {
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrVec {
+            String(String),
+            Vec(Vec<String>),
+        }
+
+        match StringOrVec::deserialize(deserializer)? {
+            StringOrVec::String(s) => Ok(vec![s]),
+            StringOrVec::Vec(v) => Ok(v),
+        }
+    }
 }
 
 /// Custom date serialization format (YYYY-MM-DD).
@@ -760,5 +804,93 @@ informed:
         assert_eq!(adr.decision_makers, vec!["Alice", "Bob"]);
         assert_eq!(adr.consulted, vec!["Carol"]);
         assert_eq!(adr.informed, vec!["Dave"]);
+    }
+
+    // ========== String-or-Vec Deserialization Tests ==========
+
+    #[test]
+    fn test_decision_makers_as_string() {
+        let yaml = r#"
+number: 1
+title: Test
+date: 2024-09-15
+status: accepted
+decision-makers: alice
+"#;
+        let adr: Adr = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(adr.decision_makers, vec!["alice"]);
+    }
+
+    #[test]
+    fn test_consulted_as_string() {
+        let yaml = r#"
+number: 1
+title: Test
+date: 2024-09-15
+status: accepted
+consulted: bob
+"#;
+        let adr: Adr = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(adr.consulted, vec!["bob"]);
+    }
+
+    #[test]
+    fn test_informed_as_string() {
+        let yaml = r#"
+number: 1
+title: Test
+date: 2024-09-15
+status: accepted
+informed: carol
+"#;
+        let adr: Adr = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(adr.informed, vec!["carol"]);
+    }
+
+    #[test]
+    fn test_tags_as_string() {
+        let yaml = r#"
+number: 1
+title: Test
+date: 2024-09-15
+status: accepted
+tags: architecture
+"#;
+        let adr: Adr = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(adr.tags, vec!["architecture"]);
+    }
+
+    #[test]
+    fn test_string_or_vec_fields_still_accept_lists() {
+        let yaml = r#"
+number: 1
+title: Test
+date: 2024-09-15
+status: accepted
+decision-makers:
+  - alice
+  - bob
+tags:
+  - arch
+  - security
+"#;
+        let adr: Adr = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(adr.decision_makers, vec!["alice", "bob"]);
+        assert_eq!(adr.tags, vec!["arch", "security"]);
+    }
+
+    #[test]
+    fn test_string_or_vec_fields_default_when_absent() {
+        let yaml = r#"
+number: 1
+title: Test
+date: 2024-09-15
+status: accepted
+"#;
+        let adr: Adr = serde_yaml::from_str(yaml).unwrap();
+        assert!(adr.decision_makers.is_empty());
+        assert!(adr.consulted.is_empty());
+        assert!(adr.informed.is_empty());
+        assert!(adr.tags.is_empty());
     }
 }
