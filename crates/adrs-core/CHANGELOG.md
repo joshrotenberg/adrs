@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-03-22
+
+### Bug Fixes
+
+- --ng flag now overrides template mode for existing repos
+- Accept string or list for frontmatter fields, report parse errors in doctor
+
+### Testing
+
+- Add tests for string-or-vec parsing and doctor parse error reporting
+
+
 ## [0.7.3] - 2026-03-04
 
 ### Bug Fixes
