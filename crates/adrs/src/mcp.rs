@@ -351,9 +351,28 @@ struct SuggestedTag {
 }
 
 // Macro to reduce boilerplate for tool registration.
-// Typed variant: handler receives a deserialized params struct.
 macro_rules! adr_tool {
-    ($state:expr, $name:expr, $desc:expr, $param:ty, $method:ident) => {
+    // Read-only tool with params.
+    (ro, $state:expr, $name:expr, $desc:expr, $param:ty, $method:ident) => {
+        ToolBuilder::new($name)
+            .description($desc)
+            .read_only()
+            .handler({
+                let state = $state.clone();
+                move |params: $param| {
+                    let state = state.clone();
+                    async move {
+                        match state.$method(params) {
+                            Ok(json) => Ok(CallToolResult::text(json)),
+                            Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+                        }
+                    }
+                }
+            })
+            .build()
+    };
+    // Write tool with params.
+    (rw, $state:expr, $name:expr, $desc:expr, $param:ty, $method:ident) => {
         ToolBuilder::new($name)
             .description($desc)
             .handler({
@@ -368,30 +387,36 @@ macro_rules! adr_tool {
                     }
                 }
             })
-            .build()?
+            .build()
     };
-    // Parameterless variant (for get_repository_info).
-    ($state:expr, $name:expr, $desc:expr, $method:ident) => {
-        ToolBuilder::new($name).description($desc).raw_handler({
-            let state = $state.clone();
-            move |_: serde_json::Value| {
-                let state = state.clone();
-                async move {
-                    match state.$method() {
-                        Ok(json) => Ok(CallToolResult::text(json)),
-                        Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+    // Read-only tool without params.
+    (ro, $state:expr, $name:expr, $desc:expr, $method:ident) => {
+        ToolBuilder::new($name)
+            .description($desc)
+            .read_only()
+            .no_params_handler({
+                let state = $state.clone();
+                move || {
+                    let state = state.clone();
+                    async move {
+                        match state.$method() {
+                            Ok(json) => Ok(CallToolResult::text(json)),
+                            Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+                        }
                     }
                 }
-            }
-        })?
+            })
+            .build()
     };
 }
 
 /// Build the MCP router with all ADR tools registered.
-fn build_router(root: PathBuf) -> Result<McpRouter> {
+fn build_router(root: PathBuf) -> McpRouter {
     let state = Arc::new(AdrState::new(root));
 
+    // Read-only tools
     let list_adrs = adr_tool!(
+        ro,
         state,
         "list_adrs",
         "List all Architecture Decision Records. Returns summary information for each ADR including number, title, status, and date. Optionally filter by status or tag.",
@@ -400,6 +425,7 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
     );
 
     let get_adr = adr_tool!(
+        ro,
         state,
         "get_adr",
         "Get the full content of an Architecture Decision Record by its number. Returns the complete ADR including title, status, content, and links.",
@@ -408,6 +434,7 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
     );
 
     let search_adrs = adr_tool!(
+        ro,
         state,
         "search_adrs",
         "Search Architecture Decision Records for matching text. Searches both titles and content by default. Use title_only=true to search only titles.",
@@ -415,47 +442,8 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
         search_adrs_impl
     );
 
-    let create_adr = adr_tool!(
-        state,
-        "create_adr",
-        "Create a new Architecture Decision Record. The ADR will be created with 'proposed' status and requires human review before acceptance. Returns the created ADR details including its number and file path.",
-        CreateAdrParams,
-        create_adr_impl
-    );
-
-    let update_status = adr_tool!(
-        state,
-        "update_status",
-        "Update the status of an existing ADR. Valid statuses: proposed, accepted, deprecated, superseded, rejected. For 'superseded', provide the superseded_by number. Note: Status changes should be reviewed by humans.",
-        UpdateStatusParams,
-        update_status_impl
-    );
-
-    let link_adrs = adr_tool!(
-        state,
-        "link_adrs",
-        "Create a bidirectional link between two ADRs. Link types: 'Supersedes', 'Amends', or 'Relates to'. The reverse link is automatically created on the target ADR.",
-        LinkAdrsParams,
-        link_adrs_impl
-    );
-
-    let update_content = adr_tool!(
-        state,
-        "update_content",
-        "Update the content sections (context, decision, consequences) of an existing ADR. Only provided fields are updated; omitted fields are preserved. Changes should be reviewed by humans.",
-        UpdateContentParams,
-        update_content_impl
-    );
-
-    let update_tags = adr_tool!(
-        state,
-        "update_tags",
-        "Add or replace tags on an ADR. Requires NextGen mode (YAML frontmatter). Use replace=true to replace all tags, or false/omit to append.",
-        UpdateTagsParams,
-        update_tags_impl
-    );
-
     let get_repository_info = adr_tool!(
+        ro,
         state,
         "get_repository_info",
         "Get information about the ADR repository including mode (compatible/nextgen), ADR count, and configuration.",
@@ -463,6 +451,7 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
     );
 
     let get_related_adrs = adr_tool!(
+        ro,
         state,
         "get_related_adrs",
         "Get all ADRs that are linked to or from a specific ADR. Returns both incoming and outgoing links with their types.",
@@ -471,6 +460,7 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
     );
 
     let validate_adr = adr_tool!(
+        ro,
         state,
         "validate_adr",
         "Validate a single ADR's structure and content. Checks for required sections (Context, Decision, Consequences), validates status, and reports any issues. Returns validation results with severity levels (error/warning).",
@@ -479,6 +469,7 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
     );
 
     let get_adr_sections = adr_tool!(
+        ro,
         state,
         "get_adr_sections",
         "Get an ADR with its content parsed into separate sections (context, decision, consequences). Returns structured data instead of raw markdown, making it easier to analyze specific sections independently.",
@@ -487,6 +478,7 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
     );
 
     let compare_adrs = adr_tool!(
+        ro,
         state,
         "compare_adrs",
         "Compare two ADRs and show the differences between them. Useful for understanding how decisions evolved, especially when one ADR supersedes another. Returns structural comparison of title, status, and content sections.",
@@ -494,15 +486,8 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
         compare_adrs_impl
     );
 
-    let bulk_update_status = adr_tool!(
-        state,
-        "bulk_update_status",
-        "Update the status of multiple ADRs in a single operation. Useful for batch accepting related ADRs or deprecating multiple outdated decisions. Returns detailed results for each ADR including any failures.",
-        BulkUpdateStatusParams,
-        bulk_update_status_impl
-    );
-
     let suggest_tags = adr_tool!(
+        ro,
         state,
         "suggest_tags",
         "Analyze an ADR's content and suggest relevant tags based on keywords and common architectural categories. Returns suggested tags with confidence scores and reasons. Requires NextGen mode for tags to be applied.",
@@ -510,35 +495,81 @@ fn build_router(root: PathBuf) -> Result<McpRouter> {
         suggest_tags_impl
     );
 
-    let router = McpRouter::new()
+    // Write tools
+    let create_adr = adr_tool!(
+        rw,
+        state,
+        "create_adr",
+        "Create a new Architecture Decision Record. The ADR will be created with 'proposed' status and requires human review before acceptance. Returns the created ADR details including its number and file path.",
+        CreateAdrParams,
+        create_adr_impl
+    );
+
+    let update_status = adr_tool!(
+        rw,
+        state,
+        "update_status",
+        "Update the status of an existing ADR. Valid statuses: proposed, accepted, deprecated, superseded, rejected. For 'superseded', provide the superseded_by number. Note: Status changes should be reviewed by humans.",
+        UpdateStatusParams,
+        update_status_impl
+    );
+
+    let link_adrs = adr_tool!(
+        rw,
+        state,
+        "link_adrs",
+        "Create a bidirectional link between two ADRs. Link types: 'Supersedes', 'Amends', or 'Relates to'. The reverse link is automatically created on the target ADR.",
+        LinkAdrsParams,
+        link_adrs_impl
+    );
+
+    let update_content = adr_tool!(
+        rw,
+        state,
+        "update_content",
+        "Update the content sections (context, decision, consequences) of an existing ADR. Only provided fields are updated; omitted fields are preserved. Changes should be reviewed by humans.",
+        UpdateContentParams,
+        update_content_impl
+    );
+
+    let update_tags = adr_tool!(
+        rw,
+        state,
+        "update_tags",
+        "Add or replace tags on an ADR. Requires NextGen mode (YAML frontmatter). Use replace=true to replace all tags, or false/omit to append.",
+        UpdateTagsParams,
+        update_tags_impl
+    );
+
+    let bulk_update_status = adr_tool!(
+        rw,
+        state,
+        "bulk_update_status",
+        "Update the status of multiple ADRs in a single operation. Useful for batch accepting related ADRs or deprecating multiple outdated decisions. Returns detailed results for each ADR including any failures.",
+        BulkUpdateStatusParams,
+        bulk_update_status_impl
+    );
+
+    McpRouter::new()
         .server_info("adrs", env!("CARGO_PKG_VERSION"))
-        .instructions(
-            "ADR (Architecture Decision Record) management server. \
-            Use list_adrs to see all decisions, get_adr to read a specific one, \
-            and search_adrs to find relevant decisions. For modifications: create_adr creates new ADRs \
-            (always as 'proposed' status for human review), update_status changes an ADR's status, \
-            link_adrs creates bidirectional links, update_content edits ADR sections, \
-            and update_tags manages ADR tags (NextGen mode only). \
-            Use get_repository_info to understand the repo configuration and get_related_adrs \
-            to explore ADR relationships. ADRs document important architectural decisions and their context."
-        )
+        .auto_instructions()
+        // Read tools
         .tool(list_adrs)
         .tool(get_adr)
         .tool(search_adrs)
-        .tool(create_adr)
-        .tool(update_status)
-        .tool(link_adrs)
-        .tool(update_content)
-        .tool(update_tags)
         .tool(get_repository_info)
         .tool(get_related_adrs)
         .tool(validate_adr)
         .tool(get_adr_sections)
         .tool(compare_adrs)
+        .tool(suggest_tags)
+        // Write tools
+        .tool(create_adr)
+        .tool(update_status)
+        .tool(link_adrs)
+        .tool(update_content)
+        .tool(update_tags)
         .tool(bulk_update_status)
-        .tool(suggest_tags);
-
-    Ok(router)
 }
 
 // Business logic implementations (unchanged).
@@ -1357,7 +1388,7 @@ impl AdrState {
 pub async fn serve_stdio(root: PathBuf) -> Result<()> {
     use tower_mcp::StdioTransport;
 
-    let router = build_router(root)?;
+    let router = build_router(root);
     let mut transport = StdioTransport::new(router);
     transport.run().await?;
     Ok(())
@@ -1368,7 +1399,7 @@ pub async fn serve_stdio(root: PathBuf) -> Result<()> {
 pub async fn serve_http(root: PathBuf, addr: std::net::SocketAddr) -> Result<()> {
     use tower_mcp::HttpTransport;
 
-    let router = build_router(root)?;
+    let router = build_router(root);
 
     eprintln!("MCP server listening on http://{}/mcp", addr);
 
