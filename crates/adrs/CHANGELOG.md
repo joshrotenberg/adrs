@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-04-23
+
+### Bug Fixes
+
+- --ng flag now overrides template mode for existing repos
+
+### Features
+
+- Migrate MCP server from rmcp to tower-mcp
+- Upgrade tower-mcp from 0.1 to 0.9
+
+### Testing
+
+- Add tests for string-or-vec parsing and doctor parse error reporting
+- Add MCP server tests using in-process ChannelTransport client
+
+
 ## [0.7.3] - 2026-03-04
 
 ### Bug Fixes
