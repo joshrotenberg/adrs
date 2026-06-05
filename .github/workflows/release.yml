@@ -331,6 +331,31 @@ jobs:
           done
           git push
 
+  # Custom job (manual addition; ci is in dist allow-dirty): the `plan` job runs
+  # `dist host --steps=create`, which publishes the GitHub Release before any
+  # artifacts are built. If an artifact build then fails, `host` is skipped but
+  # the empty release stays public. Convert it to a draft so an incomplete
+  # release is never visible. See issue #242 (root cause of #217).
+  cleanup-on-failure:
+    needs:
+      - plan
+      - build-local-artifacts
+      - build-global-artifacts
+    if: ${{ always() && needs.plan.outputs.publishing == 'true' && (needs.build-local-artifacts.result == 'failure' || needs.build-global-artifacts.result == 'failure') }}
+    runs-on: "ubuntu-22.04"
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Convert incomplete release to draft
+        run: |
+          TAG="${{ needs.plan.outputs.tag }}"
+          if [ -n "$TAG" ] && gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft
+            echo "::warning::Artifact build failed; release $TAG converted to draft to avoid publishing an incomplete release. Re-run the failed job, then undraft."
+          else
+            echo "No release found for tag '$TAG'; nothing to clean up."
+          fi
+
   announce:
     needs:
       - plan
