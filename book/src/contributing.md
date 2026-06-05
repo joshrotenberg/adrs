@@ -113,4 +113,4 @@ adrs/
 
 - Update the mdbook in `book/` for user-facing changes
 - Add doc comments to public APIs
-- Update CHANGELOG.md (handled by release-plz)
+- Per-crate changelogs (`crates/adrs/CHANGELOG.md`, `crates/adrs-core/CHANGELOG.md`) are handled by release-plz; no manual edits needed

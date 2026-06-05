@@ -31,7 +31,7 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
   "generated_at": "2024-01-15T10:30:00Z",
   "tool": {
     "name": "adrs",
-    "version": "0.7.1"
+    "version": "0.7.4"
   },
   "repository": {
     "adr_directory": "doc/adr"
