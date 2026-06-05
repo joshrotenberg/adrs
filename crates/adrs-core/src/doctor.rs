@@ -156,7 +156,7 @@ pub fn check(repo: &Repository) -> Result<DoctorReport> {
     // Sort diagnostics by severity (errors first)
     report
         .diagnostics
-        .sort_by(|a, b| b.severity.cmp(&a.severity));
+        .sort_by_key(|d| std::cmp::Reverse(d.severity));
 
     Ok(report)
 }

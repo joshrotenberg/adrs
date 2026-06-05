@@ -240,10 +240,8 @@ impl Parser {
                         section_content.push_str(&text);
                     }
                 }
-                Event::SoftBreak | Event::HardBreak => {
-                    if !in_heading {
-                        section_content.push('\n');
-                    }
+                Event::SoftBreak | Event::HardBreak if !in_heading => {
+                    section_content.push('\n');
                 }
                 _ => {}
             }
