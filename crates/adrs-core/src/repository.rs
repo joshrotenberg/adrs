@@ -266,7 +266,7 @@ impl Repository {
             })
             .collect();
 
-        matches.sort_by(|a, b| b.1.cmp(&a.1));
+        matches.sort_by_key(|m| std::cmp::Reverse(m.1));
 
         match matches.len() {
             0 => Err(Error::AdrNotFound(query.to_string())),
