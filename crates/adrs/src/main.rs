@@ -316,15 +316,18 @@ FISH:
         shell: ShellArg,
     },
 
-    /// Start MCP server for AI agent integration (requires --features mcp)
+    /// Start MCP server for AI agent integration (included by default)
     #[cfg(feature = "mcp")]
     #[command(after_long_help = "\
 Starts an MCP (Model Context Protocol) server on stdio for AI agent integration.
 
-TOOLS PROVIDED:
-  list_adrs     List all ADRs with optional status/tag filters
-  get_adr       Get full content of an ADR by number
-  search_adrs   Search ADRs for matching text
+TOOLS PROVIDED (15):
+  Read-only:
+    list_adrs, get_adr, search_adrs, get_repository_info, get_related_adrs,
+    validate_adr, get_adr_sections, compare_adrs, suggest_tags
+  Write:
+    create_adr, update_status, update_content, update_tags, link_adrs,
+    bulk_update_status
 
 USAGE WITH CLAUDE:
   Add to your Claude Desktop config (claude_desktop_config.json):

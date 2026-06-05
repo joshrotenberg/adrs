@@ -88,10 +88,16 @@ Common link types:
 - `Extends` / `Extended by`
 - `Relates to` / `Relates to`
 
-### Multiple Links
+### Adding More Links
+
+`--link` accepts a single link when creating an ADR (format
+`TARGET:KIND:REVERSE_KIND`). To attach additional links, create the ADR first
+and then use [`adrs link`](./link.md), whose arguments are
+`SOURCE LINK TARGET [REVERSE_LINK]`:
 
 ```sh
-adrs new --link "2:Amends:Amended by" --link "3:Extends:Extended by" "Combined decision"
+adrs new --link "2:Amends:Amended by" "Combined decision"
+adrs link 4 Extends 3 "Extended by"   # ADR 4 extends ADR 3
 ```
 
 ### NextGen Mode with MADR
