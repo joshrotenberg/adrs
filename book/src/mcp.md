@@ -167,8 +167,8 @@ Validate an ADR's structure and content.
 Compare two ADRs side by side.
 
 **Parameters:**
-- `adr1` (required): First ADR number
-- `adr2` (required): Second ADR number
+- `source` (required): First ADR number
+- `target` (required): Second ADR number
 
 **Returns:** Structural comparison of title, status, and content sections.
 

@@ -86,15 +86,13 @@ date: 2024-01-15
 ...
 ```
 
-## Error Handling
+## Re-initialization
 
-If the repository is already initialized (`.adr-dir` exists), the command will fail:
-
-```
-Error: ADR repository already initialized
-```
-
-To reinitialize, remove the `.adr-dir` file first.
+`adrs init` is idempotent: running it again in an already-initialized
+repository succeeds. It rewrites the configuration (for example, to change the
+ADR directory or switch modes) and preserves existing ADRs. The initial
+"Record architecture decisions" ADR is only created when the repository has no
+ADRs yet, so re-initializing will not add a duplicate.
 
 ## Related
 
