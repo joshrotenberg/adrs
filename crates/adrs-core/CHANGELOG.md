@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-06-06
+
+### Bug Fixes
+
+- --ng flag now overrides template mode for existing repos
+- Accept string or list for frontmatter fields, report parse errors in doctor
+- Resolve clippy 1.96 lints (sort_by_key, collapsible_match)
+- Serialize env-var tests to remove ADR_DIRECTORY race
+
+### Testing
+
+- Add tests for string-or-vec parsing and doctor parse error reporting
+- Add missing tests for template, export, cli, search, lint, config (closes #235, closes #236, closes #237, closes #238, closes #239, closes #241)
+
+
 ## [0.7.3] - 2026-03-04
 
 ### Bug Fixes

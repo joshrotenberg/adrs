@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-06-06
+
+### Bug Fixes
+
+- --ng flag now overrides template mode for existing repos
+- Reject invalid status/link_type in MCP tools, add missing error path tests (closes #229, closes #240)
+
+### Documentation
+
+- Fix high-priority documentation inaccuracies
+
+### Features
+
+- Migrate MCP server from rmcp to tower-mcp
+- Upgrade tower-mcp from 0.1 to 0.9
+- Add format/variant/MADR fields and tags to MCP create_adr (closes #230, closes #234)
+- Add since/until/decider to list_adrs, status/case_sensitive/snippets to search_adrs, run_doctor and export_adrs tools (closes #231, closes #232, closes #233)
+
+### Testing
+
+- Add tests for string-or-vec parsing and doctor parse error reporting
+- Add MCP server tests using in-process ChannelTransport client
+- Add missing tests for template, export, cli, search, lint, config (closes #235, closes #236, closes #237, closes #238, closes #239, closes #241)
+
+
 ## [0.7.3] - 2026-03-04
 
 ### Bug Fixes
