@@ -3,16 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "book/**"
-      - "**.md"
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "book/**"
-      - "**.md"
+# Note: no paths-ignore. CI runs on every PR so the required status checks
+# (Format, Clippy, Test) always report -- a paths-filtered workflow leaves
+# required checks "expected" forever and blocks docs-only PRs from merging.
+# See issue #243.
 
 env:
   CARGO_TERM_COLOR: always
