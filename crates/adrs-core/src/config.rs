@@ -864,6 +864,80 @@ mode = "nextgen"
         assert_eq!(config.adr_dir, PathBuf::from(DEFAULT_ADR_DIR));
     }
 
+    // ========== apply_env_overrides positive cases (issue #241) ==========
+    // Env vars are process-global; tests save/restore the old value to minimize
+    // interference. Tests are NOT marked #[serial] (serial_test is not a dep),
+    // so each test uses a distinct env-var state and restores immediately.
+    // In Rust 2024 edition, set_var/remove_var require unsafe blocks.
+
+    #[test]
+    fn test_apply_env_overrides_sets_adr_dir() {
+        // Save old value
+        let old = std::env::var(ENV_ADR_DIRECTORY).ok();
+
+        // SAFETY: single-threaded test; restoring env after test
+        unsafe { std::env::set_var(ENV_ADR_DIRECTORY, "my/custom/adr/dir") };
+        let mut config = Config::default();
+        apply_env_overrides(&mut config);
+
+        // Restore before asserting (so a panic does not leave env dirty)
+        unsafe {
+            match old {
+                Some(v) => std::env::set_var(ENV_ADR_DIRECTORY, v),
+                None => std::env::remove_var(ENV_ADR_DIRECTORY),
+            }
+        }
+
+        assert_eq!(config.adr_dir, PathBuf::from("my/custom/adr/dir"));
+    }
+
+    #[test]
+    fn test_apply_env_overrides_overrides_non_default_adr_dir() {
+        // Verify env override wins even when config already has a custom path
+        let old = std::env::var(ENV_ADR_DIRECTORY).ok();
+
+        // SAFETY: single-threaded test; restoring env after test
+        unsafe { std::env::set_var(ENV_ADR_DIRECTORY, "env_override") };
+        let mut config = Config {
+            adr_dir: PathBuf::from("config_dir"),
+            ..Default::default()
+        };
+        apply_env_overrides(&mut config);
+
+        unsafe {
+            match old {
+                Some(v) => std::env::set_var(ENV_ADR_DIRECTORY, v),
+                None => std::env::remove_var(ENV_ADR_DIRECTORY),
+            }
+        }
+
+        assert_eq!(config.adr_dir, PathBuf::from("env_override"));
+    }
+
+    #[test]
+    fn test_apply_env_overrides_no_adr_dir_var_leaves_config_unchanged() {
+        // Without ADR_DIRECTORY set, config is unchanged
+        let old = std::env::var(ENV_ADR_DIRECTORY).ok();
+
+        // SAFETY: single-threaded test; restoring env after test
+        unsafe { std::env::remove_var(ENV_ADR_DIRECTORY) };
+
+        let mut config = Config {
+            adr_dir: PathBuf::from("original/path"),
+            ..Default::default()
+        };
+        apply_env_overrides(&mut config);
+
+        unsafe {
+            match old {
+                Some(v) => std::env::set_var(ENV_ADR_DIRECTORY, v),
+                None => std::env::remove_var(ENV_ADR_DIRECTORY),
+            }
+        }
+
+        assert_eq!(config.adr_dir, PathBuf::from("original/path"));
+    }
+
     #[test]
     fn test_config_source_variants() {
         // Test that ConfigSource can be compared

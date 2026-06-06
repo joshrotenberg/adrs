@@ -884,6 +884,139 @@ fn test_import_help() {
         .stdout(predicate::str::contains("Import ADRs"));
 }
 
+#[test]
+fn test_import_export_round_trip() {
+    // Create a source repo with ADRs, export to JSON, import into fresh dir
+    let src = assert_fs::TempDir::new().unwrap();
+
+    // Initialize and create ADRs
+    adrs()
+        .current_dir(src.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(src.path())
+        .args(["new", "Use PostgreSQL"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    // Export to JSON (stdout)
+    let export_out = adrs()
+        .current_dir(src.path())
+        .args(["export", "json", "--pretty"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    // Write JSON to a temp file
+    let json_file = src.child("export.json");
+    fs::write(json_file.path(), &export_out).unwrap();
+
+    // Import into a fresh directory
+    let dest = assert_fs::TempDir::new().unwrap();
+    let dest_adr_dir = dest.child("imported");
+
+    adrs()
+        .current_dir(dest.path())
+        .args([
+            "import",
+            "json",
+            "--dir",
+            dest_adr_dir.path().to_str().unwrap(),
+            json_file.path().to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Verify ADRs were imported
+    dest_adr_dir
+        .child("0001-record-architecture-decisions.md")
+        .assert(predicate::path::exists());
+    dest_adr_dir
+        .child("0002-use-postgresql.md")
+        .assert(predicate::path::exists());
+
+    src.close().unwrap();
+    dest.close().unwrap();
+}
+
+#[test]
+fn test_import_with_ng_flag() {
+    let src = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(src.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(src.path())
+        .args(["new", "NG Import Test"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    let export_out = adrs()
+        .current_dir(src.path())
+        .args(["export", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_file = src.child("export.json");
+    fs::write(json_file.path(), &export_out).unwrap();
+
+    let dest = assert_fs::TempDir::new().unwrap();
+    let dest_adr_dir = dest.child("ng_imported");
+
+    adrs()
+        .current_dir(dest.path())
+        .args([
+            "import",
+            "json",
+            "--ng",
+            "--dir",
+            dest_adr_dir.path().to_str().unwrap(),
+            json_file.path().to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Verify the imported files have YAML frontmatter (ng_mode)
+    let imported_path = dest_adr_dir
+        .path()
+        .join("0001-record-architecture-decisions.md");
+    let content = fs::read_to_string(&imported_path).unwrap();
+    assert!(
+        content.starts_with("---"),
+        "ng import should produce YAML frontmatter. Got:\n{content}"
+    );
+
+    src.close().unwrap();
+    dest.close().unwrap();
+}
+
+#[test]
+fn test_import_missing_file_exits_nonzero() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["import", "json", "/nonexistent/path/adrs.json"])
+        .assert()
+        .failure();
+
+    temp.close().unwrap();
+}
+
 // ============================================================================
 // List Filtering
 // ============================================================================

@@ -1532,4 +1532,44 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
 
         assert_eq!(output, "000001");
     }
+    // ========== Template accessor tests (issue #235) ==========
+
+    #[test]
+    fn test_template_content_accessor() {
+        let template = Template::from_string("test", "# {{ title }}");
+        assert_eq!(template.content(), "# {{ title }}");
+    }
+
+    #[test]
+    fn test_template_name_accessor() {
+        let template = Template::from_string("my-template", "# {{ title }}");
+        assert_eq!(template.name(), "my-template");
+    }
+
+    // ========== TemplateEngine::with_variant tests (issue #235) ==========
+
+    #[test]
+    fn test_template_engine_with_variant() {
+        let engine = TemplateEngine::new().with_variant(TemplateVariant::Minimal);
+        assert_eq!(engine.default_variant, TemplateVariant::Minimal);
+    }
+
+    #[test]
+    fn test_template_engine_with_variant_bare() {
+        let engine = TemplateEngine::new().with_variant(TemplateVariant::Bare);
+        assert_eq!(engine.default_variant, TemplateVariant::Bare);
+        let template = engine.template();
+        assert_eq!(template.name(), "nygard-bare");
+    }
+
+    #[test]
+    fn test_template_engine_with_format_and_variant() {
+        let engine = TemplateEngine::new()
+            .with_format(TemplateFormat::Madr)
+            .with_variant(TemplateVariant::Minimal);
+        assert_eq!(engine.default_format, TemplateFormat::Madr);
+        assert_eq!(engine.default_variant, TemplateVariant::Minimal);
+        let template = engine.template();
+        assert_eq!(template.name(), "madr-minimal");
+    }
 }
