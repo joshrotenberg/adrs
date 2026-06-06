@@ -356,6 +356,12 @@ jobs:
             echo "No release found for tag '$TAG'; nothing to clean up."
           fi
 
+  # Custom job (manual addition; ci is in dist allow-dirty): intentional no-op stub.
+  # The dist-generated `announce` job structure is preserved here as a placeholder
+  # for future announcement integrations (e.g. posting to social/slack/discord).
+  # Currently there is no announcement target configured, so the job checks out
+  # and exits successfully without doing anything else. Add real steps here when a
+  # notification target is configured. See issue #244.
   announce:
     needs:
       - plan
@@ -373,3 +379,7 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      # No announcement target is configured. This step is a no-op placeholder.
+      # To add announcements, replace this step with the appropriate notification action.
+      - name: No-op announcement placeholder
+        run: echo "Release ${{ needs.plan.outputs.tag }} published successfully. No announcement target configured."
