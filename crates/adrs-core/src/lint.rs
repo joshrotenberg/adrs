@@ -540,4 +540,145 @@ Some consequences.
             parse_errors.iter().map(|i| &i.message).collect::<Vec<_>>()
         );
     }
+    // ========== check_repository collection rules (issue #239) ==========
+
+    fn make_nygard_adr(number: u32, title: &str, status: &str, links: &str) -> String {
+        format!(
+            "# {}. {}\n\nDate: 2024-01-01\n\n## Status\n\n{}{}\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\nSome consequences.\n",
+            number, title, status, links
+        )
+    }
+
+    #[test]
+    fn test_check_repository_broken_link_adr013() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // init creates ADR #1 automatically
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // ADR 2 links to nonexistent ADR 99
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(
+                2,
+                "Second",
+                "Accepted",
+                "\n\nSupersedes [99. Unknown](0099-unknown.md)\n",
+            ),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        // Should have an ADR013 (broken links) issue
+        let has_adr013 = report.issues.iter().any(|i| i.rule_id == "ADR013");
+        assert!(
+            has_adr013,
+            "Expected ADR013 broken-link issue, got: {:?}",
+            report.issues.iter().map(|i| &i.rule_id).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_repository_sequential_gap_adr011() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // init creates ADR #1 automatically; write #2 and #4 to create a gap at #3
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // ADRs 1, 2, 4 -- gap at 3
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(2, "Second", "Accepted", ""),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0004-fourth.md"),
+            make_nygard_adr(4, "Fourth", "Accepted", ""),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        // Should have an ADR011 (sequential gap) issue
+        let has_adr011 = report.issues.iter().any(|i| i.rule_id == "ADR011");
+        assert!(
+            has_adr011,
+            "Expected ADR011 sequential-gap issue, got: {:?}",
+            report.issues.iter().map(|i| &i.rule_id).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_repository_clean_repo_has_no_issues() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // Repository::init creates ADR #1 automatically -- use #2 and #3 to avoid duplicate
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(2, "Second", "Accepted", ""),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0003-third.md"),
+            make_nygard_adr(3, "Third", "Proposed", ""),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        let collection_rule_ids = ["ADR010", "ADR011", "ADR012", "ADR013"];
+        let collection_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| collection_rule_ids.contains(&i.rule_id.as_str()))
+            .collect();
+
+        assert!(
+            collection_issues.is_empty(),
+            "Clean repo should have no collection-rule issues, got: {:?}",
+            collection_issues
+                .iter()
+                .map(|i| format!("{}: {}", i.rule_id, i.message))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_all_combines_lint_and_repository_checks() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // Create a valid ADR so check_all has something to process
+        std::fs::write(
+            adr_dir.join("0001-first.md"),
+            make_nygard_adr(1, "First", "Accepted", ""),
+        )
+        .unwrap();
+
+        // check_all should succeed and return a report
+        let report = check_all(&repo).unwrap();
+
+        // With a valid sequential repo, no collection-rule violations
+        let adr011 = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR011")
+            .count();
+        assert_eq!(
+            adr011, 0,
+            "Single valid ADR should have no sequential-gap issue"
+        );
+    }
 }

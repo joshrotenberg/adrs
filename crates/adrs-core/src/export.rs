@@ -1376,4 +1376,183 @@ mod tests {
         assert_eq!(adr3.links[0].target, 1); // Was 10, now 1
         assert_eq!(adr3.links[1].target, 2); // Was 20, now 2
     }
+    // ========== ng_mode import tests (issue #236) ==========
+
+    #[test]
+    fn test_import_ng_mode_produces_yaml_frontmatter() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let json = r#"{
+            "number": 1,
+            "title": "Test Decision",
+            "status": "Proposed",
+            "date": "2024-01-15",
+            "context": "Test context",
+            "decision": "Test decision",
+            "consequences": "Test consequences"
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: false,
+            ng_mode: true,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+        assert_eq!(result.imported, 1);
+
+        let content = std::fs::read_to_string(&result.files[0]).unwrap();
+        // ng_mode should produce YAML frontmatter
+        assert!(
+            content.starts_with("---"),
+            "ng_mode import should produce YAML frontmatter. Got:\n{content}"
+        );
+        assert!(
+            content.contains("status: proposed"),
+            "Frontmatter should contain status"
+        );
+    }
+
+    #[test]
+    fn test_import_ng_mode_preserves_tags() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let json = r#"{
+            "number": 1,
+            "title": "Tagged Decision",
+            "status": "Accepted",
+            "date": "2024-01-15",
+            "tags": ["database", "infrastructure"]
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: false,
+            ng_mode: true,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+        assert_eq!(result.imported, 1);
+
+        let content = std::fs::read_to_string(&result.files[0]).unwrap();
+        assert!(
+            content.contains("tags:"),
+            "ng_mode import should preserve tags in frontmatter"
+        );
+        assert!(content.contains("database"));
+        assert!(content.contains("infrastructure"));
+    }
+
+    #[test]
+    fn test_import_ng_mode_compatible_mode_no_frontmatter() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let json = r#"{
+            "number": 1,
+            "title": "Compatible Decision",
+            "status": "Proposed",
+            "date": "2024-01-15"
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: false,
+            ng_mode: false, // compatible mode
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+        assert_eq!(result.imported, 1);
+
+        let content = std::fs::read_to_string(&result.files[0]).unwrap();
+        // compatible mode should NOT produce frontmatter
+        assert!(
+            !content.starts_with("---"),
+            "Compatible mode should not produce YAML frontmatter. Got:\n{content}"
+        );
+    }
+
+    #[test]
+    fn test_import_ng_mode_roundtrip_export_import() {
+        use crate::{Adr, AdrStatus};
+        use tempfile::TempDir;
+
+        // Set up source ADR
+        let mut adr = Adr::new(1, "Round-Trip Test");
+        adr.status = AdrStatus::Accepted;
+        adr.context = "We need a round-trip test.".to_string();
+        adr.decision = "We will test export and import.".to_string();
+        adr.consequences = "Better test coverage.".to_string();
+        adr.tags = vec!["test".to_string(), "ci".to_string()];
+
+        // Export the ADR to JSON
+        let json_adr = export_adr(&adr);
+        let bulk = JsonAdrBulkExport::new(vec![json_adr]);
+        let json_str = serde_json::to_string(&bulk).unwrap();
+
+        // Import with ng_mode
+        let dest_temp = TempDir::new().unwrap();
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: false,
+            dry_run: false,
+            ng_mode: true,
+        };
+
+        let result = import_to_directory(&json_str, dest_temp.path(), &options).unwrap();
+        assert_eq!(result.imported, 1);
+
+        // Verify the output file has frontmatter
+        let content = std::fs::read_to_string(&result.files[0]).unwrap();
+        assert!(
+            content.starts_with("---"),
+            "Round-trip ng import should have frontmatter"
+        );
+        assert!(content.contains("tags:"));
+        assert!(content.contains("test"));
+        assert!(content.contains("ci"));
+    }
+
+    #[test]
+    fn test_import_ng_mode_renumber_with_frontmatter() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        // Create an existing ADR
+        std::fs::write(
+            temp.path().join("0001-existing.md"),
+            "# 1. Existing\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nTest\n\n## Decision\n\nTest\n\n## Consequences\n\nTest\n",
+        ).unwrap();
+
+        let json = r#"{
+            "number": 1,
+            "title": "New Import",
+            "status": "Proposed",
+            "date": "2024-01-15",
+            "tags": ["test"]
+        }"#;
+
+        let options = ImportOptions {
+            overwrite: false,
+            renumber: true,
+            dry_run: false,
+            ng_mode: true,
+        };
+
+        let result = import_to_directory(json, temp.path(), &options).unwrap();
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.renumber_map[0], (1, 2));
+
+        let content = std::fs::read_to_string(&result.files[0]).unwrap();
+        // ng_mode with renumber should still produce frontmatter
+        assert!(
+            content.starts_with("---"),
+            "Renumbered ng import should have frontmatter"
+        );
+    }
 }
