@@ -94,8 +94,8 @@ fn main() -> anyhow::Result<()> {
     
     repo.link(
         3,                          // source
-        LinkKind::Amends,           // link type
         1,                          // target
+        LinkKind::Amends,           // link type
         LinkKind::AmendedBy,        // reverse link type
     )?;
     
@@ -232,24 +232,25 @@ None significant.
 ## Health Checks
 
 ```rust
-use adrs_core::{Repository, doctor_check};
+use adrs_core::{Repository, check_all};
+use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
     let repo = Repository::open(Path::new("."))?;
-    let report = doctor_check(&repo)?;
-    
-    for diagnostic in &report.diagnostics {
-        println!("[{:?}] {}: {}", 
-            diagnostic.severity,
-            diagnostic.check,
-            diagnostic.message
+    let report = check_all(&repo)?;
+
+    for issue in &report.issues {
+        println!("[{}] {}: {}",
+            issue.severity,
+            issue.rule_name,
+            issue.message
         );
     }
-    
+
     if report.has_errors() {
         std::process::exit(1);
     }
-    
+
     Ok(())
 }
 ```
