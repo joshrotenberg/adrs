@@ -723,6 +723,12 @@ impl AdrState {
         let repo = self.open_repo()?;
 
         let status: AdrStatus = params.status.parse().unwrap(); // Infallible
+        if matches!(status, AdrStatus::Custom(_)) {
+            return Err(format!(
+                "Invalid status '{}'. Valid values: proposed, accepted, deprecated, superseded",
+                params.status
+            ));
+        }
 
         let path = repo
             .set_status(params.number, status.clone(), params.superseded_by)
@@ -750,6 +756,12 @@ impl AdrState {
         let repo = self.open_repo()?;
 
         let source_kind: LinkKind = params.link_type.parse().unwrap(); // Infallible
+        if matches!(source_kind, LinkKind::Custom(_)) {
+            return Err(format!(
+                "Invalid link_type '{}'. Valid values: supersedes, superseded-by, amends, amended-by, relates-to",
+                params.link_type
+            ));
+        }
         let target_kind = source_kind.reverse();
 
         repo.link(
@@ -1131,6 +1143,12 @@ impl AdrState {
     fn bulk_update_status_impl(&self, params: BulkUpdateStatusParams) -> Result<String, String> {
         let repo = self.open_repo()?;
         let status: AdrStatus = params.status.parse().unwrap(); // Infallible
+        if matches!(status, AdrStatus::Custom(_)) {
+            return Err(format!(
+                "Invalid status '{}'. Valid values: proposed, accepted, deprecated, superseded",
+                params.status
+            ));
+        }
 
         let mut updated = Vec::new();
         let mut failed = Vec::new();
@@ -1825,6 +1843,132 @@ mod tests {
             .unwrap();
 
         assert!(result.is_error);
+    }
+
+    #[tokio::test]
+    async fn test_update_tags_compatible_mode_error() {
+        // setup_client(false) creates a compatible (non-NG) repo
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text("create_adr", json!({"title": "ADR for tags test"}))
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool(
+                "update_tags",
+                json!({"number": 2, "tags": ["architecture"]}),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            result.is_error,
+            "update_tags should fail in compatible (non-NG) mode"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_validate_adr_invalid_adr() {
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text("create_adr", json!({"title": "Incomplete ADR"}))
+            .await
+            .unwrap();
+
+        // Blank the sections: " " trims to empty for validation but is truthy
+        // to the template renderer (so it writes the space, not the placeholder).
+        client
+            .call_tool_text(
+                "update_content",
+                json!({"number": 2, "context": " ", "decision": " ", "consequences": " "}),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("validate_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+
+        let validation: ValidationResult = serde_json::from_str(&result).unwrap();
+        assert_eq!(validation.number, 2);
+        assert!(
+            !validation.issues.is_empty(),
+            "ADR with blank sections should have validation issues"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_status_rejects_invalid() {
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text("create_adr", json!({"title": "Test ADR"}))
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool("update_status", json!({"number": 2, "status": "banana"}))
+            .await
+            .unwrap();
+
+        assert!(
+            result.is_error,
+            "update_status should reject unknown status 'banana'"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_link_adrs_rejects_invalid_link_type() {
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text("create_adr", json!({"title": "ADR A"}))
+            .await
+            .unwrap();
+        client
+            .call_tool_text("create_adr", json!({"title": "ADR B"}))
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool(
+                "link_adrs",
+                json!({"source": 2, "target": 3, "link_type": "banana"}),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            result.is_error,
+            "link_adrs should reject unknown link_type 'banana'"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bulk_update_status_rejects_invalid() {
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text("create_adr", json!({"title": "ADR A"}))
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool(
+                "bulk_update_status",
+                json!({"numbers": [2], "status": "banana"}),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            result.is_error,
+            "bulk_update_status should reject unknown status 'banana'"
+        );
     }
 
     #[tokio::test]
