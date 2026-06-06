@@ -52,18 +52,20 @@ Then configure Claude with:
 
 ## Available Tools
 
-The MCP server provides 15 tools organized by function:
+The MCP server provides 17 tools organized by function:
 
 ### Read Operations
 
 | Tool | Description |
 |------|-------------|
-| `list_adrs` | List all ADRs with optional status/tag filters |
+| `list_adrs` | List all ADRs with optional status/tag/date/decider filters |
 | `get_adr` | Get full content of an ADR by number |
-| `search_adrs` | Search ADR titles and content |
+| `search_adrs` | Search ADR titles and content with optional status filter and case sensitivity |
 | `get_adr_sections` | Get ADR with parsed sections (context, decision, consequences) |
 | `get_related_adrs` | Get all ADRs linked to/from a specific ADR |
 | `get_repository_info` | Get repository mode, ADR count, and configuration |
+| `run_doctor` | Check repository health: broken links, parse errors, duplicate numbers |
+| `export_adrs` | Export ADRs to JSON-ADR format with optional filtering |
 
 ### Write Operations
 
@@ -93,6 +95,9 @@ List all ADRs with optional filtering.
 **Parameters:**
 - `status` (optional): Filter by status (proposed, accepted, deprecated, superseded)
 - `tag` (optional): Filter by tag (NextGen mode)
+- `since` (optional): Filter ADRs on or after this date (YYYY-MM-DD, inclusive)
+- `until` (optional): Filter ADRs on or before this date (YYYY-MM-DD, inclusive)
+- `decider` (optional): Filter by decider name -- case-insensitive substring match against decision_makers
 
 **Example response:**
 ```json
@@ -123,6 +128,10 @@ Search ADRs for matching text.
 **Parameters:**
 - `query` (required): Search text
 - `title_only` (optional): Only search titles (default: false)
+- `status` (optional): Filter results by ADR status
+- `case_sensitive` (optional): Perform case-sensitive search (default: false)
+
+**Returns:** List of matching ADRs with match snippets showing which section matched and context around the match.
 
 ### create_adr
 
@@ -186,6 +195,24 @@ Analyze ADR content and suggest relevant tags.
 - `number` (required): ADR number to analyze
 
 **Returns:** Suggested tags with confidence scores and reasons.
+
+### run_doctor
+
+Run health checks on the ADR repository.
+
+**Parameters:** None
+
+**Returns:** Health report with issue counts and details. Each issue includes severity (error/warning/info), rule ID, rule name, message, and location.
+
+### export_adrs
+
+Export ADRs to JSON-ADR format.
+
+**Parameters:**
+- `numbers` (optional): Array of ADR numbers to export (exports all if omitted)
+- `metadata_only` (optional): If true, exclude content sections from output (default: false)
+
+**Returns:** JSON-ADR format export with schema, version, and ADR array.
 
 ## Usage Examples
 
