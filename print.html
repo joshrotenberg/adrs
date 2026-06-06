@@ -948,11 +948,12 @@ date: 2024-01-15
 
 ...
 </code></pre>
-<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
-<p>If the repository is already initialized (<code>.adr-dir</code> exists), the command will fail:</p>
-<pre><code>Error: ADR repository already initialized
-</code></pre>
-<p>To reinitialize, remove the <code>.adr-dir</code> file first.</p>
+<h2 id="re-initialization"><a class="header" href="#re-initialization">Re-initialization</a></h2>
+<p><code>adrs init</code> is idempotent: running it again in an already-initialized
+repository succeeds. It rewrites the configuration (for example, to change the
+ADR directory or switch modes) and preserves existing ADRs. The initial
+"Record architecture decisions" ADR is only created when the repository has no
+ADRs yet, so re-initializing will not add a duplicate.</p>
 <h2 id="related"><a class="header" href="#related">Related</a></h2>
 <ul>
 <li><a href="commands/./config.html">config</a> - Show current configuration</li>
@@ -1022,8 +1023,13 @@ date: 2024-01-15
 <li><code>Extends</code> / <code>Extended by</code></li>
 <li><code>Relates to</code> / <code>Relates to</code></li>
 </ul>
-<h3 id="multiple-links"><a class="header" href="#multiple-links">Multiple Links</a></h3>
-<pre><code class="language-sh">adrs new --link "2:Amends:Amended by" --link "3:Extends:Extended by" "Combined decision"
+<h3 id="adding-more-links"><a class="header" href="#adding-more-links">Adding More Links</a></h3>
+<p><code>--link</code> accepts a single link when creating an ADR (format
+<code>TARGET:KIND:REVERSE_KIND</code>). To attach additional links, create the ADR first
+and then use <a href="commands/./link.html"><code>adrs link</code></a>, whose arguments are
+<code>SOURCE LINK TARGET [REVERSE_LINK]</code>:</p>
+<pre><code class="language-sh">adrs new --link "2:Amends:Amended by" "Combined decision"
+adrs link 4 Extends 3 "Extended by"   # ADR 4 extends ADR 3
 </code></pre>
 <h3 id="nextgen-mode-with-madr"><a class="header" href="#nextgen-mode-with-madr">NextGen Mode with MADR</a></h3>
 <pre><code class="language-sh">adrs new --ng --format madr "Use PostgreSQL for persistence"
@@ -1398,7 +1404,7 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
   "generated_at": "2024-01-15T10:30:00Z",
   "tool": {
     "name": "adrs",
-    "version": "0.7.1"
+    "version": "0.7.4"
   },
   "repository": {
     "adr_directory": "doc/adr"
@@ -2069,15 +2075,17 @@ More: adrs --help, adrs &lt;command&gt; --help
 }
 </code></pre>
 <h2 id="available-tools"><a class="header" href="#available-tools">Available Tools</a></h2>
-<p>The MCP server provides 15 tools organized by function:</p>
+<p>The MCP server provides 17 tools organized by function:</p>
 <h3 id="read-operations"><a class="header" href="#read-operations">Read Operations</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>list_adrs</code></td><td>List all ADRs with optional status/tag filters</td></tr>
+<tr><td><code>list_adrs</code></td><td>List all ADRs with optional status/tag/date/decider filters</td></tr>
 <tr><td><code>get_adr</code></td><td>Get full content of an ADR by number</td></tr>
-<tr><td><code>search_adrs</code></td><td>Search ADR titles and content</td></tr>
+<tr><td><code>search_adrs</code></td><td>Search ADR titles and content with optional status filter and case sensitivity</td></tr>
 <tr><td><code>get_adr_sections</code></td><td>Get ADR with parsed sections (context, decision, consequences)</td></tr>
 <tr><td><code>get_related_adrs</code></td><td>Get all ADRs linked to/from a specific ADR</td></tr>
 <tr><td><code>get_repository_info</code></td><td>Get repository mode, ADR count, and configuration</td></tr>
+<tr><td><code>run_doctor</code></td><td>Check repository health: broken links, parse errors, duplicate numbers</td></tr>
+<tr><td><code>export_adrs</code></td><td>Export ADRs to JSON-ADR format with optional filtering</td></tr>
 </tbody></table>
 </div>
 <h3 id="write-operations"><a class="header" href="#write-operations">Write Operations</a></h3>
@@ -2104,6 +2112,9 @@ More: adrs --help, adrs &lt;command&gt; --help
 <ul>
 <li><code>status</code> (optional): Filter by status (proposed, accepted, deprecated, superseded)</li>
 <li><code>tag</code> (optional): Filter by tag (NextGen mode)</li>
+<li><code>since</code> (optional): Filter ADRs on or after this date (YYYY-MM-DD, inclusive)</li>
+<li><code>until</code> (optional): Filter ADRs on or before this date (YYYY-MM-DD, inclusive)</li>
+<li><code>decider</code> (optional): Filter by decider name -- case-insensitive substring match against decision_makers</li>
 </ul>
 <p><strong>Example response:</strong></p>
 <pre><code class="language-json">[
@@ -2129,7 +2140,10 @@ More: adrs --help, adrs &lt;command&gt; --help
 <ul>
 <li><code>query</code> (required): Search text</li>
 <li><code>title_only</code> (optional): Only search titles (default: false)</li>
+<li><code>status</code> (optional): Filter results by ADR status</li>
+<li><code>case_sensitive</code> (optional): Perform case-sensitive search (default: false)</li>
 </ul>
+<p><strong>Returns:</strong> List of matching ADRs with match snippets showing which section matched and context around the match.</p>
 <h3 id="create_adr"><a class="header" href="#create_adr">create_adr</a></h3>
 <p>Create a new ADR. Always creates with 'proposed' status for human review.</p>
 <p><strong>Parameters:</strong></p>
@@ -2139,6 +2153,12 @@ More: adrs --help, adrs &lt;command&gt; --help
 <li><code>decision</code> (optional): Decision section content</li>
 <li><code>consequences</code> (optional): Consequences section content</li>
 <li><code>supersedes</code> (optional): ADR number this supersedes</li>
+<li><code>format</code> (optional): Template format -- <code>nygard</code> (default) or <code>madr</code> for MADR 4.0.0 format</li>
+<li><code>variant</code> (optional): Template variant -- <code>full</code> (default), <code>minimal</code>, or <code>bare</code></li>
+<li><code>decision_makers</code> (optional): List of people who made the decision (most useful with MADR format)</li>
+<li><code>consulted</code> (optional): List of people consulted for input (most useful with MADR format)</li>
+<li><code>informed</code> (optional): List of people kept informed (most useful with MADR format)</li>
+<li><code>tags</code> (optional): Tags for categorization. Applied at creation in NextGen mode. In compatible mode a warning is returned in the response instead of an error.</li>
 </ul>
 <h3 id="update_status"><a class="header" href="#update_status">update_status</a></h3>
 <p>Change an ADR's status.</p>
@@ -2167,8 +2187,8 @@ More: adrs --help, adrs &lt;command&gt; --help
 <p>Compare two ADRs side by side.</p>
 <p><strong>Parameters:</strong></p>
 <ul>
-<li><code>adr1</code> (required): First ADR number</li>
-<li><code>adr2</code> (required): Second ADR number</li>
+<li><code>source</code> (required): First ADR number</li>
+<li><code>target</code> (required): Second ADR number</li>
 </ul>
 <p><strong>Returns:</strong> Structural comparison of title, status, and content sections.</p>
 <h3 id="suggest_tags"><a class="header" href="#suggest_tags">suggest_tags</a></h3>
@@ -2178,6 +2198,18 @@ More: adrs --help, adrs &lt;command&gt; --help
 <li><code>number</code> (required): ADR number to analyze</li>
 </ul>
 <p><strong>Returns:</strong> Suggested tags with confidence scores and reasons.</p>
+<h3 id="run_doctor"><a class="header" href="#run_doctor">run_doctor</a></h3>
+<p>Run health checks on the ADR repository.</p>
+<p><strong>Parameters:</strong> None</p>
+<p><strong>Returns:</strong> Health report with issue counts and details. Each issue includes severity (error/warning/info), rule ID, rule name, message, and location.</p>
+<h3 id="export_adrs"><a class="header" href="#export_adrs">export_adrs</a></h3>
+<p>Export ADRs to JSON-ADR format.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>numbers</code> (optional): Array of ADR numbers to export (exports all if omitted)</li>
+<li><code>metadata_only</code> (optional): If true, exclude content sections from output (default: false)</li>
+</ul>
+<p><strong>Returns:</strong> JSON-ADR format export with schema, version, and ADR array.</p>
 <h2 id="usage-examples"><a class="header" href="#usage-examples">Usage Examples</a></h2>
 <h3 id="ask-claude-to-list-your-adrs"><a class="header" href="#ask-claude-to-list-your-adrs">Ask Claude to list your ADRs</a></h3>
 <blockquote>
@@ -2299,8 +2331,8 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     
     repo.link(
         3,                          // source
-        LinkKind::Amends,           // link type
         1,                          // target
+        LinkKind::Amends,           // link type
         LinkKind::AmendedBy,        // reverse link type
     )?;
     
@@ -2409,24 +2441,25 @@ None significant.
     Ok(())
 }</code></pre></pre>
 <h2 id="health-checks"><a class="header" href="#health-checks">Health Checks</a></h2>
-<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, doctor_check};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, check_all};
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
-    let report = doctor_check(&amp;repo)?;
-    
-    for diagnostic in &amp;report.diagnostics {
-        println!("[{:?}] {}: {}", 
-            diagnostic.severity,
-            diagnostic.check,
-            diagnostic.message
+    let report = check_all(&amp;repo)?;
+
+    for issue in &amp;report.issues {
+        println!("[{}] {}: {}",
+            issue.severity,
+            issue.rule_name,
+            issue.message
         );
     }
-    
+
     if report.has_errors() {
         std::process::exit(1);
     }
-    
+
     Ok(())
 }</code></pre></pre>
 <h2 id="types"><a class="header" href="#types">Types</a></h2>
@@ -2448,7 +2481,7 @@ let kind = LinkKind::Supersedes;
 let kind = LinkKind::AmendedBy;
 let kind = LinkKind::Custom("Depends on".to_string());
 <span class="boring">}</span></code></pre></pre>
-<h2 id="error-handling-1"><a class="header" href="#error-handling-1">Error Handling</a></h2>
+<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
 <p>The library uses <code>thiserror</code> for error types:</p>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Error};
 
@@ -2591,7 +2624,7 @@ chore: maintenance tasks
 <ul>
 <li>Update the mdbook in <code>book/</code> for user-facing changes</li>
 <li>Add doc comments to public APIs</li>
-<li>Update CHANGELOG.md (handled by release-plz)</li>
+<li>Per-crate changelogs (<code>crates/adrs/CHANGELOG.md</code>, <code>crates/adrs-core/CHANGELOG.md</code>) are handled by release-plz; no manual edits needed</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="license"><a class="header" href="#license">License</a></h1>
 <p>See <a href="https://github.com/joshrotenberg/adrs/blob/main/LICENSE-MIT">LICENSE-MIT</a> or <a href="https://github.com/joshrotenberg/adrs/blob/main/LICENSE-APACHE-2.0">LICENSE-APACHE</a>.</p>

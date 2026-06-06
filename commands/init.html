@@ -240,11 +240,12 @@ date: 2024-01-15
 
 ...
 </code></pre>
-<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
-<p>If the repository is already initialized (<code>.adr-dir</code> exists), the command will fail:</p>
-<pre><code>Error: ADR repository already initialized
-</code></pre>
-<p>To reinitialize, remove the <code>.adr-dir</code> file first.</p>
+<h2 id="re-initialization"><a class="header" href="#re-initialization">Re-initialization</a></h2>
+<p><code>adrs init</code> is idempotent: running it again in an already-initialized
+repository succeeds. It rewrites the configuration (for example, to change the
+ADR directory or switch modes) and preserves existing ADRs. The initial
+"Record architecture decisions" ADR is only created when the repository has no
+ADRs yet, so re-initializing will not add a duplicate.</p>
 <h2 id="related"><a class="header" href="#related">Related</a></h2>
 <ul>
 <li><a href="./config.html">config</a> - Show current configuration</li>

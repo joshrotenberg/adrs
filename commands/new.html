@@ -245,8 +245,13 @@
 <li><code>Extends</code> / <code>Extended by</code></li>
 <li><code>Relates to</code> / <code>Relates to</code></li>
 </ul>
-<h3 id="multiple-links"><a class="header" href="#multiple-links">Multiple Links</a></h3>
-<pre><code class="language-sh">adrs new --link "2:Amends:Amended by" --link "3:Extends:Extended by" "Combined decision"
+<h3 id="adding-more-links"><a class="header" href="#adding-more-links">Adding More Links</a></h3>
+<p><code>--link</code> accepts a single link when creating an ADR (format
+<code>TARGET:KIND:REVERSE_KIND</code>). To attach additional links, create the ADR first
+and then use <a href="./link.html"><code>adrs link</code></a>, whose arguments are
+<code>SOURCE LINK TARGET [REVERSE_LINK]</code>:</p>
+<pre><code class="language-sh">adrs new --link "2:Amends:Amended by" "Combined decision"
+adrs link 4 Extends 3 "Extended by"   # ADR 4 extends ADR 3
 </code></pre>
 <h3 id="nextgen-mode-with-madr"><a class="header" href="#nextgen-mode-with-madr">NextGen Mode with MADR</a></h3>
 <pre><code class="language-sh">adrs new --ng --format madr "Use PostgreSQL for persistence"

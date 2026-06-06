@@ -252,8 +252,8 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     
     repo.link(
         3,                          // source
-        LinkKind::Amends,           // link type
         1,                          // target
+        LinkKind::Amends,           // link type
         LinkKind::AmendedBy,        // reverse link type
     )?;
     
@@ -362,24 +362,25 @@ None significant.
     Ok(())
 }</code></pre></pre>
 <h2 id="health-checks"><a class="header" href="#health-checks">Health Checks</a></h2>
-<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, doctor_check};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, check_all};
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
-    let report = doctor_check(&amp;repo)?;
-    
-    for diagnostic in &amp;report.diagnostics {
-        println!("[{:?}] {}: {}", 
-            diagnostic.severity,
-            diagnostic.check,
-            diagnostic.message
+    let report = check_all(&amp;repo)?;
+
+    for issue in &amp;report.issues {
+        println!("[{}] {}: {}",
+            issue.severity,
+            issue.rule_name,
+            issue.message
         );
     }
-    
+
     if report.has_errors() {
         std::process::exit(1);
     }
-    
+
     Ok(())
 }</code></pre></pre>
 <h2 id="types"><a class="header" href="#types">Types</a></h2>
