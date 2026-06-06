@@ -134,6 +134,12 @@ Create a new ADR. Always creates with 'proposed' status for human review.
 - `decision` (optional): Decision section content
 - `consequences` (optional): Consequences section content
 - `supersedes` (optional): ADR number this supersedes
+- `format` (optional): Template format -- `nygard` (default) or `madr` for MADR 4.0.0 format
+- `variant` (optional): Template variant -- `full` (default), `minimal`, or `bare`
+- `decision_makers` (optional): List of people who made the decision (most useful with MADR format)
+- `consulted` (optional): List of people consulted for input (most useful with MADR format)
+- `informed` (optional): List of people kept informed (most useful with MADR format)
+- `tags` (optional): Tags for categorization. Applied at creation in NextGen mode. In compatible mode a warning is returned in the response instead of an error.
 
 ### update_status
 

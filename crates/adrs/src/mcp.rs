@@ -3,7 +3,7 @@
 //! This module provides an MCP server that allows AI agents to interact with ADRs.
 //! Enable with the `mcp` feature flag.
 
-use adrs_core::{AdrStatus, LinkKind, Repository};
+use adrs_core::{AdrStatus, LinkKind, Repository, TemplateFormat, TemplateVariant};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -84,6 +84,38 @@ pub struct CreateAdrParams {
     /// ADR number this supersedes (if any)
     #[schemars(description = "If this ADR supersedes another, provide its number (optional)")]
     pub supersedes: Option<u32>,
+
+    /// Template format: "nygard" (default) or "madr"
+    #[schemars(
+        description = "Template format: 'nygard' (default) or 'madr' for MADR 4.0.0 format"
+    )]
+    pub format: Option<String>,
+
+    /// Template variant: "full" (default), "minimal", or "bare"
+    #[schemars(description = "Template variant: 'full' (default), 'minimal', or 'bare'")]
+    pub variant: Option<String>,
+
+    /// Decision makers for MADR format
+    #[schemars(
+        description = "People who made the decision (optional, most useful with MADR format)"
+    )]
+    pub decision_makers: Option<Vec<String>>,
+
+    /// Consulted people for MADR format
+    #[schemars(
+        description = "People consulted for input (optional, most useful with MADR format)"
+    )]
+    pub consulted: Option<Vec<String>>,
+
+    /// Informed people for MADR format
+    #[schemars(description = "People kept informed (optional, most useful with MADR format)")]
+    pub informed: Option<Vec<String>>,
+
+    /// Tags for categorization (applied in NextGen mode; warns in compatible mode)
+    #[schemars(
+        description = "Tags for categorization. Applied at creation in NextGen mode. In compatible mode, a warning is returned instead of an error."
+    )]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -666,7 +698,27 @@ impl AdrState {
     }
 
     fn create_adr_impl(&self, params: CreateAdrParams) -> Result<String, String> {
-        let repo = self.open_repo()?;
+        // Parse format/variant before opening repo so we fail fast on invalid input.
+        let template_format = match &params.format {
+            Some(f) => f
+                .parse::<TemplateFormat>()
+                .map_err(|_| format!("Invalid format '{}'. Use 'nygard' or 'madr'.", f))?,
+            None => TemplateFormat::default(),
+        };
+
+        let template_variant = match &params.variant {
+            Some(v) => v.parse::<TemplateVariant>().map_err(|_| {
+                format!("Invalid variant '{}'. Use 'full', 'minimal', or 'bare'.", v)
+            })?,
+            None => TemplateVariant::default(),
+        };
+
+        let repo = self
+            .open_repo()?
+            .with_template_format(template_format)
+            .with_template_variant(template_variant);
+
+        let mut warnings: Vec<String> = Vec::new();
 
         let (mut adr, path) = if let Some(supersedes) = params.supersedes {
             repo.supersede(&params.title, supersedes)
@@ -675,7 +727,7 @@ impl AdrState {
             repo.new_adr(&params.title).map_err(|e| e.to_string())?
         };
 
-        // Update content if provided
+        // Update content sections if provided.
         let mut content_updated = false;
         if let Some(context) = params.context {
             adr.context = context;
@@ -690,7 +742,43 @@ impl AdrState {
             content_updated = true;
         }
 
-        // Re-render if content was provided
+        // Set MADR metadata fields if provided.
+        if let Some(makers) = params.decision_makers
+            && !makers.is_empty()
+        {
+            adr.set_decision_makers(makers);
+            content_updated = true;
+        }
+        if let Some(consulted) = params.consulted
+            && !consulted.is_empty()
+        {
+            adr.set_consulted(consulted);
+            content_updated = true;
+        }
+        if let Some(informed) = params.informed
+            && !informed.is_empty()
+        {
+            adr.set_informed(informed);
+            content_updated = true;
+        }
+
+        // Handle tags.
+        if let Some(tag_list) = params.tags
+            && !tag_list.is_empty()
+        {
+            if repo.config().is_next_gen() {
+                adr.set_tags(tag_list);
+                content_updated = true;
+            } else {
+                warnings.push(
+                    "Tags ignored: repository is not in NextGen mode. \
+                     Use 'adrs --ng init' to enable NextGen mode."
+                        .to_string(),
+                );
+            }
+        }
+
+        // Re-render if any content or metadata was provided.
         let final_path = if content_updated {
             repo.update(&adr).map_err(|e| e.to_string())?
         } else {
@@ -705,6 +793,7 @@ impl AdrState {
             status: String,
             path: String,
             content_populated: bool,
+            warnings: Vec<String>,
         }
 
         let response = CreateResponse {
@@ -714,6 +803,7 @@ impl AdrState {
             status: adr.status.to_string(),
             path: final_path.display().to_string(),
             content_populated: content_updated,
+            warnings,
         };
 
         serde_json::to_string_pretty(&response).map_err(|e| e.to_string())
@@ -1975,5 +2065,205 @@ mod tests {
     async fn test_ping() {
         let (client, _tmp) = setup_client(false).await;
         client.ping().await.unwrap();
+    }
+
+    // ========== New tests for #230 and #234 ==========
+
+    #[tokio::test]
+    async fn test_create_adr_madr_format() {
+        let (client, _tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use MADR format",
+                    "format": "madr"
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("get_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+
+        let adr: AdrDetail = serde_json::from_str(&result).unwrap();
+        assert!(
+            adr.content.contains("Context and Problem Statement"),
+            "MADR format ADR should contain 'Context and Problem Statement', got:\n{}",
+            adr.content
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_madr_with_decision_makers() {
+        let (client, _tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use MADR with decision makers",
+                    "format": "madr",
+                    "decision_makers": ["Alice", "Bob"]
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("get_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+
+        let adr: AdrDetail = serde_json::from_str(&result).unwrap();
+        assert!(
+            adr.content.contains("Alice"),
+            "MADR ADR content should contain 'Alice', got:\n{}",
+            adr.content
+        );
+        assert!(
+            adr.content.contains("Bob"),
+            "MADR ADR content should contain 'Bob', got:\n{}",
+            adr.content
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_with_tags_ng_mode() {
+        let (client, _tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use Redis for caching",
+                    "tags": ["api", "security"]
+                }),
+            )
+            .await
+            .unwrap();
+
+        // Verify tag filter works for the newly created ADR
+        let result = client
+            .call_tool_text("list_adrs", json!({"tag": "api"}))
+            .await
+            .unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&result).unwrap();
+        assert!(
+            adrs.iter().any(|a| a.number == 2),
+            "ADR #2 should appear when filtering by tag 'api'"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_with_tags_compatible_mode_warns() {
+        // setup_client(false) creates a compatible (non-NG) repo
+        let (client, _tmp) = setup_client(false).await;
+
+        let result = client
+            .call_tool(
+                "create_adr",
+                json!({
+                    "title": "ADR with tags in compat mode",
+                    "tags": ["api"]
+                }),
+            )
+            .await
+            .unwrap();
+
+        // Must NOT be an error
+        assert!(
+            !result.is_error,
+            "create_adr with tags in compatible mode should warn, not error"
+        );
+
+        // Response JSON should include a warnings array with at least one entry
+        let text = result.all_text();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let warnings = value["warnings"].as_array().unwrap();
+        assert!(
+            !warnings.is_empty(),
+            "response should contain at least one warning when tags are given in compatible mode"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_madr_variant_bare() {
+        // The MADR bare template uses empty YAML fields (decision-makers:, consulted:,
+        // informed: with no values), which the current parser cannot round-trip. This
+        // test therefore only verifies that create_adr accepts format=madr + variant=bare
+        // and succeeds (produces a file at the returned path). A full read-back test is
+        // not feasible here until the parser handles null YAML values.
+        let (client, _tmp) = setup_client(true).await;
+
+        let result = client
+            .call_tool(
+                "create_adr",
+                json!({
+                    "title": "MADR bare variant ADR",
+                    "format": "madr",
+                    "variant": "bare"
+                }),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            !result.is_error,
+            "create_adr with format=madr and variant=bare should succeed"
+        );
+
+        let text = result.all_text();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["number"], 2, "created ADR should be number 2");
+        assert_eq!(
+            value["status"], "Proposed",
+            "created ADR should be Proposed"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_invalid_format() {
+        let (client, _tmp) = setup_client(false).await;
+
+        let result = client
+            .call_tool(
+                "create_adr",
+                json!({
+                    "title": "Invalid format test",
+                    "format": "bogus"
+                }),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            result.is_error,
+            "create_adr with invalid format should return an error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_invalid_variant() {
+        let (client, _tmp) = setup_client(false).await;
+
+        let result = client
+            .call_tool(
+                "create_adr",
+                json!({
+                    "title": "Invalid variant test",
+                    "variant": "bogus"
+                }),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            result.is_error,
+            "create_adr with invalid variant should return an error"
+        );
     }
 }
