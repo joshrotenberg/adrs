@@ -853,25 +853,42 @@ mode = "nextgen"
         assert_eq!(discovered.config.adr_dir, PathBuf::from("doc/adr"));
     }
 
+    // Serializes tests that mutate the process-global ADR_DIRECTORY env var.
+    // `std::env` is shared across cargo's parallel test threads, so without this
+    // lock these tests race and clobber each other's values (issue #241 follow-up).
+    // `unwrap_or_else(into_inner)` recovers the guard even if a prior test panicked
+    // while holding the lock (poisoned mutex).
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_apply_env_overrides() {
-        // Test apply_env_overrides function directly without modifying the environment.
-        // The function reads env vars, so we test that it doesn't panic and returns
-        // when no env vars are set.
+        let _env = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // Test apply_env_overrides when ADR_DIRECTORY is not set.
+        let old = std::env::var(ENV_ADR_DIRECTORY).ok();
+        // SAFETY: serialized by ENV_LOCK; env restored before returning.
+        unsafe { std::env::remove_var(ENV_ADR_DIRECTORY) };
+
         let mut config = Config::default();
         apply_env_overrides(&mut config);
-        // With no env vars set, the config should remain at default
+
+        unsafe {
+            if let Some(v) = old {
+                std::env::set_var(ENV_ADR_DIRECTORY, v);
+            }
+        }
+
+        // With no env var set, the config should remain at default
         assert_eq!(config.adr_dir, PathBuf::from(DEFAULT_ADR_DIR));
     }
 
     // ========== apply_env_overrides positive cases (issue #241) ==========
-    // Env vars are process-global; tests save/restore the old value to minimize
-    // interference. Tests are NOT marked #[serial] (serial_test is not a dep),
-    // so each test uses a distinct env-var state and restores immediately.
+    // Env vars are process-global; these tests serialize via ENV_LOCK and
+    // save/restore the old value so they neither race nor leak state.
     // In Rust 2024 edition, set_var/remove_var require unsafe blocks.
 
     #[test]
     fn test_apply_env_overrides_sets_adr_dir() {
+        let _env = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Save old value
         let old = std::env::var(ENV_ADR_DIRECTORY).ok();
 
@@ -893,6 +910,7 @@ mode = "nextgen"
 
     #[test]
     fn test_apply_env_overrides_overrides_non_default_adr_dir() {
+        let _env = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Verify env override wins even when config already has a custom path
         let old = std::env::var(ENV_ADR_DIRECTORY).ok();
 
@@ -916,6 +934,7 @@ mode = "nextgen"
 
     #[test]
     fn test_apply_env_overrides_no_adr_dir_var_leaves_config_unchanged() {
+        let _env = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Without ADR_DIRECTORY set, config is unchanged
         let old = std::env::var(ENV_ADR_DIRECTORY).ok();
 
