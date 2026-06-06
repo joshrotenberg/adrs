@@ -3,11 +3,15 @@
 //! This module provides an MCP server that allows AI agents to interact with ADRs.
 //! Enable with the `mcp` feature flag.
 
-use adrs_core::{AdrStatus, LinkKind, Repository, TemplateFormat, TemplateVariant};
+use adrs_core::{
+    AdrStatus, IssueSeverity, LinkKind, Repository, TemplateFormat, TemplateVariant, check_all,
+    export_repository,
+};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
+use time::Date;
 use tower_mcp::{CallToolResult, McpRouter, ToolBuilder};
 
 /// Shared state for ADR MCP tools.
@@ -37,6 +41,24 @@ pub struct ListAdrsParams {
     /// Filter by tag (requires NextGen mode)
     #[schemars(description = "Filter ADRs by tag (optional)")]
     pub tag: Option<String>,
+
+    /// Filter ADRs created on or after this date (YYYY-MM-DD, inclusive)
+    #[schemars(
+        description = "Filter ADRs created on or after this date in YYYY-MM-DD format (optional)"
+    )]
+    pub since: Option<String>,
+
+    /// Filter ADRs created on or before this date (YYYY-MM-DD, inclusive)
+    #[schemars(
+        description = "Filter ADRs created on or before this date in YYYY-MM-DD format (optional)"
+    )]
+    pub until: Option<String>,
+
+    /// Filter by decider name (case-insensitive substring match against decision_makers)
+    #[schemars(
+        description = "Filter ADRs by decider name -- case-insensitive substring match (optional)"
+    )]
+    pub decider: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -55,6 +77,25 @@ pub struct SearchAdrsParams {
     /// Search titles only
     #[schemars(description = "If true, only search in ADR titles (optional)")]
     pub title_only: Option<bool>,
+
+    /// Filter results by ADR status (optional)
+    #[schemars(description = "Filter search results by status (optional)")]
+    pub status: Option<String>,
+
+    /// If true, perform a case-sensitive search (default: false)
+    #[schemars(description = "If true, perform a case-sensitive search (default: false)")]
+    pub case_sensitive: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ExportAdrsParams {
+    /// If provided, only export ADRs with these numbers
+    #[schemars(description = "List of ADR numbers to export (optional, exports all if omitted)")]
+    pub numbers: Option<Vec<u32>>,
+
+    /// If true, omit content fields (context, decision, consequences) from output
+    #[schemars(description = "If true, export metadata only without content sections (optional)")]
+    pub metadata_only: Option<bool>,
 }
 
 // Write operation parameter types
@@ -382,6 +423,42 @@ struct SuggestedTag {
     reason: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct SearchResult {
+    number: u32,
+    title: String,
+    status: String,
+    date: Option<String>,
+    tags: Vec<String>,
+    matches: Vec<MatchSnippet>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct MatchSnippet {
+    section: String,
+    snippet: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct DoctorResult {
+    healthy: bool,
+    error_count: usize,
+    warning_count: usize,
+    info_count: usize,
+    issues: Vec<DoctorIssue>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct DoctorIssue {
+    severity: String,
+    rule_id: String,
+    rule_name: String,
+    message: String,
+    path: Option<String>,
+    line: Option<usize>,
+    adr_number: Option<u32>,
+}
+
 // Macro to reduce boilerplate for tool registration.
 macro_rules! adr_tool {
     // Read-only tool with params.
@@ -527,6 +604,23 @@ fn build_router(root: PathBuf) -> McpRouter {
         suggest_tags_impl
     );
 
+    let run_doctor = adr_tool!(
+        ro,
+        state,
+        "run_doctor",
+        "Run health checks on the ADR repository. Returns broken links, parse errors, duplicate numbers, and other issues. Read-only; does not modify any files.",
+        run_doctor_impl
+    );
+
+    let export_adrs = adr_tool!(
+        ro,
+        state,
+        "export_adrs",
+        "Export ADRs to JSON-ADR format (machine-readable interchange format). Optionally filter to specific ADR numbers and/or export metadata only without content sections.",
+        ExportAdrsParams,
+        export_adrs_impl
+    );
+
     // Write tools
     let create_adr = adr_tool!(
         rw,
@@ -595,6 +689,8 @@ fn build_router(root: PathBuf) -> McpRouter {
         .tool(get_adr_sections)
         .tool(compare_adrs)
         .tool(suggest_tags)
+        .tool(run_doctor)
+        .tool(export_adrs)
         // Write tools
         .tool(create_adr)
         .tool(update_status)
@@ -604,15 +700,129 @@ fn build_router(root: PathBuf) -> McpRouter {
         .tool(bulk_update_status)
 }
 
-// Business logic implementations (unchanged).
+/// Check if a section's text contains the (already-normalized) query.
+fn search_section_matches(text: &str, query_normalized: &str, case_sensitive: bool) -> bool {
+    if case_sensitive {
+        text.contains(query_normalized)
+    } else {
+        text.to_lowercase().contains(query_normalized)
+    }
+}
+
+/// Extract a context snippet around the match location in text.
+/// The query_normalized must already be lowercased if case_sensitive is false.
+fn extract_search_snippet(text: &str, query_normalized: &str, case_sensitive: bool) -> String {
+    let text_search = if case_sensitive {
+        text.to_string()
+    } else {
+        text.to_lowercase()
+    };
+
+    if let Some(pos) = text_search.find(query_normalized) {
+        let start = pos.saturating_sub(40);
+        let end = (pos + query_normalized.len() + 40).min(text.len());
+
+        // Expand to word boundaries
+        let start = text[..start]
+            .rfind(char::is_whitespace)
+            .map(|p| p + 1)
+            .unwrap_or(start);
+        let end = text[end..]
+            .find(char::is_whitespace)
+            .map(|p| end + p)
+            .unwrap_or(end);
+
+        let mut snippet = text[start..end].to_string();
+
+        if start > 0 {
+            snippet = format!("...{}", snippet);
+        }
+        if end < text.len() {
+            snippet = format!("{}...", snippet);
+        }
+
+        snippet.replace('\n', " ")
+    } else {
+        // Fallback: first 80 chars
+        let preview: String = text.chars().take(80).collect();
+        if text.len() > 80 {
+            format!("{}...", preview)
+        } else {
+            preview
+        }
+    }
+}
+
+// Business logic implementations.
 
 impl AdrState {
     fn list_adrs_impl(&self, params: ListAdrsParams) -> Result<String, String> {
         let repo = self.open_repo()?;
         let adrs = repo.list().map_err(|e| e.to_string())?;
 
-        let mut summaries: Vec<AdrSummary> = adrs
+        // Parse date filters
+        let since_date: Option<Date> = match &params.since {
+            Some(s) => Some(
+                Date::parse(s, &time::format_description::well_known::Iso8601::DATE)
+                    .map_err(|_| format!("Invalid date format: '{}'. Use YYYY-MM-DD.", s))?,
+            ),
+            None => None,
+        };
+
+        let until_date: Option<Date> = match &params.until {
+            Some(s) => Some(
+                Date::parse(s, &time::format_description::well_known::Iso8601::DATE)
+                    .map_err(|_| format!("Invalid date format: '{}'. Use YYYY-MM-DD.", s))?,
+            ),
+            None => None,
+        };
+
+        let summaries: Vec<AdrSummary> = adrs
             .iter()
+            .filter(|adr| {
+                // Status filter (case-insensitive)
+                if let Some(ref status) = params.status
+                    && adr.status.to_string().to_lowercase() != status.to_lowercase()
+                {
+                    return false;
+                }
+
+                // Tag filter (case-insensitive)
+                if let Some(ref tag) = params.tag {
+                    let tag_lower = tag.to_lowercase();
+                    if !adr.tags.iter().any(|t| t.to_lowercase() == tag_lower) {
+                        return false;
+                    }
+                }
+
+                // Since date filter (inclusive)
+                if let Some(since) = since_date
+                    && adr.date < since
+                {
+                    return false;
+                }
+
+                // Until date filter (inclusive)
+                if let Some(until) = until_date
+                    && adr.date > until
+                {
+                    return false;
+                }
+
+                // Decider filter (case-insensitive substring match)
+                if let Some(ref decider) = params.decider {
+                    let decider_lower = decider.to_lowercase();
+                    if !adr
+                        .decision_makers
+                        .iter()
+                        .any(|dm| dm.to_lowercase().contains(&decider_lower))
+                    {
+                        return false;
+                    }
+                }
+
+                true
+            })
             .map(|adr| AdrSummary {
                 number: adr.number,
                 title: adr.title.clone(),
@@ -621,17 +831,6 @@ impl AdrState {
                 tags: adr.tags.clone(),
             })
             .collect();
-
-        // Apply filters
-        if let Some(ref status) = params.status {
-            let status_lower = status.to_lowercase();
-            summaries.retain(|s| s.status.to_lowercase() == status_lower);
-        }
-
-        if let Some(ref tag) = params.tag {
-            let tag_lower = tag.to_lowercase();
-            summaries.retain(|s| s.tags.iter().any(|t| t.to_lowercase() == tag_lower));
-        }
 
         serde_json::to_string_pretty(&summaries).map_err(|e| e.to_string())
     }
@@ -667,34 +866,92 @@ impl AdrState {
         let repo = self.open_repo()?;
         let adrs = repo.list().map_err(|e| e.to_string())?;
 
-        let query_lower = params.query.to_lowercase();
+        let case_sensitive = params.case_sensitive.unwrap_or(false);
         let title_only = params.title_only.unwrap_or(false);
 
-        let mut matches: Vec<AdrSummary> = Vec::new();
+        // Normalize the query based on case sensitivity
+        let query_normalized = if case_sensitive {
+            params.query.clone()
+        } else {
+            params.query.to_lowercase()
+        };
+
+        let mut results: Vec<SearchResult> = Vec::new();
 
         for adr in &adrs {
-            let title_match = adr.title.to_lowercase().contains(&query_lower);
+            // Apply status filter (case-insensitive)
+            if let Some(ref status) = params.status
+                && adr.status.to_string().to_lowercase() != status.to_lowercase()
+            {
+                continue;
+            }
 
-            let content_match = if !title_only {
-                repo.read_content(adr)
-                    .map(|c| c.to_lowercase().contains(&query_lower))
-                    .unwrap_or(false)
+            let mut snippets: Vec<MatchSnippet> = Vec::new();
+
+            // Check title
+            let title_text = if case_sensitive {
+                adr.title.clone()
             } else {
-                false
+                adr.title.to_lowercase()
             };
+            if title_text.contains(&query_normalized) {
+                snippets.push(MatchSnippet {
+                    section: "Title".to_string(),
+                    snippet: adr.title.clone(),
+                });
+            }
 
-            if title_match || content_match {
-                matches.push(AdrSummary {
+            if !title_only {
+                // Check context
+                if search_section_matches(&adr.context, &query_normalized, case_sensitive) {
+                    snippets.push(MatchSnippet {
+                        section: "Context".to_string(),
+                        snippet: extract_search_snippet(
+                            &adr.context,
+                            &query_normalized,
+                            case_sensitive,
+                        ),
+                    });
+                }
+
+                // Check decision
+                if search_section_matches(&adr.decision, &query_normalized, case_sensitive) {
+                    snippets.push(MatchSnippet {
+                        section: "Decision".to_string(),
+                        snippet: extract_search_snippet(
+                            &adr.decision,
+                            &query_normalized,
+                            case_sensitive,
+                        ),
+                    });
+                }
+
+                // Check consequences
+                if search_section_matches(&adr.consequences, &query_normalized, case_sensitive) {
+                    snippets.push(MatchSnippet {
+                        section: "Consequences".to_string(),
+                        snippet: extract_search_snippet(
+                            &adr.consequences,
+                            &query_normalized,
+                            case_sensitive,
+                        ),
+                    });
+                }
+            }
+
+            if !snippets.is_empty() {
+                results.push(SearchResult {
                     number: adr.number,
                     title: adr.title.clone(),
                     status: adr.status.to_string(),
                     date: Some(adr.date.to_string()),
                     tags: adr.tags.clone(),
+                    matches: snippets,
                 });
             }
         }
 
-        serde_json::to_string_pretty(&matches).map_err(|e| e.to_string())
+        serde_json::to_string_pretty(&results).map_err(|e| e.to_string())
     }
 
     fn create_adr_impl(&self, params: CreateAdrParams) -> Result<String, String> {
@@ -1490,6 +1747,64 @@ impl AdrState {
 
         serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
     }
+
+    fn run_doctor_impl(&self) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let report = check_all(&repo).map_err(|e| e.to_string())?;
+
+        let error_count = report.count_by_severity(IssueSeverity::Error);
+        let warning_count = report.count_by_severity(IssueSeverity::Warning);
+        let info_count = report.count_by_severity(IssueSeverity::Info);
+
+        let issues: Vec<DoctorIssue> = report
+            .issues
+            .iter()
+            .map(|issue| DoctorIssue {
+                severity: issue.severity.to_string(),
+                rule_id: issue.rule_id.clone(),
+                rule_name: issue.rule_name.clone(),
+                message: issue.message.clone(),
+                path: issue.path.as_ref().map(|p| p.display().to_string()),
+                line: issue.line,
+                adr_number: issue.adr_number,
+            })
+            .collect();
+
+        let result = DoctorResult {
+            healthy: error_count == 0,
+            error_count,
+            warning_count,
+            info_count,
+            issues,
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
+    }
+
+    fn export_adrs_impl(&self, params: ExportAdrsParams) -> Result<String, String> {
+        let repo = self.open_repo()?;
+        let mut export = export_repository(&repo).map_err(|e| e.to_string())?;
+
+        // Filter by numbers if provided
+        if let Some(ref numbers) = params.numbers {
+            export.adrs.retain(|adr| numbers.contains(&adr.number));
+        }
+
+        // Strip content fields if metadata_only
+        if params.metadata_only.unwrap_or(false) {
+            for adr in &mut export.adrs {
+                adr.context = None;
+                adr.decision = None;
+                adr.consequences = None;
+                adr.confirmation = None;
+                adr.decision_drivers.clear();
+                adr.considered_options.clear();
+                adr.custom_sections.clear();
+            }
+        }
+
+        serde_json::to_string_pretty(&export).map_err(|e| e.to_string())
+    }
 }
 
 /// Run the MCP server on stdio.
@@ -1543,10 +1858,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_tools_returns_all_15() {
+    async fn test_list_tools_returns_all_17() {
         let (client, _tmp) = setup_client(false).await;
         let tools = client.list_all_tools().await.unwrap();
-        assert_eq!(tools.len(), 15, "expected 15 tools, got {}", tools.len());
+        assert_eq!(tools.len(), 17, "expected 17 tools, got {}", tools.len());
 
         let names: Vec<_> = tools.iter().map(|t| t.name.as_str()).collect();
         assert!(names.contains(&"list_adrs"));
@@ -1564,6 +1879,8 @@ mod tests {
         assert!(names.contains(&"compare_adrs"));
         assert!(names.contains(&"bulk_update_status"));
         assert!(names.contains(&"suggest_tags"));
+        assert!(names.contains(&"run_doctor"));
+        assert!(names.contains(&"export_adrs"));
     }
 
     #[tokio::test]
@@ -1581,6 +1898,8 @@ mod tests {
             "get_adr_sections",
             "compare_adrs",
             "suggest_tags",
+            "run_doctor",
+            "export_adrs",
         ];
 
         for name in read_only_names {
@@ -2264,6 +2583,302 @@ mod tests {
         assert!(
             result.is_error,
             "create_adr with invalid variant should return an error"
+        );
+    }
+
+    // ========== New tests for #231, #232, #233 ==========
+
+    #[tokio::test]
+    async fn test_list_adrs_filter_by_since() {
+        let (client, _tmp) = setup_client(false).await;
+        // Filter by a far-future date -- should return no ADRs
+        let result = client
+            .call_tool_text("list_adrs", json!({"since": "2099-01-01"}))
+            .await
+            .unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&result).unwrap();
+        assert_eq!(adrs.len(), 0, "no ADRs should be on or after 2099-01-01");
+    }
+
+    #[tokio::test]
+    async fn test_list_adrs_filter_by_until() {
+        let (client, _tmp) = setup_client(false).await;
+        // Filter by a past date -- the init ADR (today) should not appear
+        let result = client
+            .call_tool_text("list_adrs", json!({"until": "2000-01-01"}))
+            .await
+            .unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&result).unwrap();
+        assert_eq!(adrs.len(), 0, "no ADRs should be on or before 2000-01-01");
+    }
+
+    #[tokio::test]
+    async fn test_list_adrs_filter_by_decider() {
+        let (client, _tmp) = setup_client(true).await;
+        // Create an ADR with decision_makers via MADR format
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use gRPC",
+                    "format": "madr",
+                    "decision_makers": ["Alice Smith", "Bob Jones"]
+                }),
+            )
+            .await
+            .unwrap();
+
+        // Filter by decider "alice" -- should find the new ADR
+        let result = client
+            .call_tool_text("list_adrs", json!({"decider": "alice"}))
+            .await
+            .unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&result).unwrap();
+        assert!(
+            adrs.iter().any(|a| a.number == 2),
+            "should find ADR #2 with decider 'alice'"
+        );
+
+        // Filter by decider "charlie" -- should return empty
+        let result = client
+            .call_tool_text("list_adrs", json!({"decider": "charlie"}))
+            .await
+            .unwrap();
+        let adrs: Vec<AdrSummary> = serde_json::from_str(&result).unwrap();
+        assert_eq!(adrs.len(), 0, "no ADRs with decider 'charlie'");
+    }
+
+    #[tokio::test]
+    async fn test_list_adrs_invalid_since_date() {
+        let (client, _tmp) = setup_client(false).await;
+        let result = client
+            .call_tool("list_adrs", json!({"since": "not-a-date"}))
+            .await
+            .unwrap();
+        assert!(result.is_error, "invalid since date should return an error");
+    }
+
+    #[tokio::test]
+    async fn test_search_adrs_case_sensitive() {
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use PostgreSQL for Database",
+                    "context": "PostgreSQL is the chosen database."
+                }),
+            )
+            .await
+            .unwrap();
+
+        // Case-insensitive (default) -- should match
+        let result = client
+            .call_tool_text("search_adrs", json!({"query": "postgresql"}))
+            .await
+            .unwrap();
+        let matches: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+        assert!(!matches.is_empty(), "case-insensitive search should match");
+
+        // Case-sensitive, wrong case -- should NOT match
+        let result = client
+            .call_tool_text(
+                "search_adrs",
+                json!({"query": "postgresql", "case_sensitive": true}),
+            )
+            .await
+            .unwrap();
+        let matches: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+        assert!(
+            matches.is_empty(),
+            "case-sensitive search for 'postgresql' should not match 'PostgreSQL'"
+        );
+
+        // Case-sensitive, correct case -- should match
+        let result = client
+            .call_tool_text(
+                "search_adrs",
+                json!({"query": "PostgreSQL", "case_sensitive": true}),
+            )
+            .await
+            .unwrap();
+        let matches: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+        assert!(
+            !matches.is_empty(),
+            "case-sensitive search for 'PostgreSQL' should match"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_search_adrs_status_filter() {
+        let (client, _tmp) = setup_client(false).await;
+
+        // Init ADR is "Accepted", create a proposed one
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({"title": "Proposed ADR about databases"}),
+            )
+            .await
+            .unwrap();
+
+        // Search with status=proposed -- should only find the proposed one
+        let result = client
+            .call_tool_text("search_adrs", json!({"query": "adr", "status": "proposed"}))
+            .await
+            .unwrap();
+        let matches: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+        for m in &matches {
+            assert_eq!(
+                m["status"].as_str().unwrap().to_lowercase(),
+                "proposed",
+                "all search results should be proposed"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_search_adrs_returns_snippets() {
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Snippet Test ADR",
+                    "context": "We need to evaluate the performance of the system under load.",
+                    "decision": "Use a load balancer for better performance.",
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("search_adrs", json!({"query": "performance"}))
+            .await
+            .unwrap();
+        let matches: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+        assert!(
+            !matches.is_empty(),
+            "should find ADR with 'performance' in it"
+        );
+
+        let first = &matches[0];
+        let snippets = first["matches"].as_array().unwrap();
+        assert!(
+            !snippets.is_empty(),
+            "should have at least one match snippet"
+        );
+        for s in snippets {
+            assert!(
+                s["section"].is_string(),
+                "each snippet should have a section"
+            );
+            assert!(
+                s["snippet"].is_string(),
+                "each snippet should have a snippet"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_doctor_healthy_repo() {
+        let (client, _tmp) = setup_client(false).await;
+        let result = client
+            .call_tool_text("run_doctor", json!({}))
+            .await
+            .unwrap();
+
+        let report: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert!(report["healthy"].is_boolean());
+        assert!(report["issues"].is_array());
+        assert_eq!(
+            report["error_count"].as_u64().unwrap(),
+            0,
+            "fresh repo should have no errors"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_export_adrs_all() {
+        let (client, _tmp) = setup_client(false).await;
+        let result = client
+            .call_tool_text("export_adrs", json!({}))
+            .await
+            .unwrap();
+
+        let export: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let adrs = export["adrs"].as_array().unwrap();
+        assert!(
+            !adrs.is_empty(),
+            "export should contain at least the init ADR"
+        );
+        assert!(adrs[0]["number"].is_number());
+        assert!(adrs[0]["title"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_export_adrs_filtered_by_numbers() {
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text("create_adr", json!({"title": "ADR Two"}))
+            .await
+            .unwrap();
+        client
+            .call_tool_text("create_adr", json!({"title": "ADR Three"}))
+            .await
+            .unwrap();
+
+        // Export only ADR #2
+        let result = client
+            .call_tool_text("export_adrs", json!({"numbers": [2]}))
+            .await
+            .unwrap();
+
+        let export: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let adrs = export["adrs"].as_array().unwrap();
+        assert_eq!(adrs.len(), 1, "should export exactly 1 ADR");
+        assert_eq!(adrs[0]["number"].as_u64().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_export_adrs_metadata_only() {
+        let (client, _tmp) = setup_client(false).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "ADR with content",
+                    "context": "Some context here.",
+                    "decision": "Some decision here."
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("export_adrs", json!({"metadata_only": true}))
+            .await
+            .unwrap();
+
+        let export: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let adrs = export["adrs"].as_array().unwrap();
+        // Find ADR #2
+        let adr2 = adrs
+            .iter()
+            .find(|a| a["number"].as_u64() == Some(2))
+            .unwrap();
+        // context, decision should be absent (null or not present) in metadata_only mode
+        assert!(
+            adr2.get("context").is_none() || adr2["context"].is_null(),
+            "context should be absent in metadata_only mode"
+        );
+        assert!(
+            adr2.get("decision").is_none() || adr2["decision"].is_null(),
+            "decision should be absent in metadata_only mode"
         );
     }
 }
