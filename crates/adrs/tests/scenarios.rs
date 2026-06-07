@@ -1391,3 +1391,138 @@ fn scenario_doctor_reports_invalid_frontmatter() {
 
     temp.close().unwrap();
 }
+
+// ============================================================================
+// Scenario: Custom Template via CLI --template Flag
+// ============================================================================
+
+/// User passes --template <path> to adrs new and the custom template is used.
+#[test]
+fn scenario_custom_template_from_cli_flag() {
+    let temp = TempDir::new().unwrap();
+
+    // Step 1: Initialize repository
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Step 2: Write a custom template file
+    let templates_dir = temp.child("templates");
+    templates_dir.create_dir_all().unwrap();
+    fs::write(
+        temp.path().join("templates/my-adr.md"),
+        "# CLI-CUSTOM: {{ number }}. {{ title }}
+
+Provided via --template flag.
+",
+    )
+    .unwrap();
+
+    // Step 3: Create ADR using --template flag
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--template",
+            "templates/my-adr.md",
+            "Custom via CLI",
+        ])
+        .assert()
+        .success();
+
+    let adr = temp.child("doc/adr/0002-custom-via-cli.md");
+    adr.assert(predicate::path::exists());
+    let content = fs::read_to_string(adr.path()).unwrap();
+
+    assert!(
+        content.contains("CLI-CUSTOM: 2. Custom via CLI"),
+        "ADR should use the CLI-specified custom template. Got:
+{content}"
+    );
+    assert!(
+        content.contains("Provided via --template flag."),
+        "ADR should contain custom template body"
+    );
+
+    temp.close().unwrap();
+}
+
+/// When both config custom and --template CLI flag are set, the CLI flag wins.
+#[test]
+fn scenario_cli_template_flag_overrides_config() {
+    let temp = TempDir::new().unwrap();
+
+    // Step 1: Initialize with nextgen mode
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    // Step 2: Write a config custom template
+    let templates_dir = temp.child("templates");
+    templates_dir.create_dir_all().unwrap();
+    fs::write(
+        temp.path().join("templates/config-template.md"),
+        "# CONFIG: {{ number }}. {{ title }}
+
+From config.
+",
+    )
+    .unwrap();
+
+    // Step 3: Write a CLI custom template
+    fs::write(
+        temp.path().join("templates/cli-template.md"),
+        "# CLI: {{ number }}. {{ title }}
+
+From CLI flag.
+",
+    )
+    .unwrap();
+
+    // Step 4: Configure config custom template in adrs.toml
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "ng"
+
+[templates]
+custom = "templates/config-template.md"
+"#,
+    )
+    .unwrap();
+
+    // Step 5: Create ADR with --template flag -- should use CLI template, not config
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--template",
+            "templates/cli-template.md",
+            "CLI Override Test",
+        ])
+        .assert()
+        .success();
+
+    let adr = temp.child("doc/adr/0002-cli-override-test.md");
+    adr.assert(predicate::path::exists());
+    let content = fs::read_to_string(adr.path()).unwrap();
+
+    assert!(
+        content.contains("CLI: 2. CLI Override Test"),
+        "CLI --template should override config custom. Got:
+{content}"
+    );
+    assert!(
+        !content.contains("CONFIG:"),
+        "Config custom template should be bypassed when --template is given"
+    );
+
+    temp.close().unwrap();
+}
