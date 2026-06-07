@@ -331,9 +331,23 @@ pub struct ImportResult {
 /// This function scans a directory for markdown files that look like ADRs
 /// (files matching `NNNN-*.md` pattern) and parses them. Unlike `export_repository`,
 /// this does not require an initialized adrs repository.
+///
+/// Files that look like ADRs but fail to parse are skipped. Use
+/// [`export_directory_with_warnings`] if you need to surface those parse
+/// failures to the caller rather than silently dropping them.
 pub fn export_directory(dir: &Path) -> Result<JsonAdrBulkExport> {
+    export_directory_with_warnings(dir).map(|(export, _warnings)| export)
+}
+
+/// Like [`export_directory`], but also returns a human-readable warning for
+/// every file that looked like an ADR but failed to parse.
+///
+/// This is the library-friendly variant: it never writes to stderr, leaving the
+/// caller in control of how (or whether) to surface skipped files.
+pub fn export_directory_with_warnings(dir: &Path) -> Result<(JsonAdrBulkExport, Vec<String>)> {
     let parser = Parser::new();
     let mut adrs = Vec::new();
+    let mut warnings = Vec::new();
 
     // Scan for markdown files
     if dir.is_dir() {
@@ -357,16 +371,18 @@ pub fn export_directory(dir: &Path) -> Result<JsonAdrBulkExport> {
             let path = entry.path();
             match parser.parse_file(&path) {
                 Ok(adr) => adrs.push(JsonAdr::from(&adr)),
-                Err(e) => {
-                    // Log warning but continue with other files
-                    eprintln!("Warning: Failed to parse {}: {}", path.display(), e);
-                }
+                // Collect the warning instead of printing; the caller decides
+                // whether and how to surface skipped files.
+                Err(e) => warnings.push(format!("Failed to parse {}: {}", path.display(), e)),
             }
         }
     }
 
     let adr_dir = dir.display().to_string();
-    Ok(JsonAdrBulkExport::new(adrs).with_repository(None, adr_dir))
+    Ok((
+        JsonAdrBulkExport::new(adrs).with_repository(None, adr_dir),
+        warnings,
+    ))
 }
 
 /// Convert a JsonAdr back to an Adr for rendering.
