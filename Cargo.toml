@@ -8,8 +8,7 @@ authors = ["josh rotenberg <joshrotenberg@gmail.com>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/joshrotenberg/adrs"
-homepage = "https://github.com/joshrotenberg/adrs"
-documentation = "https://github.com/joshrotenberg/adrs"
+homepage = "https://joshrotenberg.com/adrs/"
 
 [workspace.dependencies]
 # Core
