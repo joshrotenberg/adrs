@@ -1,18 +1,51 @@
 //! # adrs-core
 //!
-//! Core library for managing Architecture Decision Records (ADRs).
+//! The engine behind the [`adrs`] command-line tool: a standalone library for
+//! creating, reading, linking, validating, and exporting Architecture Decision
+//! Records (ADRs).
 //!
-//! This library provides the foundational types and operations for working with ADRs,
-//! including parsing, creating, linking, and querying decision records.
+//! Depend on `adrs-core` directly when you want to manage ADRs from your own
+//! program -- a build tool, an editor integration, or an AI agent -- instead of
+//! shelling out to the CLI. The CLI is a thin layer over this crate, so anything
+//! `adrs` does is available here as a normal Rust API.
+//!
+//! [`adrs`]: https://crates.io/crates/adrs
+//!
+//! ## Key types
+//!
+//! - [`Repository`] -- the main entry point. Open or initialize a directory of
+//!   ADRs, then [`list`](Repository::list), [`new_adr`](Repository::new_adr),
+//!   [`link`](Repository::link), [`supersede`](Repository::supersede), and
+//!   [`set_status`](Repository::set_status).
+//! - [`Adr`] -- a single decision record: number, title, [`AdrStatus`], body
+//!   sections, [`AdrLink`]s, tags, and MADR metadata (deciders, consulted,
+//!   informed).
+//! - [`AdrStatus`] and [`LinkKind`] -- typed status values and link
+//!   relationships (e.g. `Supersedes` / `SupersededBy`).
+//! - [`Config`] and [`discover`] -- repository configuration and upward
+//!   directory discovery (find the ADR directory from a nested path).
+//! - [`Parser`] -- parse an ADR from markdown, in either legacy (adr-tools) or
+//!   YAML-frontmatter form.
+//! - The [`export`] module -- convert ADRs to and from the **JSON-ADR**
+//!   interchange format, handy for feeding a decision log to other tools or to
+//!   an AI agent that reasons over it.
+//! - The [`lint`] module -- repository health checks via [`check_all`]:
+//!   broken links, duplicate numbers, numbering gaps, and missing fields.
+//! - [`Error`] and [`Result`] -- the library's error type, built on `thiserror`.
 //!
 //! ## Modes
 //!
-//! The library supports two modes:
+//! ADRs can be stored in two on-disk formats:
 //!
-//! - **Compatible mode** (default): Writes markdown-only format compatible with adr-tools,
-//!   but can read both legacy and next-gen formats.
-//! - **Next-gen mode**: Uses YAML frontmatter for structured metadata, enabling richer
-//!   features like typed links and better validation.
+//! - **Compatible mode** (default): markdown-only, interoperable with
+//!   [adr-tools]. Reads both legacy and next-gen files; writes legacy.
+//! - **Next-gen mode**: YAML frontmatter for structured metadata, enabling
+//!   richer features like typed links, tags, and stronger validation.
+//!
+//! The mode is chosen at [`Repository::init`] time (the `ng` argument) or via
+//! [`Config`], and the parser transparently reads either format.
+//!
+//! [adr-tools]: https://github.com/npryce/adr-tools
 //!
 //! ## Quick start
 //!
@@ -35,8 +68,18 @@
 //! # }
 //! ```
 //!
-//! See the [`examples`](https://github.com/joshrotenberg/adrs/tree/main/crates/adrs-core/examples)
-//! directory for more, including linking ADRs, exporting to JSON-ADR, and linting.
+//! ## Exporting to JSON-ADR
+//!
+//! [`export_repository`] converts an open [`Repository`] to the JSON-ADR format.
+//! For a plain directory that isn't an initialized adrs repository, use
+//! [`export_directory`] (or [`export_directory_with_warnings`] to also receive a
+//! message for every file that failed to parse, rather than skipping silently).
+//!
+//! ## More examples
+//!
+//! The [`examples`](https://github.com/joshrotenberg/adrs/tree/main/crates/adrs-core/examples)
+//! directory has runnable programs: `create_and_list`, `link_adrs`,
+//! `export_json`, and `lint_repository`.
 
 mod config;
 pub mod doctor;
