@@ -22,7 +22,12 @@ pub enum Error {
 
     /// Multiple ADRs matched a query.
     #[error("Multiple ADRs match '{query}': {matches:?}")]
-    AmbiguousAdr { query: String, matches: Vec<String> },
+    AmbiguousAdr {
+        /// The query string that matched more than one ADR.
+        query: String,
+        /// Human-readable identifiers of the ADRs that matched.
+        matches: Vec<String>,
+    },
 
     /// Invalid ADR number.
     #[error("Invalid ADR number: {0}")]
@@ -30,11 +35,21 @@ pub enum Error {
 
     /// Invalid ADR format (parsing failed).
     #[error("Invalid ADR format in {path}: {reason}")]
-    InvalidFormat { path: PathBuf, reason: String },
+    InvalidFormat {
+        /// Path to the ADR file that failed to parse.
+        path: PathBuf,
+        /// Why parsing failed.
+        reason: String,
+    },
 
     /// Missing required field in ADR.
     #[error("Missing required field '{field}' in {path}")]
-    MissingField { path: PathBuf, field: String },
+    MissingField {
+        /// Path to the ADR file missing the field.
+        path: PathBuf,
+        /// Name of the required field that was missing.
+        field: String,
+    },
 
     /// Invalid status value.
     #[error("Invalid status: {0}")]
