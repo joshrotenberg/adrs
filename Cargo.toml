@@ -18,8 +18,7 @@ serde_yaml = "0.9"
 toml = "0.8"
 
 # Markdown
-pulldown-cmark = "0.12"
-pulldown-cmark-to-cmark = "17"
+pulldown-cmark = "0.13"
 
 # Templates
 minijinja = { version = "2", features = ["loader"] }
