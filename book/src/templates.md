@@ -100,6 +100,25 @@ Chosen option: "", because ...
 
 Create custom templates using [Jinja2](https://jinja.palletsprojects.com/) syntax.
 
+### Specifying a Custom Template
+
+Custom templates can be set in two ways:
+
+1. **Per-invocation via CLI flag** -- highest precedence, overrides config and built-in formats:
+
+   ```sh
+   adrs new --template ./templates/security-adr.md "My Decision"
+   ```
+
+2. **Project-wide via `adrs.toml`** -- applied when no CLI `--format`/`--variant`/`--template` is given:
+
+   ```toml
+   [templates]
+   custom = "templates/my-template.md"
+   ```
+
+Precedence: `--template` CLI flag > `[templates] custom` in config > `--format`/`--variant`.
+
 ### Template Variables
 
 | Variable | Description | Example |

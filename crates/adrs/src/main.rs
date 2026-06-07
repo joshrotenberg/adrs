@@ -114,6 +114,10 @@ LINK FORMAT:
         #[arg(short, long, value_name = "VARIANT")]
         variant: Option<String>,
 
+        /// Path to a custom template file (overrides --format/--variant and config)
+        #[arg(long, value_name = "PATH")]
+        template: Option<PathBuf>,
+
         /// Initial status [default: Proposed]
         #[arg(long, value_name = "STATUS")]
         status: Option<String>,
@@ -583,6 +587,7 @@ fn main() -> Result<()> {
             link,
             format,
             variant,
+            template,
             status,
             tags,
             no_edit,
@@ -596,6 +601,7 @@ fn main() -> Result<()> {
                 link,
                 format,
                 variant,
+                template,
                 status,
                 tags,
                 no_edit,

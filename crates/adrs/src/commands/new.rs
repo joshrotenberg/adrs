@@ -4,7 +4,7 @@ use adrs_core::{
     AdrStatus, Config, ConfigMode, LinkKind, Repository, Template, TemplateFormat, TemplateVariant,
 };
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[allow(clippy::too_many_arguments)]
 pub fn new(
@@ -15,6 +15,7 @@ pub fn new(
     link: Option<String>,
     format: Option<String>,
     variant: Option<String>,
+    template: Option<PathBuf>,
     status: Option<String>,
     tags: Option<Vec<String>>,
     no_edit: bool,
@@ -59,17 +60,25 @@ pub fn new(
         repo = repo.with_mode(ConfigMode::NextGen);
     }
 
-    // Load custom template from config if set (and no format/variant CLI override)
-    if format.is_none()
+    // Apply custom template: CLI --template > config custom > built-in format/variant
+    if let Some(ref cli_path) = template {
+        // CLI flag takes highest precedence
+        let tmpl = Template::from_file(cli_path).context(format!(
+            "Failed to load custom template from {}: check the path is correct",
+            cli_path.display()
+        ))?;
+        repo = repo.with_custom_template(tmpl);
+    } else if format.is_none()
         && variant.is_none()
         && let Some(ref custom_path) = config.templates.custom
     {
+        // Config custom path applies when no CLI format/variant override is given
         let full_path = root.join(custom_path);
-        let template = Template::from_file(&full_path).context(format!(
+        let tmpl = Template::from_file(&full_path).context(format!(
             "Failed to load custom template from config: {}",
             custom_path.display()
         ))?;
-        repo = repo.with_custom_template(template);
+        repo = repo.with_custom_template(tmpl);
     }
 
     let (mut adr, path) = if let Some(superseded) = supersedes {

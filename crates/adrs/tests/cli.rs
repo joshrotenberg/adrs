@@ -1081,6 +1081,40 @@ fn test_new_no_edit_flag() {
 }
 
 // ============================================================================
+// Custom Template Flag Tests
+// ============================================================================
+
+#[test]
+fn test_new_template_flag_missing_file() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Passing a non-existent template file should fail with a clear error
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--template",
+            "/nonexistent/path/template.md",
+            "Should fail",
+        ])
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("custom template")
+                .or(predicate::str::contains("/nonexistent/path/template.md")),
+        );
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // MADR Format Tests
 // ============================================================================
 

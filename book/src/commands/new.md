@@ -20,6 +20,7 @@ adrs new [OPTIONS] <TITLE>
 |--------|-------------|
 | `-f, --format <FORMAT>` | Template format: `nygard` or `madr` (default: `nygard`) |
 | `-v, --variant <VARIANT>` | Template variant: `full`, `minimal`, or `bare` (default: `full`) |
+| `--template <PATH>` | Path to a custom template file (overrides `--format`/`--variant` and config) |
 | `--status <STATUS>` | Initial status (default: `Proposed`) |
 | `-s, --supersedes <N>` | ADR number this supersedes |
 | `-l, --link <LINK>` | Link to another ADR |
@@ -60,6 +61,18 @@ adrs new --variant minimal "Use PostgreSQL for persistence"
 ```sh
 adrs new --status Accepted "Use PostgreSQL for persistence"
 ```
+
+### Custom Template File
+
+Use a custom template file for this ADR:
+
+```sh
+adrs new --template ./templates/security-adr.md "Security Design Decision"
+```
+
+The `--template` flag takes precedence over `--format`/`--variant` and the
+`[templates] custom` setting in `adrs.toml`. See
+[Templates](../templates.md) for the template variable reference.
 
 ### Superseding an ADR
 
