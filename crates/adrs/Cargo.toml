@@ -4,6 +4,9 @@ description = "Command line tool for managing Architecture Decision Records"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+# CLI MSRV: higher than the library because tower-mcp (default `mcp` feature)
+# requires rustc 1.90. Verified in CI.
+rust-version = "1.90"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

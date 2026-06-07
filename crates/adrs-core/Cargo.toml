@@ -4,6 +4,8 @@ description = "Core library for managing Architecture Decision Records"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+# Library MSRV: edition 2024 (1.85) + let-chains (1.88). Verified in CI.
+rust-version = "1.88"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
