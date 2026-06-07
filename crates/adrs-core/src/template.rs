@@ -537,13 +537,15 @@ number: {{ number }}
 title: {{ title }}
 status: {{ status | lower }}
 date: {{ date }}
-decision-makers:
-consulted:
-informed:
-{% if tags %}tags:
+{% if decision_makers %}decision-makers:
+{% for dm in decision_makers %}  - {{ dm }}
+{% endfor %}{% endif %}{% if consulted %}consulted:
+{% for c in consulted %}  - {{ c }}
+{% endfor %}{% endif %}{% if informed %}informed:
+{% for i in informed %}  - {{ i }}
+{% endfor %}{% endif %}{% if tags %}tags:
 {% for tag in tags %}  - {{ tag }}
-{% endfor %}{% else %}tags:
-{% endif %}---
+{% endfor %}{% endif %}---
 
 # {{ title }}
 
@@ -740,6 +742,40 @@ mod tests {
         assert!(output.contains("## Status"));
         assert!(output.contains("Accepted"));
         assert!(!output.starts_with("---")); // No frontmatter in compatible mode
+    }
+
+    #[test]
+    fn test_madr_bare_roundtrips_when_empty() {
+        // Regression for #264: the bare MADR template emitted null-valued
+        // metadata keys that the parser rejected, silently dropping the ADR.
+        let template = Template::builtin_with_variant(TemplateFormat::Madr, TemplateVariant::Bare);
+        let adr = Adr::new(2, "Bare MADR decision");
+        let config = Config::default();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
+
+        // Empty metadata keys are omitted entirely, not emitted as null.
+        assert!(!output.contains("decision-makers:"));
+
+        // And the rendered file parses back cleanly.
+        let parsed = crate::Parser::new().parse(&output).unwrap();
+        assert_eq!(parsed.title, "Bare MADR decision");
+        assert!(parsed.decision_makers.is_empty());
+        assert!(parsed.tags.is_empty());
+    }
+
+    #[test]
+    fn test_madr_bare_renders_decision_makers() {
+        // The old bare template ignored decision-makers entirely; confirm they
+        // now render and round-trip (relevant to MCP create_adr with MADR).
+        let template = Template::builtin_with_variant(TemplateFormat::Madr, TemplateVariant::Bare);
+        let mut adr = Adr::new(2, "With deciders");
+        adr.decision_makers = vec!["alice".to_string(), "bob".to_string()];
+        let config = Config::default();
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
+
+        assert!(output.contains("decision-makers:"));
+        let parsed = crate::Parser::new().parse(&output).unwrap();
+        assert_eq!(parsed.decision_makers, vec!["alice", "bob"]);
     }
 
     #[test]
@@ -1183,12 +1219,13 @@ mod tests {
         let config = Config::default();
         let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
-        // MADR bare has frontmatter with empty fields (matches official adr-template-bare.md)
+        // MADR bare has frontmatter; empty metadata keys are omitted rather
+        // than emitted as null YAML (which the parser rejects -- see #264).
         assert!(output.starts_with("---"));
         assert!(output.contains("status:"));
-        assert!(output.contains("decision-makers:"));
-        assert!(output.contains("consulted:"));
-        assert!(output.contains("informed:"));
+        assert!(!output.contains("decision-makers:"));
+        assert!(!output.contains("consulted:"));
+        assert!(!output.contains("informed:"));
         assert!(output.contains("# MADR Bare"));
         // Should have ALL sections (empty)
         assert!(output.contains("## Decision Drivers"));

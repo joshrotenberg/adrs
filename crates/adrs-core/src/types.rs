@@ -361,9 +361,12 @@ mod string_or_vec {
             Vec(Vec<String>),
         }
 
-        match StringOrVec::deserialize(deserializer)? {
-            StringOrVec::String(s) => Ok(vec![s]),
-            StringOrVec::Vec(v) => Ok(v),
+        // Accept a missing/null value (a `field:` line with nothing after it)
+        // as an empty list, in addition to a bare string or a YAML sequence.
+        match Option::<StringOrVec>::deserialize(deserializer)? {
+            None => Ok(Vec::new()),
+            Some(StringOrVec::String(s)) => Ok(vec![s]),
+            Some(StringOrVec::Vec(v)) => Ok(v),
         }
     }
 }
@@ -886,6 +889,27 @@ number: 1
 title: Test
 date: 2024-09-15
 status: accepted
+"#;
+        let adr: Adr = serde_yaml::from_str(yaml).unwrap();
+        assert!(adr.decision_makers.is_empty());
+        assert!(adr.consulted.is_empty());
+        assert!(adr.informed.is_empty());
+        assert!(adr.tags.is_empty());
+    }
+
+    #[test]
+    fn test_string_or_vec_fields_null_value() {
+        // The MADR bare template historically emitted `field:` with no value
+        // (YAML null). Those must deserialize to empty lists, not error (#264).
+        let yaml = r#"
+number: 1
+title: Test
+date: 2024-09-15
+status: accepted
+decision-makers:
+consulted:
+informed:
+tags:
 "#;
         let adr: Adr = serde_yaml::from_str(yaml).unwrap();
         assert!(adr.decision_makers.is_empty());
