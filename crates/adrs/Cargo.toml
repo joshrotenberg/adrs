@@ -6,7 +6,11 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://joshrotenberg.com/adrs/"
 readme = "../../README.md"
+keywords = ["adr", "architecture", "decision-records", "madr", "cli"]
+categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
 name = "adrs"
