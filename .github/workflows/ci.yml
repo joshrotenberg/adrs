@@ -51,3 +51,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo test --all-targets --all-features
+
+  # Verify each crate still builds on its declared rust-version (MSRV), so a
+  # newer-toolchain feature can't silently raise it. Keep these versions in sync
+  # with the `rust-version` field in each crate's Cargo.toml.
+  msrv:
+    name: MSRV (${{ matrix.crate }} @ ${{ matrix.rust }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: adrs-core
+            rust: "1.88"
+          - crate: adrs
+            rust: "1.90"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Check ${{ matrix.crate }} on ${{ matrix.rust }}
+        run: cargo check -p ${{ matrix.crate }} --all-features --locked
