@@ -314,7 +314,13 @@ jobs:
         with:
           persist-credentials: true
           repository: "joshrotenberg/homebrew-brew"
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # Manual edit: use COMMITTER_TOKEN (the PAT with tap repo access).
+          # HOMEBREW_TAP_TOKEN is the cargo-dist default but is not configured
+          # in this repo. This line was restored from v0.7.4 after the cargo-dist
+          # 0.32 regen in #275 broke it. ci is in dist allow-dirty so this
+          # edit persists across regeneration, but double-check if upgrading
+          # cargo-dist again (see #294).
+          token: ${{ secrets.COMMITTER_TOKEN }}
       # So we have access to the formula
       - name: Fetch homebrew formulae
         uses: actions/download-artifact@v8
