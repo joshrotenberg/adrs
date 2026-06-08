@@ -76,8 +76,13 @@ jobs:
       # (PRs run on the *source* but secrets are usually on the *target* -- that's *good*
       # but also really annoying to build CI around when it needs secrets to work right.)
       - id: plan
+        # Manual edit (ci is in dist allow-dirty): always `dist plan`, never
+        # `dist host --steps=create`. Pre-creating the GitHub Release here made
+        # the host job's `gh release create` fail with "already exists",
+        # leaving an empty public release (#281). The release is now created
+        # exactly once, in the `host` job, atomically with its artifacts.
         run: |
-          dist ${{ (!github.event.pull_request && format('host --steps=create --tag={0}', github.ref_name)) || 'plan' }} --output-format=json > plan-dist-manifest.json
+          dist plan --output-format=json > plan-dist-manifest.json
           echo "dist ran successfully"
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
@@ -324,17 +329,17 @@ jobs:
           done
           git push
 
-  # Custom job (manual addition; ci is in dist allow-dirty): the `plan` job runs
-  # `dist host --steps=create`, which publishes the GitHub Release before any
-  # artifacts are built. If an artifact build then fails, `host` is skipped but
-  # the empty release stays public. Convert it to a draft so an incomplete
-  # release is never visible. See issue #242 (root cause of #217).
+  # Custom job (manual addition; ci is in dist allow-dirty): safety net. If any
+  # artifact build OR the host (upload/release) job fails, draft the release so
+  # an incomplete one is never left public. See #242 (root cause of #217) and
+  # #281 (host-failure gap that left v0.7.5's release empty).
   cleanup-on-failure:
     needs:
       - plan
       - build-local-artifacts
       - build-global-artifacts
-    if: ${{ always() && needs.plan.outputs.publishing == 'true' && (needs.build-local-artifacts.result == 'failure' || needs.build-global-artifacts.result == 'failure') }}
+      - host
+    if: ${{ always() && needs.plan.outputs.publishing == 'true' && (needs.build-local-artifacts.result == 'failure' || needs.build-global-artifacts.result == 'failure' || needs.host.result == 'failure') }}
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
