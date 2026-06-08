@@ -2,6 +2,7 @@
 
 use adrs_core::{ConfigSource, discover};
 use anyhow::{Context, Result};
+use clap::builder::styling::{AnsiColor, Styles};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use std::io;
@@ -12,10 +13,35 @@ mod commands;
 #[cfg(feature = "mcp")]
 mod mcp;
 
+const STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Green.on_default().bold())
+    .usage(AnsiColor::Green.on_default().bold())
+    .literal(AnsiColor::Cyan.on_default())
+    .placeholder(AnsiColor::BrightBlack.on_default());
+
 #[derive(Parser)]
 #[command(name = "adrs")]
 #[command(author, version)]
+#[command(styles = STYLES)]
 #[command(about = "Manage Architecture Decision Records")]
+#[command(after_help = "\
+Run `adrs <command> --help` for command details. See `adrs --help` for environment variables and configuration.")]
+#[command(after_long_help = "\
+ENVIRONMENT VARIABLES:
+  ADR_DIRECTORY    Override the ADR directory (e.g., ADR_DIRECTORY=docs/decisions adrs list)
+  ADRS_CONFIG      Explicit path to adrs.toml config file (e.g., ADRS_CONFIG=/path/to/adrs.toml adrs list)
+
+CONFIGURATION:
+  adrs.toml is discovered by walking up from the current directory. A global config is
+  also read from $XDG_CONFIG_HOME/adrs/adrs.toml (or ~/.config/adrs/adrs.toml on Linux/macOS,
+  %APPDATA%/adrs/adrs.toml on Windows), and from ~/.adrs.toml as a fallback.
+
+  Compatible mode (default): metadata stored in markdown body, compatible with adr-tools.
+  NextGen mode (--ng): YAML frontmatter with extended fields (tags, deciders, custom fields).
+
+  Template format and variant can be set in adrs.toml:
+    format = \"madr\"     # nygard (default) or madr
+    variant = \"full\"    # full (default), minimal, or bare")]
 #[command(long_about = "\
 A command-line tool for creating and managing Architecture Decision Records (ADRs).
 
