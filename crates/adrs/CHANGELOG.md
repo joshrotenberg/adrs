@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.6] - 2026-06-08
+
+### Features
+
+- Add styled help with ENVIRONMENT VARIABLES and CONFIGURATION sections (closes #290)
+
+### Polish
+
+- Align CLI help layout with jpx/roba + version footer + higher-contrast color
+
+
 ## [0.7.5] - 2026-06-08
 
 ### Features
