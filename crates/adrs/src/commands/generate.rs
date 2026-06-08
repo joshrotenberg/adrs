@@ -110,7 +110,7 @@ pub fn generate_book(
     let title = title.unwrap_or_else(|| "Architecture Decision Records".to_string());
     let description =
         description.unwrap_or_else(|| "Documentation of architectural decisions".to_string());
-    let author = whoami::username();
+    let author = whoami::username().unwrap_or_else(|_| "unknown".to_string());
 
     // Create output directories
     let src_dir = output.join("src");
