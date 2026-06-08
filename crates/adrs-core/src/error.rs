@@ -77,7 +77,7 @@ pub enum Error {
 
     /// YAML parsing error.
     #[error("YAML error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_yaml_neo::Error),
 
     /// TOML parsing error.
     #[error("TOML error: {0}")]
