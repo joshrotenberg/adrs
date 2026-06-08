@@ -281,7 +281,17 @@ jobs:
           # Write and read notes from a file to avoid quoting breaking things
           echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
 
-          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          TAG="${{ needs.plan.outputs.tag }}"
+          # Idempotent (#283): if the release already exists -- e.g.
+          # cleanup-on-failure drafted it, or this is a re-run -- upload the
+          # artifacts to it and un-draft, instead of failing with
+          # "a release with the same tag name already exists". Re-runs self-heal.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/* --clobber
+            gh release edit "$TAG" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" --draft=false
+          else
+            gh release create "$TAG" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          fi
 
   publish-homebrew-formula:
     needs:
@@ -360,15 +370,56 @@ jobs:
   # Currently there is no announcement target configured, so the job checks out
   # and exits successfully without doing anything else. Add real steps here when a
   # notification target is configured. See issue #244.
+  # Custom job (manual addition; ci is in dist allow-dirty): post-release
+  # verification (#285). Both #217 and #281 shipped incomplete releases that
+  # were only caught by hand. Confirm the release has its full artifact set and
+  # a valid checksum; fail loud and re-draft if not, so a broken release can't
+  # pass silently. `announce` depends on this -- we only announce verified releases.
+  verify-release:
+    needs:
+      - plan
+      - host
+    if: ${{ needs.host.result == 'success' && needs.plan.outputs.publishing == 'true' }}
+    runs-on: "ubuntu-22.04"
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Verify release is complete
+        run: |
+          TAG="${{ needs.plan.outputs.tag }}"
+          COUNT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')
+          echo "Release $TAG has $COUNT assets:"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort | sed 's/^/  /'
+          # Expect >= 14: 5 tarballs + 5 .sha256 + 2 installers + sha256.sum + dist-manifest.json
+          if [ "$COUNT" -lt 14 ]; then
+            echo "::error::Incomplete release: $COUNT assets (expected >= 14). Re-drafting so it is not public."
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft
+            exit 1
+          fi
+      - name: Spot-check a checksum
+        run: |
+          TAG="${{ needs.plan.outputs.tag }}"
+          DL="$(mktemp -d)"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "adrs-x86_64-unknown-linux-gnu.tar.xz*" --dir "$DL"
+          exp="$(awk '{print $1}' "$DL"/adrs-x86_64-unknown-linux-gnu.tar.xz.sha256)"
+          got="$(sha256sum "$DL"/adrs-x86_64-unknown-linux-gnu.tar.xz | awk '{print $1}')"
+          if [ "$exp" != "$got" ]; then
+            echo "::error::Checksum mismatch for the linux x86_64 tarball (expected $exp, got $got). Re-drafting."
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft
+            exit 1
+          fi
+          echo "Release $TAG verified: complete asset set + checksum OK."
+
   announce:
     needs:
       - plan
       - host
       - publish-homebrew-formula
+      - verify-release
     # use "always() && ..." to allow us to wait for all publish jobs while
     # still allowing individual publish jobs to skip themselves (for prereleases).
-    # "host" however must run to completion, no skipping allowed!
-    if: ${{ always() && needs.host.result == 'success' && (needs.publish-homebrew-formula.result == 'skipped' || needs.publish-homebrew-formula.result == 'success') }}
+    # "host" and "verify-release" however must succeed, no skipping allowed!
+    if: ${{ always() && needs.host.result == 'success' && needs.verify-release.result == 'success' && (needs.publish-homebrew-formula.result == 'skipped' || needs.publish-homebrew-formula.result == 'success') }}
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

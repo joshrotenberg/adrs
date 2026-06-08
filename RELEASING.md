@@ -28,14 +28,24 @@ maintainer merges the Release PR
   -> release.yml triggers on the tag
 
 release.yml jobs:
-  plan          -- runs `dist host --steps=create`, creates the draft GitHub Release
+  plan          -- runs `dist plan` (computes targets/manifest; does NOT create
+                   the release)
   build-local-artifacts  -- builds per-platform binaries (5 targets)
   build-global-artifacts -- builds installers (shell, powershell) and checksums
-  host          -- runs `dist host --steps=upload --steps=release`, uploads artifacts
+  host          -- uploads artifacts and creates the GitHub Release ONCE, with all
+                   artifacts attached. Sole release creator. Idempotent: a re-run
+                   uploads to the existing release instead of failing (#283).
+  verify-release -- confirms the published release has its full asset set + a valid
+                   checksum; re-drafts and fails if incomplete (#285)
   publish-homebrew-formula -- pushes the .rb formula to joshrotenberg/homebrew-brew
-  announce      -- no-op placeholder (no announcement target configured)
-  cleanup-on-failure -- converts the release to a draft if any build job fails
+  announce      -- no-op placeholder; runs only after verify-release succeeds
+  cleanup-on-failure -- drafts the release if any build OR host job fails (#242, #281)
 ```
+
+Note: a CI/workflow-only change merged to `main` does NOT trigger a release
+(release-plz only cuts a release for crate version bumps, #287). To validate a
+pipeline change end-to-end, bundle it with a crate change, or push the next
+version normally -- the fixed workflow runs on the next tag.
 
 ### Target platforms
 
@@ -88,20 +98,33 @@ Both secrets must be set at `https://github.com/joshrotenberg/adrs/settings/secr
 
 ## Recovery: incomplete release (missing artifacts)
 
-If the release workflow fails mid-run (e.g. a build job fails), the
-`cleanup-on-failure` job converts the GitHub Release to a draft so an
-incomplete release is never publicly visible. See issue #242.
+If the release workflow fails mid-run, the `cleanup-on-failure` job converts the
+GitHub Release to a draft so an incomplete release is never publicly visible (it
+fires on any build OR host failure). The `verify-release` job additionally
+re-drafts and fails if the published release is missing assets. See #242, #281, #285.
 
 To recover:
 
 1. Investigate the failed job in the Actions tab.
 2. Fix the root cause (e.g. a dependency issue, a flaky runner).
-3. Re-run the failed job from the Actions UI: go to the failed workflow run
-   and click "Re-run failed jobs."
-4. Once all jobs pass, verify the release artifacts (see above).
-5. If the release is still in draft state after a successful re-run, undraft it:
+3. Re-run the failed jobs from the Actions UI ("Re-run failed jobs"). The
+   "Create GitHub Release" step is idempotent (#283): a re-run uploads artifacts
+   to the existing/drafted release and un-drafts it, instead of failing with
+   "a release with the same tag name already exists".
+4. Once all jobs pass (including `verify-release`), confirm the release artifacts.
+
+If a re-run fails with `HTTP 403: Resource not accessible by integration`, the
+re-run got a restricted `GITHUB_TOKEN` (a known GitHub re-run quirk). Recover
+manually with your own `gh` auth instead: download the run's built artifacts and
+attach them to the release.
 
    ```bash
+   gh run download <run-id> -D /tmp/rel && cd /tmp/rel
+   gh release create v<VERSION> --repo joshrotenberg/adrs --verify-tag \
+     --title "adrs <VERSION>" --notes-file <notes> \
+     artifacts-build-local-*/adrs-* artifacts-build-global/adrs-installer.* \
+     artifacts-build-global/adrs.rb artifacts-build-global/sha256.sum
+   # or, if the (drafted) release already exists:
    gh release edit v<VERSION> --repo joshrotenberg/adrs --draft=false
    ```
 
