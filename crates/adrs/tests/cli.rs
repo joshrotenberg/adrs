@@ -24,6 +24,25 @@ fn test_help() {
 }
 
 #[test]
+fn test_long_help_contains_env_vars() {
+    adrs()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ENVIRONMENT VARIABLES"))
+        .stdout(predicate::str::contains("ADR_DIRECTORY"));
+}
+
+#[test]
+fn test_short_help_no_env_vars() {
+    adrs()
+        .arg("-h")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ENVIRONMENT VARIABLES").not());
+}
+
+#[test]
 fn test_version() {
     adrs()
         .arg("--version")
