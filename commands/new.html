@@ -195,6 +195,7 @@
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-f, --format &lt;FORMAT&gt;</code></td><td>Template format: <code>nygard</code> or <code>madr</code> (default: <code>nygard</code>)</td></tr>
 <tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: <code>full</code>, <code>minimal</code>, or <code>bare</code> (default: <code>full</code>)</td></tr>
+<tr><td><code>--template &lt;PATH&gt;</code></td><td>Path to a custom template file (overrides <code>--format</code>/<code>--variant</code> and config)</td></tr>
 <tr><td><code>--status &lt;STATUS&gt;</code></td><td>Initial status (default: <code>Proposed</code>)</td></tr>
 <tr><td><code>-s, --supersedes &lt;N&gt;</code></td><td>ADR number this supersedes</td></tr>
 <tr><td><code>-l, --link &lt;LINK&gt;</code></td><td>Link to another ADR</td></tr>
@@ -221,6 +222,13 @@
 <h3 id="with-initial-status"><a class="header" href="#with-initial-status">With Initial Status</a></h3>
 <pre><code class="language-sh">adrs new --status Accepted "Use PostgreSQL for persistence"
 </code></pre>
+<h3 id="custom-template-file"><a class="header" href="#custom-template-file">Custom Template File</a></h3>
+<p>Use a custom template file for this ADR:</p>
+<pre><code class="language-sh">adrs new --template ./templates/security-adr.md "Security Design Decision"
+</code></pre>
+<p>The <code>--template</code> flag takes precedence over <code>--format</code>/<code>--variant</code> and the
+<code>[templates] custom</code> setting in <code>adrs.toml</code>. See
+<a href="../templates.html">Templates</a> for the template variable reference.</p>
 <h3 id="superseding-an-adr"><a class="header" href="#superseding-an-adr">Superseding an ADR</a></h3>
 <pre><code class="language-sh">adrs new --supersedes 2 "Use MySQL instead of PostgreSQL"
 </code></pre>

@@ -731,6 +731,22 @@ Chosen option: "", because ...
 </code></pre>
 <h2 id="custom-templates"><a class="header" href="#custom-templates">Custom Templates</a></h2>
 <p>Create custom templates using <a href="https://jinja.palletsprojects.com/">Jinja2</a> syntax.</p>
+<h3 id="specifying-a-custom-template"><a class="header" href="#specifying-a-custom-template">Specifying a Custom Template</a></h3>
+<p>Custom templates can be set in two ways:</p>
+<ol>
+<li>
+<p><strong>Per-invocation via CLI flag</strong> -- highest precedence, overrides config and built-in formats:</p>
+<pre><code class="language-sh">adrs new --template ./templates/security-adr.md "My Decision"
+</code></pre>
+</li>
+<li>
+<p><strong>Project-wide via <code>adrs.toml</code></strong> -- applied when no CLI <code>--format</code>/<code>--variant</code>/<code>--template</code> is given:</p>
+<pre><code class="language-toml">[templates]
+custom = "templates/my-template.md"
+</code></pre>
+</li>
+</ol>
+<p>Precedence: <code>--template</code> CLI flag &gt; <code>[templates] custom</code> in config &gt; <code>--format</code>/<code>--variant</code>.</p>
 <h3 id="template-variables"><a class="header" href="#template-variables">Template Variables</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Description</th><th>Example</th></tr></thead><tbody>
 <tr><td><code>number</code></td><td>ADR number</td><td><code>1</code></td></tr>
@@ -973,6 +989,7 @@ ADRs yet, so re-initializing will not add a duplicate.</p>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-f, --format &lt;FORMAT&gt;</code></td><td>Template format: <code>nygard</code> or <code>madr</code> (default: <code>nygard</code>)</td></tr>
 <tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: <code>full</code>, <code>minimal</code>, or <code>bare</code> (default: <code>full</code>)</td></tr>
+<tr><td><code>--template &lt;PATH&gt;</code></td><td>Path to a custom template file (overrides <code>--format</code>/<code>--variant</code> and config)</td></tr>
 <tr><td><code>--status &lt;STATUS&gt;</code></td><td>Initial status (default: <code>Proposed</code>)</td></tr>
 <tr><td><code>-s, --supersedes &lt;N&gt;</code></td><td>ADR number this supersedes</td></tr>
 <tr><td><code>-l, --link &lt;LINK&gt;</code></td><td>Link to another ADR</td></tr>
@@ -999,6 +1016,13 @@ ADRs yet, so re-initializing will not add a duplicate.</p>
 <h3 id="with-initial-status"><a class="header" href="#with-initial-status">With Initial Status</a></h3>
 <pre><code class="language-sh">adrs new --status Accepted "Use PostgreSQL for persistence"
 </code></pre>
+<h3 id="custom-template-file"><a class="header" href="#custom-template-file">Custom Template File</a></h3>
+<p>Use a custom template file for this ADR:</p>
+<pre><code class="language-sh">adrs new --template ./templates/security-adr.md "Security Design Decision"
+</code></pre>
+<p>The <code>--template</code> flag takes precedence over <code>--format</code>/<code>--variant</code> and the
+<code>[templates] custom</code> setting in <code>adrs.toml</code>. See
+<a href="commands/../templates.html">Templates</a> for the template variable reference.</p>
 <h3 id="superseding-an-adr"><a class="header" href="#superseding-an-adr">Superseding an ADR</a></h3>
 <pre><code class="language-sh">adrs new --supersedes 2 "Use MySQL instead of PostgreSQL"
 </code></pre>

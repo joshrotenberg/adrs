@@ -265,6 +265,22 @@ Chosen option: "", because ...
 </code></pre>
 <h2 id="custom-templates"><a class="header" href="#custom-templates">Custom Templates</a></h2>
 <p>Create custom templates using <a href="https://jinja.palletsprojects.com/">Jinja2</a> syntax.</p>
+<h3 id="specifying-a-custom-template"><a class="header" href="#specifying-a-custom-template">Specifying a Custom Template</a></h3>
+<p>Custom templates can be set in two ways:</p>
+<ol>
+<li>
+<p><strong>Per-invocation via CLI flag</strong> -- highest precedence, overrides config and built-in formats:</p>
+<pre><code class="language-sh">adrs new --template ./templates/security-adr.md "My Decision"
+</code></pre>
+</li>
+<li>
+<p><strong>Project-wide via <code>adrs.toml</code></strong> -- applied when no CLI <code>--format</code>/<code>--variant</code>/<code>--template</code> is given:</p>
+<pre><code class="language-toml">[templates]
+custom = "templates/my-template.md"
+</code></pre>
+</li>
+</ol>
+<p>Precedence: <code>--template</code> CLI flag &gt; <code>[templates] custom</code> in config &gt; <code>--format</code>/<code>--variant</code>.</p>
 <h3 id="template-variables"><a class="header" href="#template-variables">Template Variables</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Description</th><th>Example</th></tr></thead><tbody>
 <tr><td><code>number</code></td><td>ADR number</td><td><code>1</code></td></tr>
