@@ -16,37 +16,21 @@ mod mcp;
 const STYLES: Styles = Styles::styled()
     .header(AnsiColor::Green.on_default().bold())
     .usage(AnsiColor::Green.on_default().bold())
-    .literal(AnsiColor::Cyan.on_default())
-    .placeholder(AnsiColor::BrightBlack.on_default());
+    .literal(AnsiColor::Cyan.on_default().bold())
+    .placeholder(AnsiColor::Cyan.on_default());
 
 #[derive(Parser)]
 #[command(name = "adrs")]
 #[command(author, version)]
 #[command(styles = STYLES)]
 #[command(about = "Manage Architecture Decision Records")]
-#[command(after_help = "\
-Run `adrs <command> --help` for command details. See `adrs --help` for environment variables and configuration.")]
-#[command(after_long_help = "\
-ENVIRONMENT VARIABLES:
-  ADR_DIRECTORY    Override the ADR directory (e.g., ADR_DIRECTORY=docs/decisions adrs list)
-  ADRS_CONFIG      Explicit path to adrs.toml config file (e.g., ADRS_CONFIG=/path/to/adrs.toml adrs list)
-
-CONFIGURATION:
-  adrs.toml is discovered by walking up from the current directory. A global config is
-  also read from $XDG_CONFIG_HOME/adrs/adrs.toml (or ~/.config/adrs/adrs.toml on Linux/macOS,
-  %APPDATA%/adrs/adrs.toml on Windows), and from ~/.adrs.toml as a fallback.
-
-  Compatible mode (default): metadata stored in markdown body, compatible with adr-tools.
-  NextGen mode (--ng): YAML frontmatter with extended fields (tags, deciders, custom fields).
-
-  Template format and variant can be set in adrs.toml:
-    format = \"madr\"     # nygard (default) or madr
-    variant = \"full\"    # full (default), minimal, or bare")]
 #[command(long_about = "\
 A command-line tool for creating and managing Architecture Decision Records (ADRs).
 
-Compatible with adr-tools repositories. Supports both Nygard and MADR 4.0.0 formats.
-
+Compatible with adr-tools repositories. Supports both Nygard and MADR 4.0.0 formats.")]
+#[command(after_help = "\
+Run `adrs <command> --help` for command details, or `adrs --help` for getting started, examples, environment variables, and configuration.")]
+#[command(after_long_help = concat!("\
 GETTING STARTED:
   adrs init                    Create a new ADR repository
   adrs new \"My Decision\"       Create your first ADR
@@ -68,7 +52,24 @@ EXAMPLES:
   adrs link 3 Amends 1                          Link two ADRs (auto-derives reverse)
   adrs generate toc > doc/adr/README.md         Generate table of contents
 
-DOCUMENTATION: https://joshrotenberg.com/adrs/")]
+ENVIRONMENT VARIABLES:
+  ADR_DIRECTORY    Override the ADR directory (default: doc/adr)
+  ADRS_CONFIG      Explicit path to the adrs.toml config file
+
+CONFIGURATION:
+  adrs.toml is discovered by walking up from the current directory. A global config
+  is also read from $XDG_CONFIG_HOME/adrs/adrs.toml (~/.config/adrs/adrs.toml on
+  Linux/macOS, %APPDATA%/adrs/adrs.toml on Windows), and ~/.adrs.toml as a fallback.
+
+  Compatible mode (default): metadata stored in the markdown body (adr-tools compatible).
+  NextGen mode (--ng):       YAML frontmatter with extended fields (tags, deciders).
+
+  Template format and variant can be set in adrs.toml:
+    format = \"madr\"     # nygard (default) or madr
+    variant = \"full\"    # full (default), minimal, or bare
+
+Version:       ", env!("CARGO_PKG_VERSION"), "
+Documentation: https://joshrotenberg.com/adrs/"))]
 struct Cli {
     /// Enable NextGen mode with YAML frontmatter for richer metadata
     #[arg(
