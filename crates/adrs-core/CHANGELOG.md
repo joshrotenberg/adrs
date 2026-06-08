@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.5] - 2026-06-08
+
+### Bug Fixes
+
+- MADR bare template no longer emits unparseable null YAML
+
+### Documentation
+
+- Expand adrs-core crate-level documentation
+
+### Features
+
+- Polish adrs-core for external library use
+
+### Miscellaneous
+
+- Complete crate metadata (docs, homepage, keywords, categories)
+- Declare per-crate MSRV with a CI guard
+
+
 ## [0.7.4] - 2026-06-06
 
 ### Bug Fixes
