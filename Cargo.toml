@@ -38,7 +38,7 @@ anyhow = "1"
 clap = { version = "4", features = ["derive", "env", "string"] }
 clap_complete = "4"
 edit = "0.1"
-whoami = "1"
+whoami = "2"
 
 # MCP server (optional feature)
 tower-mcp = { version = "0.9", features = ["http"] }
