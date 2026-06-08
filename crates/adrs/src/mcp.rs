@@ -1852,7 +1852,7 @@ mod tests {
     #[tokio::test]
     async fn test_initialize_returns_server_info() {
         let (client, _tmp) = setup_client(false).await;
-        let info = client.server_info().unwrap();
+        let info = client.server_info().await.unwrap();
         assert_eq!(info.server_info.name, "adrs");
         assert!(info.capabilities.tools.is_some());
     }
