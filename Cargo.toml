@@ -14,7 +14,7 @@ homepage = "https://joshrotenberg.com/adrs/"
 # Core
 thiserror = "2"
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
+serde_yaml_neo = "0.11"
 toml = "0.8"
 
 # Markdown

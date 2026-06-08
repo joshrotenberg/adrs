@@ -65,7 +65,7 @@ impl Parser {
         let body = parts[2];
 
         // Parse frontmatter
-        let mut adr: Adr = serde_yaml::from_str(yaml)?;
+        let mut adr: Adr = serde_yaml_neo::from_str(yaml)?;
 
         // If title is missing from frontmatter, try to extract from body H1
         if adr.title.is_empty()
