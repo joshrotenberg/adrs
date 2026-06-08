@@ -42,7 +42,12 @@ on:
   pull_request:
   push:
     tags:
-      - '**[0-9]+.[0-9]+.[0-9]+*'
+      # Only the adrs CLI's `v*` tags trigger the binary release. The library
+      # tag `adrs-core-v*` (git_release_enable = false) must NOT run cargo-dist:
+      # it has no binaries, and doing so created a junk GH release that races
+      # release-plz and trips the verify-release check. See #286.
+      # (Manual edit; ci is in dist allow-dirty, so dist generate won't revert it.)
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
   # Run 'dist plan' (or host) to determine what tasks we need to do
