@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.5] - 2026-06-08
+
+### Features
+
+- Add --template flag to adrs new for custom template files (closes #122)
+
+### Miscellaneous
+
+- Complete crate metadata (docs, homepage, keywords, categories)
+- Declare per-crate MSRV with a CI guard
+
+
 ## [0.7.4] - 2026-06-06
 
 ### Bug Fixes
