@@ -36,6 +36,7 @@ Config source: adrs.toml
 ADR directory: doc/adr
 Full path: /home/user/myproject/doc/adr
 Mode: Compatible
+Default ADR status: accepted
 ```
 
 ### Without Initialization

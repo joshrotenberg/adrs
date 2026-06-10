@@ -33,6 +33,10 @@ adr_dir = "doc/adr"
 # - nextgen: YAML frontmatter with enhanced features
 mode = "compatible"
 
+# Default status for newly created ADRs
+# If omitted, defaults to "proposed"
+default_status = "proposed"
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"
@@ -52,6 +56,7 @@ Create `~/.config/adrs/config.toml` for user-wide defaults:
 ```toml
 # Default mode for new repositories
 mode = "nextgen"
+default_status = "accepted"
 
 [templates]
 format = "madr"

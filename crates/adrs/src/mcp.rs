@@ -626,7 +626,7 @@ fn build_router(root: PathBuf) -> McpRouter {
         rw,
         state,
         "create_adr",
-        "Create a new Architecture Decision Record. The ADR will be created with 'proposed' status and requires human review before acceptance. Returns the created ADR details including its number and file path.",
+        "Create a new Architecture Decision Record. The ADR will use the repository's configured default status (proposed if not configured) and requires human review before acceptance. Returns the created ADR details including its number and file path.",
         CreateAdrParams,
         create_adr_impl
     );
