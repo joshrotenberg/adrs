@@ -67,6 +67,7 @@ CONFIGURATION:
   Template format and variant can be set in adrs.toml:
     format = \"madr\"     # nygard (default) or madr
     variant = \"full\"    # full (default), minimal, or bare
+    default_status = \"accepted\" # proposed (default), accepted, deprecated, superseded, or custom
 
 Version:       ", env!("CARGO_PKG_VERSION"), "
 Documentation: https://joshrotenberg.com/adrs/"))]
@@ -145,7 +146,7 @@ LINK FORMAT:
         #[arg(long, value_name = "PATH")]
         template: Option<PathBuf>,
 
-        /// Initial status [default: Proposed]
+        /// Initial status [default: config default_status or Proposed]
         #[arg(long, value_name = "STATUS")]
         status: Option<String>,
 

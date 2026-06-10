@@ -32,6 +32,9 @@ pub struct Config {
     /// The mode of operation.
     pub mode: ConfigMode,
 
+    /// Default status for newly created ADRs.
+    pub default_status: Option<String>,
+
     /// Template configuration.
     #[serde(default)]
     pub templates: TemplateConfig,
@@ -42,6 +45,7 @@ impl Default for Config {
         Self {
             adr_dir: PathBuf::from(DEFAULT_ADR_DIR),
             mode: ConfigMode::Compatible,
+            default_status: None,
             templates: TemplateConfig::default(),
         }
     }
@@ -80,6 +84,7 @@ impl Config {
             return Ok(Self {
                 adr_dir: PathBuf::from(adr_dir),
                 mode: ConfigMode::Compatible,
+                default_status: None,
                 templates: TemplateConfig::default(),
             });
         }
@@ -144,6 +149,9 @@ impl Config {
         }
         if other.templates.custom.is_some() {
             self.templates.custom = other.templates.custom.clone();
+        }
+        if other.default_status.is_some() {
+            self.default_status = other.default_status.clone();
         }
     }
 }
@@ -252,6 +260,7 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
             let config = Config {
                 adr_dir: PathBuf::from(adr_dir),
                 mode: ConfigMode::Compatible,
+                default_status: None,
                 templates: TemplateConfig::default(),
             };
             return Ok(Some((current, config, ConfigSource::Project(legacy_path))));
@@ -360,6 +369,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.adr_dir, PathBuf::from("doc/adr"));
         assert_eq!(config.mode, ConfigMode::Compatible);
+        assert!(config.default_status.is_none());
         assert!(config.templates.format.is_none());
         assert!(config.templates.custom.is_none());
     }
@@ -437,6 +447,22 @@ mode = "compatible"
 
         let config = Config::load(temp.path()).unwrap();
         assert_eq!(config.mode, ConfigMode::Compatible);
+    }
+
+    #[test]
+    fn test_load_new_config_with_default_status() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+default_status = "accepted"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(config.default_status, Some("accepted".to_string()));
     }
 
     #[test]
@@ -569,6 +595,7 @@ mode = "nextgen"
         let config = Config {
             adr_dir: PathBuf::from("my/adrs"),
             mode: ConfigMode::Compatible,
+            default_status: None,
             templates: TemplateConfig::default(),
         };
 
@@ -586,6 +613,7 @@ mode = "nextgen"
         let config = Config {
             adr_dir: PathBuf::from("docs/decisions"),
             mode: ConfigMode::NextGen,
+            default_status: None,
             templates: TemplateConfig::default(),
         };
 
@@ -604,6 +632,7 @@ mode = "nextgen"
         let config = Config {
             adr_dir: PathBuf::from("decisions"),
             mode: ConfigMode::NextGen,
+            default_status: None,
             templates: TemplateConfig {
                 format: Some("custom".to_string()),
                 variant: None,
@@ -624,6 +653,7 @@ mode = "nextgen"
         let original = Config {
             adr_dir: PathBuf::from("architecture/decisions"),
             mode: ConfigMode::Compatible,
+            default_status: None,
             templates: TemplateConfig::default(),
         };
 
@@ -640,6 +670,7 @@ mode = "nextgen"
         let original = Config {
             adr_dir: PathBuf::from("docs/adr"),
             mode: ConfigMode::NextGen,
+            default_status: None,
             templates: TemplateConfig {
                 format: Some("markdown".to_string()),
                 variant: None,
@@ -976,6 +1007,7 @@ mode = "nextgen"
         let other = Config {
             adr_dir: PathBuf::from("custom"),
             mode: ConfigMode::NextGen,
+            default_status: None,
             templates: TemplateConfig {
                 format: Some("madr".to_string()),
                 variant: None,
@@ -1000,6 +1032,18 @@ mode = "nextgen"
         base.merge(&other);
         // Should keep original since other has default
         assert_eq!(base.adr_dir, PathBuf::from("original"));
+    }
+
+    #[test]
+    fn test_config_merge_default_status() {
+        let mut base = Config::default();
+        let other = Config {
+            default_status: Some("accepted".to_string()),
+            ..Default::default()
+        };
+
+        base.merge(&other);
+        assert_eq!(base.default_status, Some("accepted".to_string()));
     }
 
     // ========== Config Validation Tests ==========
@@ -1129,6 +1173,7 @@ custom = "templates/my-adr.md"
         let original = Config {
             adr_dir: PathBuf::from("docs/decisions"),
             mode: ConfigMode::NextGen,
+            default_status: None,
             templates: TemplateConfig {
                 format: Some("madr".to_string()),
                 variant: Some("minimal".to_string()),

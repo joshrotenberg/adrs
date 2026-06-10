@@ -620,6 +620,74 @@ variant = "minimal"
 }
 
 // ============================================================================
+// Scenario: Custom default_status from Config
+// ============================================================================
+
+/// User configures default_status in adrs.toml and expects `adrs new`
+/// to use it when --status is not provided.
+#[test]
+fn scenario_config_driven_default_status() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Step 1: Initialize repository
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Step 2: Configure default_status in adrs.toml
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "compatible"
+default_status = "accepted"
+"#,
+    )
+    .unwrap();
+
+    // Step 3: Create ADR without --status
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Config default status test"])
+        .assert()
+        .success();
+
+    // Step 4: Verify status came from config
+    let adr = temp.child("doc/adr/0002-config-default-status-test.md");
+    adr.assert(predicate::path::exists());
+    let content = fs::read_to_string(adr.path()).unwrap();
+
+    assert!(
+        content.contains("## Status\n\nAccepted"),
+        "ADR should use configured default status. Got:\n{content}"
+    );
+
+    // Step 5: CLI --status still overrides config
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "new",
+            "--no-edit",
+            "--status",
+            "deprecated",
+            "CLI status override test",
+        ])
+        .assert()
+        .success();
+
+    let override_adr = temp.child("doc/adr/0003-cli-status-override-test.md");
+    let override_content = fs::read_to_string(override_adr.path()).unwrap();
+    assert!(
+        override_content.contains("## Status\n\nDeprecated"),
+        "CLI --status should override config default_status"
+    );
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // Scenario: Custom Template from Config
 // ============================================================================
 

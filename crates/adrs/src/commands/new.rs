@@ -43,12 +43,10 @@ pub fn new(
         TemplateVariant::default()
     };
 
-    // Parse status if specified
-    let initial_status = if let Some(ref s) = status {
-        s.parse::<AdrStatus>().unwrap_or(AdrStatus::Proposed)
-    } else {
-        AdrStatus::Proposed
-    };
+    // Parse CLI status override if specified.
+    let cli_status = status
+        .as_deref()
+        .map(|s| s.parse::<AdrStatus>().unwrap_or(AdrStatus::Proposed));
 
     let mut repo = Repository::open(root)
         .context("ADR repository not found. Run 'adrs init' first.")?
@@ -88,9 +86,9 @@ pub fn new(
         repo.new_adr(&title).context("Failed to create new ADR")?
     };
 
-    // Set custom status if specified (and not superseding, which sets its own status)
-    if supersedes.is_none() && status.is_some() {
-        adr.status = initial_status;
+    // Apply explicit CLI status if specified (superseding sets its own status).
+    if supersedes.is_none() && let Some(status) = cli_status {
+        adr.status = status;
         repo.update_metadata(&adr)
             .context("Failed to update ADR status")?;
     }

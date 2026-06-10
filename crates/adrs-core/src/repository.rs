@@ -322,7 +322,10 @@ impl Repository {
     /// Create a new ADR with the given title.
     pub fn new_adr(&self, title: impl Into<String>) -> Result<(Adr, PathBuf)> {
         let number = self.next_number()?;
-        let adr = Adr::new(number, title);
+        let mut adr = Adr::new(number, title);
+        if let Some(default_status) = self.config.default_status.as_deref() {
+            adr.status = default_status.parse::<AdrStatus>().unwrap();
+        }
         let path = self.create(&adr)?;
         Ok((adr, path))
     }
@@ -856,6 +859,27 @@ mod tests {
         let (_, path) = repo.new_adr("Test ADR").unwrap();
         assert!(path.exists());
         assert!(path.to_string_lossy().contains("0002-test-adr.md"));
+    }
+
+    #[test]
+    fn test_new_adr_uses_custom_default_status_from_config() {
+        let temp = TempDir::new().unwrap();
+        Repository::init(temp.path(), None, false).unwrap();
+
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+mode = "compatible"
+default_status = "draft"
+"#,
+        )
+        .unwrap();
+
+        let repo = Repository::open(temp.path()).unwrap();
+        let (adr, _) = repo.new_adr("Custom status ADR").unwrap();
+
+        assert_eq!(adr.status, AdrStatus::Custom("draft".into()));
     }
 
     // ========== Get and Find Tests ==========
