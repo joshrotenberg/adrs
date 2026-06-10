@@ -24,6 +24,9 @@ pub fn config_with_discovery(start_dir: &Path, discovered: Option<DiscoveredConf
                 disc.root.join(&disc.config.adr_dir).display()
             );
             println!("Mode: {:?}", disc.config.mode);
+            if let Some(ref default_status) = disc.config.default_status {
+                println!("Default ADR status: {}", default_status);
+            }
             if let Some(ref format) = disc.config.templates.format {
                 println!("Template format: {}", format);
             }
