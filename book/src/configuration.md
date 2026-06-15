@@ -37,6 +37,10 @@ mode = "compatible"
 # If omitted, defaults to "proposed"
 default_status = "proposed"
 
+# Skip opening the editor when creating a new ADR (for CI/scripting)
+# If omitted, defaults to false
+no_edit = false
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"

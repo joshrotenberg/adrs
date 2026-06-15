@@ -35,6 +35,9 @@ pub struct Config {
     /// Default status for newly created ADRs.
     pub default_status: Option<String>,
 
+    /// Skip opening the editor when creating a new ADR.
+    pub no_edit: bool,
+
     /// Template configuration.
     #[serde(default)]
     pub templates: TemplateConfig,
@@ -46,6 +49,7 @@ impl Default for Config {
             adr_dir: PathBuf::from(DEFAULT_ADR_DIR),
             mode: ConfigMode::Compatible,
             default_status: None,
+            no_edit: false,
             templates: TemplateConfig::default(),
         }
     }
@@ -85,6 +89,7 @@ impl Config {
                 adr_dir: PathBuf::from(adr_dir),
                 mode: ConfigMode::Compatible,
                 default_status: None,
+                no_edit: false,
                 templates: TemplateConfig::default(),
             });
         }
@@ -152,6 +157,9 @@ impl Config {
         }
         if other.default_status.is_some() {
             self.default_status = other.default_status.clone();
+        }
+        if other.no_edit {
+            self.no_edit = other.no_edit;
         }
     }
 }
@@ -261,6 +269,7 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
                 adr_dir: PathBuf::from(adr_dir),
                 mode: ConfigMode::Compatible,
                 default_status: None,
+                no_edit: false,
                 templates: TemplateConfig::default(),
             };
             return Ok(Some((current, config, ConfigSource::Project(legacy_path))));
@@ -596,6 +605,7 @@ mode = "nextgen"
             adr_dir: PathBuf::from("my/adrs"),
             mode: ConfigMode::Compatible,
             default_status: None,
+            no_edit: false,
             templates: TemplateConfig::default(),
         };
 
@@ -614,6 +624,7 @@ mode = "nextgen"
             adr_dir: PathBuf::from("docs/decisions"),
             mode: ConfigMode::NextGen,
             default_status: None,
+            no_edit: false,
             templates: TemplateConfig::default(),
         };
 
@@ -633,6 +644,7 @@ mode = "nextgen"
             adr_dir: PathBuf::from("decisions"),
             mode: ConfigMode::NextGen,
             default_status: None,
+            no_edit: false,
             templates: TemplateConfig {
                 format: Some("custom".to_string()),
                 variant: None,
@@ -654,6 +666,7 @@ mode = "nextgen"
             adr_dir: PathBuf::from("architecture/decisions"),
             mode: ConfigMode::Compatible,
             default_status: None,
+            no_edit: false,
             templates: TemplateConfig::default(),
         };
 
@@ -671,6 +684,7 @@ mode = "nextgen"
             adr_dir: PathBuf::from("docs/adr"),
             mode: ConfigMode::NextGen,
             default_status: None,
+            no_edit: false,
             templates: TemplateConfig {
                 format: Some("markdown".to_string()),
                 variant: None,
@@ -1008,6 +1022,7 @@ mode = "nextgen"
             adr_dir: PathBuf::from("custom"),
             mode: ConfigMode::NextGen,
             default_status: None,
+            no_edit: false,
             templates: TemplateConfig {
                 format: Some("madr".to_string()),
                 variant: None,
@@ -1044,6 +1059,86 @@ mode = "nextgen"
 
         base.merge(&other);
         assert_eq!(base.default_status, Some("accepted".to_string()));
+    }
+
+    // ========== no_edit Tests ==========
+
+    #[test]
+    fn test_no_edit_defaults_to_false() {
+        let config = Config::default();
+        assert!(!config.no_edit);
+    }
+
+    #[test]
+    fn test_no_edit_true_from_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\nno_edit = true\n",
+        )
+        .unwrap();
+        let config = Config::load(temp.path()).unwrap();
+        assert!(config.no_edit);
+    }
+
+    #[test]
+    fn test_no_edit_false_from_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\nno_edit = false\n",
+        )
+        .unwrap();
+        let config = Config::load(temp.path()).unwrap();
+        assert!(!config.no_edit);
+    }
+
+    #[test]
+    fn test_no_edit_absent_from_toml_defaults_false() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+        let config = Config::load(temp.path()).unwrap();
+        assert!(!config.no_edit);
+    }
+
+    #[test]
+    fn test_config_merge_no_edit() {
+        let mut base = Config::default();
+        let other = Config {
+            no_edit: true,
+            ..Default::default()
+        };
+        base.merge(&other);
+        assert!(base.no_edit);
+    }
+
+    #[test]
+    fn test_config_merge_no_edit_false_does_not_overwrite_true() {
+        // merge: other.no_edit=false should NOT overwrite base.no_edit=true
+        let mut base = Config {
+            no_edit: true,
+            ..Default::default()
+        };
+        let other = Config::default(); // no_edit = false
+        base.merge(&other);
+        assert!(
+            base.no_edit,
+            "merge with no_edit=false should not overwrite true"
+        );
+    }
+
+    #[test]
+    fn test_no_edit_save_load_roundtrip() {
+        let temp = TempDir::new().unwrap();
+        let original = Config {
+            adr_dir: PathBuf::from("doc/adr"),
+            mode: ConfigMode::NextGen,
+            no_edit: true,
+            ..Default::default()
+        };
+        original.save(temp.path()).unwrap();
+        let loaded = Config::load(temp.path()).unwrap();
+        assert!(loaded.no_edit);
     }
 
     // ========== Config Validation Tests ==========
@@ -1174,6 +1269,7 @@ custom = "templates/my-adr.md"
             adr_dir: PathBuf::from("docs/decisions"),
             mode: ConfigMode::NextGen,
             default_status: None,
+            no_edit: false,
             templates: TemplateConfig {
                 format: Some("madr".to_string()),
                 variant: Some("minimal".to_string()),
