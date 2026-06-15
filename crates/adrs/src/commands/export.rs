@@ -12,7 +12,10 @@ use std::path::Path;
 /// Options:
 /// - `metadata_only`: If true, excludes content fields (context, decision, consequences)
 ///   and sets source_uri based on base_url.
-/// - `base_url`: Base URL for constructing source_uri values.
+/// - `base_url`: Base URL for constructing source_uri values (CLI flag).
+/// - `config_base_url`: Base URL from `export.base_url` in adrs.toml (config).
+///
+/// Precedence: `--base-url` CLI flag > `export.base_url` config > built-in default (None).
 pub fn export_json(
     root: &Path,
     adr_number: Option<u32>,
@@ -20,7 +23,11 @@ pub fn export_json(
     pretty: bool,
     metadata_only: bool,
     base_url: Option<String>,
+    config_base_url: Option<String>,
 ) -> Result<()> {
+    // Precedence: --base-url CLI flag > export.base_url config > built-in default (None)
+    let base_url = base_url.or(config_base_url);
+
     let json = if let Some(dir_path) = dir {
         // Export from arbitrary directory (no repo required)
         if adr_number.is_some() {

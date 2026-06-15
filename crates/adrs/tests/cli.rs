@@ -890,6 +890,116 @@ fn test_export_json_after_init() {
     temp.close().unwrap();
 }
 
+// Tests for export.base_url config support (#300)
+
+#[test]
+fn test_export_json_config_base_url_no_flag() {
+    // When export.base_url is set in adrs.toml, adrs export json (no --base-url)
+    // should include source_uri fields.
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Write adrs.toml with [export] base_url
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\n\n[export]\nbase_url = \"https://example.com/adr\"\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["export", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("source_uri"))
+        .stdout(predicate::str::contains("https://example.com/adr"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_export_json_flag_overrides_config_base_url() {
+    // --base-url CLI flag takes precedence over export.base_url in config.
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\n\n[export]\nbase_url = \"https://config.example.com/adr\"\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "export",
+            "json",
+            "--base-url",
+            "https://flag.example.com/adr",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("https://flag.example.com/adr"))
+        .stdout(predicate::str::is_match("source_uri").unwrap());
+
+    // The config URL should NOT appear
+    let output = adrs()
+        .current_dir(temp.path())
+        .args([
+            "export",
+            "json",
+            "--base-url",
+            "https://flag.example.com/adr",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let output_str = String::from_utf8(output).unwrap();
+    assert!(
+        !output_str.contains("https://config.example.com/adr"),
+        "config base_url should not appear when --base-url flag is set"
+    );
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_export_json_no_base_url_no_source_uri() {
+    // When neither --base-url nor export.base_url in config is set,
+    // export output should not contain source_uri fields.
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Write adrs.toml WITHOUT [export] section
+    fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["export", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("source_uri").not());
+
+    temp.close().unwrap();
+}
+
 // ============================================================================
 // Import Command
 // ============================================================================

@@ -48,6 +48,13 @@ no_edit = false
 # If omitted, defaults to empty string (bare filename links)
 # toc_prefix = "./"
 
+# Export command configuration
+[export]
+# Default base URL for source_uri fields in JSON export
+# (used by 'adrs export json' if --base-url is not given)
+# If omitted, defaults to none (no source_uri fields)
+# base_url = "https://github.com/org/repo/blob/main/doc/adr"
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"

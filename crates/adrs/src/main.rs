@@ -71,6 +71,8 @@ CONFIGURATION:
     no_edit = true              # skip editor for new ADRs (default: false)
     [generate]
     toc_prefix = \"./\"          # default prefix for 'generate toc' links (default: empty)
+    [export]
+    base_url = \"https://github.com/org/repo/blob/main/doc/adr\"  # default base URL for 'export json' (default: none)
 
 Version:       ", env!("CARGO_PKG_VERSION"), "
 Documentation: https://joshrotenberg.com/adrs/"))]
@@ -725,7 +727,7 @@ fn main() -> Result<()> {
                 base_url,
             } => {
                 if let Some(ref dir_path) = dir {
-                    // Export from arbitrary directory - no repo needed
+                    // Export from arbitrary directory - no repo needed, no config available
                     commands::export_json(
                         &start_dir,
                         adr,
@@ -733,6 +735,7 @@ fn main() -> Result<()> {
                         pretty,
                         metadata_only,
                         base_url,
+                        None,
                     )
                 } else {
                     // Export from repository
@@ -744,6 +747,7 @@ fn main() -> Result<()> {
                         pretty,
                         metadata_only,
                         base_url,
+                        discovered.config.export.base_url,
                     )
                 }
             }

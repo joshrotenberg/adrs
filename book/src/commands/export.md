@@ -20,7 +20,7 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
 | `--pretty`, `-p` | Pretty-print the JSON output |
 | `--dir`, `-d` | Export from a directory without requiring an initialized repository |
 | `--metadata-only` | Export metadata without content fields (context, decision, consequences) |
-| `--base-url <URL>` | Set base URL for `source_uri` field (for federation) |
+| `--base-url <URL>` | Set base URL for `source_uri` field (for federation); can also be set in `adrs.toml` |
 
 ### Output Format
 
@@ -61,6 +61,17 @@ adrs export json --metadata-only --base-url "https://github.com/org/repo/blob/ma
 ```
 
 This produces lightweight exports that reference the source files:
+
+#### Configuring base_url in adrs.toml
+
+Since a repo's source URL rarely changes, you can set it once in `adrs.toml` so you do not need to pass `--base-url` on every invocation:
+
+```toml
+[export]
+base_url = "https://github.com/org/repo/blob/main/doc/adr"
+```
+
+With this config, `adrs export json` will include `source_uri` fields automatically. The `--base-url` CLI flag always takes precedence over the config value.
 
 ```json
 {
