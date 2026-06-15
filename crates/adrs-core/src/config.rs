@@ -45,6 +45,10 @@ pub struct Config {
     /// Generate command configuration.
     #[serde(default)]
     pub generate: GenerateConfig,
+
+    /// Export command configuration.
+    #[serde(default)]
+    pub export: ExportConfig,
 }
 
 impl Default for Config {
@@ -56,6 +60,7 @@ impl Default for Config {
             no_edit: false,
             templates: TemplateConfig::default(),
             generate: GenerateConfig::default(),
+            export: ExportConfig::default(),
         }
     }
 }
@@ -97,6 +102,7 @@ impl Config {
                 no_edit: false,
                 templates: TemplateConfig::default(),
                 generate: GenerateConfig::default(),
+                export: ExportConfig::default(),
             });
         }
 
@@ -169,6 +175,9 @@ impl Config {
         }
         if other.generate.toc_prefix.is_some() {
             self.generate.toc_prefix = other.generate.toc_prefix.clone();
+        }
+        if other.export.base_url.is_some() {
+            self.export.base_url = other.export.base_url.clone();
         }
     }
 }
@@ -281,6 +290,7 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
                 no_edit: false,
                 templates: TemplateConfig::default(),
                 generate: GenerateConfig::default(),
+                export: ExportConfig::default(),
             };
             return Ok(Some((current, config, ConfigSource::Project(legacy_path))));
         }
@@ -381,6 +391,14 @@ pub struct TemplateConfig {
 pub struct GenerateConfig {
     /// Default prefix for TOC links (used by `adrs generate toc` if `--prefix` is not given).
     pub toc_prefix: Option<String>,
+}
+
+/// Export command configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExportConfig {
+    /// Default base URL for source_uri in JSON export (used by `adrs export json` if `--base-url` is not given).
+    pub base_url: Option<String>,
 }
 
 #[cfg(test)]
@@ -626,6 +644,7 @@ mode = "nextgen"
             no_edit: false,
             templates: TemplateConfig::default(),
             generate: GenerateConfig::default(),
+            export: ExportConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -646,6 +665,7 @@ mode = "nextgen"
             no_edit: false,
             templates: TemplateConfig::default(),
             generate: GenerateConfig::default(),
+            export: ExportConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -671,6 +691,7 @@ mode = "nextgen"
                 custom: Some(PathBuf::from("my-template.md")),
             },
             generate: GenerateConfig::default(),
+            export: ExportConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -690,6 +711,7 @@ mode = "nextgen"
             no_edit: false,
             templates: TemplateConfig::default(),
             generate: GenerateConfig::default(),
+            export: ExportConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -713,6 +735,7 @@ mode = "nextgen"
                 custom: None,
             },
             generate: GenerateConfig::default(),
+            export: ExportConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -1052,6 +1075,7 @@ mode = "nextgen"
                 custom: None,
             },
             generate: GenerateConfig::default(),
+            export: ExportConfig::default(),
         };
 
         base.merge(&other);
@@ -1300,6 +1324,7 @@ custom = "templates/my-adr.md"
                 custom: Some(PathBuf::from("templates/custom.md")),
             },
             generate: GenerateConfig::default(),
+            export: ExportConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -1474,6 +1499,100 @@ toc_prefix = "./"
             loaded.generate.toc_prefix,
             Some("wiki/adr/".to_string()),
             "toc_prefix should survive a save/load round-trip"
+        );
+    }
+
+    // ========== ExportConfig / base_url Tests ==========
+
+    #[test]
+    fn test_export_config_default() {
+        let config = ExportConfig::default();
+        assert!(config.base_url.is_none());
+    }
+
+    #[test]
+    fn test_export_base_url_from_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+
+[export]
+base_url = "https://github.com/org/repo/blob/main/doc/adr"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(
+            config.export.base_url,
+            Some("https://github.com/org/repo/blob/main/doc/adr".to_string())
+        );
+    }
+
+    #[test]
+    fn test_export_base_url_absent_defaults_none() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert!(config.export.base_url.is_none());
+    }
+
+    #[test]
+    fn test_config_merge_export_base_url() {
+        let mut base = Config::default();
+        let other = Config {
+            export: ExportConfig {
+                base_url: Some("https://example.com/adr".to_string()),
+            },
+            ..Default::default()
+        };
+
+        base.merge(&other);
+        assert_eq!(
+            base.export.base_url,
+            Some("https://example.com/adr".to_string())
+        );
+    }
+
+    #[test]
+    fn test_config_merge_export_base_url_none_does_not_overwrite() {
+        let mut base = Config {
+            export: ExportConfig {
+                base_url: Some("https://existing.example.com/adr".to_string()),
+            },
+            ..Default::default()
+        };
+        let other = Config::default(); // export.base_url = None
+
+        base.merge(&other);
+        assert_eq!(
+            base.export.base_url,
+            Some("https://existing.example.com/adr".to_string()),
+            "merge with export.base_url=None should not overwrite existing value"
+        );
+    }
+
+    #[test]
+    fn test_export_base_url_save_load_roundtrip() {
+        let temp = TempDir::new().unwrap();
+        let original = Config {
+            mode: ConfigMode::NextGen,
+            export: ExportConfig {
+                base_url: Some("https://github.com/org/repo/blob/main/doc/adr".to_string()),
+            },
+            ..Default::default()
+        };
+
+        original.save(temp.path()).unwrap();
+        let loaded = Config::load(temp.path()).unwrap();
+
+        assert_eq!(
+            loaded.export.base_url,
+            Some("https://github.com/org/repo/blob/main/doc/adr".to_string()),
+            "export.base_url should survive a save/load round-trip"
         );
     }
 }
