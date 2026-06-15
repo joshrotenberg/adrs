@@ -88,6 +88,18 @@ adrs generate toc -i intro.md -O outro.md > doc/adr/README.md
 adrs generate toc -p "wiki/adr/"
 ```
 
+#### Configuring a Default Prefix
+
+Instead of passing `--prefix` on every invocation, set it once in `adrs.toml`:
+
+```toml
+[generate]
+toc_prefix = "./"
+```
+
+Then `adrs generate toc` (with no `--prefix`) will apply `"./"` automatically.
+The `--prefix` CLI flag overrides this config value when provided.
+
 ---
 
 ## generate graph

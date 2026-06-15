@@ -41,6 +41,13 @@ default_status = "proposed"
 # If omitted, defaults to false
 no_edit = false
 
+# Generate command configuration
+[generate]
+# Default prefix for TOC links (used by 'adrs generate toc' if --prefix is not given)
+# Useful for CI jobs that always regenerate the TOC with the same prefix.
+# If omitted, defaults to empty string (bare filename links)
+# toc_prefix = "./"
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"

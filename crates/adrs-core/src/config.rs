@@ -41,6 +41,10 @@ pub struct Config {
     /// Template configuration.
     #[serde(default)]
     pub templates: TemplateConfig,
+
+    /// Generate command configuration.
+    #[serde(default)]
+    pub generate: GenerateConfig,
 }
 
 impl Default for Config {
@@ -51,6 +55,7 @@ impl Default for Config {
             default_status: None,
             no_edit: false,
             templates: TemplateConfig::default(),
+            generate: GenerateConfig::default(),
         }
     }
 }
@@ -91,6 +96,7 @@ impl Config {
                 default_status: None,
                 no_edit: false,
                 templates: TemplateConfig::default(),
+                generate: GenerateConfig::default(),
             });
         }
 
@@ -160,6 +166,9 @@ impl Config {
         }
         if other.no_edit {
             self.no_edit = other.no_edit;
+        }
+        if other.generate.toc_prefix.is_some() {
+            self.generate.toc_prefix = other.generate.toc_prefix.clone();
         }
     }
 }
@@ -271,6 +280,7 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
                 default_status: None,
                 no_edit: false,
                 templates: TemplateConfig::default(),
+                generate: GenerateConfig::default(),
             };
             return Ok(Some((current, config, ConfigSource::Project(legacy_path))));
         }
@@ -363,6 +373,14 @@ pub struct TemplateConfig {
 
     /// Path to a custom template file.
     pub custom: Option<PathBuf>,
+}
+
+/// Generate command configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GenerateConfig {
+    /// Default prefix for TOC links (used by `adrs generate toc` if `--prefix` is not given).
+    pub toc_prefix: Option<String>,
 }
 
 #[cfg(test)]
@@ -607,6 +625,7 @@ mode = "nextgen"
             default_status: None,
             no_edit: false,
             templates: TemplateConfig::default(),
+            generate: GenerateConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -626,6 +645,7 @@ mode = "nextgen"
             default_status: None,
             no_edit: false,
             templates: TemplateConfig::default(),
+            generate: GenerateConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -650,6 +670,7 @@ mode = "nextgen"
                 variant: None,
                 custom: Some(PathBuf::from("my-template.md")),
             },
+            generate: GenerateConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -668,6 +689,7 @@ mode = "nextgen"
             default_status: None,
             no_edit: false,
             templates: TemplateConfig::default(),
+            generate: GenerateConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -690,6 +712,7 @@ mode = "nextgen"
                 variant: None,
                 custom: None,
             },
+            generate: GenerateConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -1028,6 +1051,7 @@ mode = "nextgen"
                 variant: None,
                 custom: None,
             },
+            generate: GenerateConfig::default(),
         };
 
         base.merge(&other);
@@ -1275,6 +1299,7 @@ custom = "templates/my-adr.md"
                 variant: Some("minimal".to_string()),
                 custom: Some(PathBuf::from("templates/custom.md")),
             },
+            generate: GenerateConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -1362,5 +1387,93 @@ custom = "templates/my-adr.md"
         assert_eq!(base.templates.format, Some("madr".to_string()));
         assert_eq!(base.templates.variant, Some("minimal".to_string()));
         assert_eq!(base.templates.custom, Some(PathBuf::from("template.md")));
+    }
+
+    // ========== GenerateConfig / toc_prefix Tests ==========
+
+    #[test]
+    fn test_generate_config_default() {
+        let config = GenerateConfig::default();
+        assert!(config.toc_prefix.is_none());
+    }
+
+    #[test]
+    fn test_generate_toc_prefix_from_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+
+[generate]
+toc_prefix = "./"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(config.generate.toc_prefix, Some("./".to_string()));
+    }
+
+    #[test]
+    fn test_generate_toc_prefix_absent_defaults_none() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert!(config.generate.toc_prefix.is_none());
+    }
+
+    #[test]
+    fn test_config_merge_generate_toc_prefix() {
+        let mut base = Config::default();
+        let other = Config {
+            generate: GenerateConfig {
+                toc_prefix: Some("./".to_string()),
+            },
+            ..Default::default()
+        };
+
+        base.merge(&other);
+        assert_eq!(base.generate.toc_prefix, Some("./".to_string()));
+    }
+
+    #[test]
+    fn test_config_merge_generate_toc_prefix_none_does_not_overwrite() {
+        let mut base = Config {
+            generate: GenerateConfig {
+                toc_prefix: Some("docs/".to_string()),
+            },
+            ..Default::default()
+        };
+        let other = Config::default(); // toc_prefix = None
+
+        base.merge(&other);
+        assert_eq!(
+            base.generate.toc_prefix,
+            Some("docs/".to_string()),
+            "merge with toc_prefix=None should not overwrite existing value"
+        );
+    }
+
+    #[test]
+    fn test_generate_toc_prefix_save_load_roundtrip() {
+        let temp = TempDir::new().unwrap();
+        let original = Config {
+            mode: ConfigMode::NextGen,
+            generate: GenerateConfig {
+                toc_prefix: Some("wiki/adr/".to_string()),
+            },
+            ..Default::default()
+        };
+
+        original.save(temp.path()).unwrap();
+        let loaded = Config::load(temp.path()).unwrap();
+
+        assert_eq!(
+            loaded.generate.toc_prefix,
+            Some("wiki/adr/".to_string()),
+            "toc_prefix should survive a save/load round-trip"
+        );
     }
 }

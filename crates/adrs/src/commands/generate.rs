@@ -12,6 +12,7 @@ pub fn generate_toc(
     intro: Option<PathBuf>,
     outro: Option<PathBuf>,
     prefix: Option<String>,
+    config_prefix: Option<String>,
 ) -> Result<()> {
     let repo =
         Repository::open(root).context("ADR repository not found. Run 'adrs init' first.")?;
@@ -25,7 +26,8 @@ pub fn generate_toc(
     }
 
     // Print TOC
-    let prefix = prefix.unwrap_or_default();
+    // Precedence: --prefix CLI flag > generate.toc_prefix config > built-in default (empty)
+    let prefix = prefix.or(config_prefix).unwrap_or_default();
     for (i, adr) in adrs.iter().enumerate() {
         let bullet = if ordered {
             format!("{}.", i + 1)
