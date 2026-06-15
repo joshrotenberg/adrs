@@ -236,6 +236,13 @@
 <h4 id="link-prefix-for-wikis"><a class="header" href="#link-prefix-for-wikis">Link Prefix for Wikis</a></h4>
 <pre><code class="language-sh">adrs generate toc -p "wiki/adr/"
 </code></pre>
+<h4 id="configuring-a-default-prefix"><a class="header" href="#configuring-a-default-prefix">Configuring a Default Prefix</a></h4>
+<p>Instead of passing <code>--prefix</code> on every invocation, set it once in <code>adrs.toml</code>:</p>
+<pre><code class="language-toml">[generate]
+toc_prefix = "./"
+</code></pre>
+<p>Then <code>adrs generate toc</code> (with no <code>--prefix</code>) will apply <code>"./"</code> automatically.
+The <code>--prefix</code> CLI flag overrides this config value when provided.</p>
 <hr />
 <h2 id="generate-graph"><a class="header" href="#generate-graph">generate graph</a></h2>
 <p>Generate a Graphviz DOT graph showing ADR relationships.</p>

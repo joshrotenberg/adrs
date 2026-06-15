@@ -195,7 +195,7 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
 <tr><td><code>--pretty</code>, <code>-p</code></td><td>Pretty-print the JSON output</td></tr>
 <tr><td><code>--dir</code>, <code>-d</code></td><td>Export from a directory without requiring an initialized repository</td></tr>
 <tr><td><code>--metadata-only</code></td><td>Export metadata without content fields (context, decision, consequences)</td></tr>
-<tr><td><code>--base-url &lt;URL&gt;</code></td><td>Set base URL for <code>source_uri</code> field (for federation)</td></tr>
+<tr><td><code>--base-url &lt;URL&gt;</code></td><td>Set base URL for <code>source_uri</code> field (for federation); can also be set in <code>adrs.toml</code></td></tr>
 </tbody></table>
 </div>
 <h3 id="output-format"><a class="header" href="#output-format">Output Format</a></h3>
@@ -230,6 +230,12 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
 <pre><code class="language-bash">adrs export json --metadata-only --base-url "https://github.com/org/repo/blob/main/doc/adr"
 </code></pre>
 <p>This produces lightweight exports that reference the source files:</p>
+<h4 id="configuring-base_url-in-adrstoml"><a class="header" href="#configuring-base_url-in-adrstoml">Configuring base_url in adrs.toml</a></h4>
+<p>Since a repo's source URL rarely changes, you can set it once in <code>adrs.toml</code> so you do not need to pass <code>--base-url</code> on every invocation:</p>
+<pre><code class="language-toml">[export]
+base_url = "https://github.com/org/repo/blob/main/doc/adr"
+</code></pre>
+<p>With this config, <code>adrs export json</code> will include <code>source_uri</code> fields automatically. The <code>--base-url</code> CLI flag always takes precedence over the config value.</p>
 <pre><code class="language-json">{
   "number": 1,
   "title": "Use PostgreSQL",

@@ -320,6 +320,28 @@ adr_dir = "doc/adr"
 # - nextgen: YAML frontmatter with enhanced features
 mode = "compatible"
 
+# Default status for newly created ADRs
+# If omitted, defaults to "proposed"
+default_status = "proposed"
+
+# Skip opening the editor when creating a new ADR (for CI/scripting)
+# If omitted, defaults to false
+no_edit = false
+
+# Generate command configuration
+[generate]
+# Default prefix for TOC links (used by 'adrs generate toc' if --prefix is not given)
+# Useful for CI jobs that always regenerate the TOC with the same prefix.
+# If omitted, defaults to empty string (bare filename links)
+# toc_prefix = "./"
+
+# Export command configuration
+[export]
+# Default base URL for source_uri fields in JSON export
+# (used by 'adrs export json' if --base-url is not given)
+# If omitted, defaults to none (no source_uri fields)
+# base_url = "https://github.com/org/repo/blob/main/doc/adr"
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"
@@ -335,6 +357,7 @@ variant = "full"
 <p>Create <code>~/.config/adrs/config.toml</code> for user-wide defaults:</p>
 <pre><code class="language-toml"># Default mode for new repositories
 mode = "nextgen"
+default_status = "accepted"
 
 [templates]
 format = "madr"
@@ -990,11 +1013,11 @@ ADRs yet, so re-initializing will not add a duplicate.</p>
 <tr><td><code>-f, --format &lt;FORMAT&gt;</code></td><td>Template format: <code>nygard</code> or <code>madr</code> (default: <code>nygard</code>)</td></tr>
 <tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: <code>full</code>, <code>minimal</code>, or <code>bare</code> (default: <code>full</code>)</td></tr>
 <tr><td><code>--template &lt;PATH&gt;</code></td><td>Path to a custom template file (overrides <code>--format</code>/<code>--variant</code> and config)</td></tr>
-<tr><td><code>--status &lt;STATUS&gt;</code></td><td>Initial status (default: <code>Proposed</code>)</td></tr>
+<tr><td><code>--status &lt;STATUS&gt;</code></td><td>Initial status (default: <code>default_status</code> from config, else <code>Proposed</code>)</td></tr>
 <tr><td><code>-s, --supersedes &lt;N&gt;</code></td><td>ADR number this supersedes</td></tr>
 <tr><td><code>-l, --link &lt;LINK&gt;</code></td><td>Link to another ADR</td></tr>
 <tr><td><code>-t, --tags &lt;TAGS&gt;</code></td><td>Tags for categorization (comma-separated, requires --ng)</td></tr>
-<tr><td><code>--no-edit</code></td><td>Create ADR without opening editor (for scripting/CI)</td></tr>
+<tr><td><code>--no-edit</code></td><td>Create ADR without opening editor (for scripting/CI); also configurable via <code>no_edit = true</code> in <code>adrs.toml</code></td></tr>
 <tr><td><code>--ng</code></td><td>Use NextGen mode (YAML frontmatter)</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
@@ -1002,6 +1025,7 @@ ADRs yet, so re-initializing will not add a duplicate.</p>
 </div>
 <h2 id="description-1"><a class="header" href="#description-1">Description</a></h2>
 <p>Creates a new ADR file with the next available number. Opens your <code>$EDITOR</code> to edit the document. The ADR is saved when you close the editor.</p>
+<p>To skip the editor by default for all <code>adrs new</code> invocations in a repository, set <code>no_edit = true</code> in <code>adrs.toml</code>. The <code>--no-edit</code> CLI flag takes precedence over the config setting.</p>
 <h2 id="examples-1"><a class="header" href="#examples-1">Examples</a></h2>
 <h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
 <pre><code class="language-sh">adrs new "Use PostgreSQL for persistence"
@@ -1418,7 +1442,7 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
 <tr><td><code>--pretty</code>, <code>-p</code></td><td>Pretty-print the JSON output</td></tr>
 <tr><td><code>--dir</code>, <code>-d</code></td><td>Export from a directory without requiring an initialized repository</td></tr>
 <tr><td><code>--metadata-only</code></td><td>Export metadata without content fields (context, decision, consequences)</td></tr>
-<tr><td><code>--base-url &lt;URL&gt;</code></td><td>Set base URL for <code>source_uri</code> field (for federation)</td></tr>
+<tr><td><code>--base-url &lt;URL&gt;</code></td><td>Set base URL for <code>source_uri</code> field (for federation); can also be set in <code>adrs.toml</code></td></tr>
 </tbody></table>
 </div>
 <h3 id="output-format-1"><a class="header" href="#output-format-1">Output Format</a></h3>
@@ -1453,6 +1477,12 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
 <pre><code class="language-bash">adrs export json --metadata-only --base-url "https://github.com/org/repo/blob/main/doc/adr"
 </code></pre>
 <p>This produces lightweight exports that reference the source files:</p>
+<h4 id="configuring-base_url-in-adrstoml"><a class="header" href="#configuring-base_url-in-adrstoml">Configuring base_url in adrs.toml</a></h4>
+<p>Since a repo's source URL rarely changes, you can set it once in <code>adrs.toml</code> so you do not need to pass <code>--base-url</code> on every invocation:</p>
+<pre><code class="language-toml">[export]
+base_url = "https://github.com/org/repo/blob/main/doc/adr"
+</code></pre>
+<p>With this config, <code>adrs export json</code> will include <code>source_uri</code> fields automatically. The <code>--base-url</code> CLI flag always takes precedence over the config value.</p>
 <pre><code class="language-json">{
   "number": 1,
   "title": "Use PostgreSQL",
@@ -1612,6 +1642,13 @@ Cross-references updated:
 <h4 id="link-prefix-for-wikis"><a class="header" href="#link-prefix-for-wikis">Link Prefix for Wikis</a></h4>
 <pre><code class="language-sh">adrs generate toc -p "wiki/adr/"
 </code></pre>
+<h4 id="configuring-a-default-prefix"><a class="header" href="#configuring-a-default-prefix">Configuring a Default Prefix</a></h4>
+<p>Instead of passing <code>--prefix</code> on every invocation, set it once in <code>adrs.toml</code>:</p>
+<pre><code class="language-toml">[generate]
+toc_prefix = "./"
+</code></pre>
+<p>Then <code>adrs generate toc</code> (with no <code>--prefix</code>) will apply <code>"./"</code> automatically.
+The <code>--prefix</code> CLI flag overrides this config value when provided.</p>
 <hr />
 <h2 id="generate-graph"><a class="header" href="#generate-graph">generate graph</a></h2>
 <p>Generate a Graphviz DOT graph showing ADR relationships.</p>
@@ -1821,6 +1858,7 @@ Config source: adrs.toml
 ADR directory: doc/adr
 Full path: /home/user/myproject/doc/adr
 Mode: Compatible
+Default ADR status: accepted
 </code></pre>
 <h3 id="without-initialization"><a class="header" href="#without-initialization">Without Initialization</a></h3>
 <pre><code class="language-sh">adrs config
