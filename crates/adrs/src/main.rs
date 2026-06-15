@@ -69,6 +69,8 @@ CONFIGURATION:
     variant = \"full\"    # full (default), minimal, or bare
     default_status = \"accepted\" # proposed (default), accepted, deprecated, superseded, or custom
     no_edit = true              # skip editor for new ADRs (default: false)
+    [generate]
+    toc_prefix = \"./\"          # default prefix for 'generate toc' links (default: empty)
 
 Version:       ", env!("CARGO_PKG_VERSION"), "
 Documentation: https://joshrotenberg.com/adrs/"))]
@@ -696,7 +698,14 @@ fn main() -> Result<()> {
                     intro,
                     outro,
                     prefix,
-                } => commands::generate_toc(&discovered.root, ordered, intro, outro, prefix),
+                } => commands::generate_toc(
+                    &discovered.root,
+                    ordered,
+                    intro,
+                    outro,
+                    prefix,
+                    discovered.config.generate.toc_prefix,
+                ),
                 GenerateCommands::Graph { prefix, extension } => {
                     commands::generate_graph(&discovered.root, prefix, &extension)
                 }

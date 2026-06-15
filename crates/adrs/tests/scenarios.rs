@@ -1690,3 +1690,165 @@ custom = "templates/config-template.md"
 
     temp.close().unwrap();
 }
+
+// ============================================================================
+// Scenario: Configurable default TOC prefix via [generate].toc_prefix
+// ============================================================================
+
+/// When `[generate] toc_prefix` is set in adrs.toml, `adrs generate toc`
+/// (with no `--prefix` flag) emits links with that prefix.
+#[test]
+fn scenario_config_toc_prefix_applies_without_flag() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Step 1: Initialize repository
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Step 2: Create an ADR so there is something to list
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Config prefix test"])
+        .assert()
+        .success();
+
+    // Step 3: Set toc_prefix in adrs.toml
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "compatible"
+
+[generate]
+toc_prefix = "./"
+"#,
+    )
+    .unwrap();
+
+    // Step 4: Generate TOC without --prefix; prefix from config should apply
+    let output = adrs()
+        .current_dir(temp.path())
+        .args(["generate", "toc"])
+        .output()
+        .unwrap();
+
+    let toc = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "generate toc should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        toc.contains("./"),
+        "TOC links should include config toc_prefix './'. Got:\n{toc}"
+    );
+    assert!(
+        toc.contains("Config prefix test"),
+        "TOC should contain the ADR title. Got:\n{toc}"
+    );
+
+    temp.close().unwrap();
+}
+
+/// When both `[generate] toc_prefix` is set in config and `--prefix` is
+/// provided on the CLI, the CLI flag takes precedence.
+#[test]
+fn scenario_config_toc_prefix_overridden_by_cli_flag() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Step 1: Initialize repository
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Step 2: Create an ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "CLI prefix override test"])
+        .assert()
+        .success();
+
+    // Step 3: Set toc_prefix in config
+    fs::write(
+        temp.path().join("adrs.toml"),
+        r#"
+adr_dir = "doc/adr"
+mode = "compatible"
+
+[generate]
+toc_prefix = "./"
+"#,
+    )
+    .unwrap();
+
+    // Step 4: Generate TOC with explicit --prefix; CLI wins
+    let output = adrs()
+        .current_dir(temp.path())
+        .args(["generate", "toc", "--prefix", "wiki/"])
+        .output()
+        .unwrap();
+
+    let toc = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "generate toc should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        toc.contains("wiki/"),
+        "CLI --prefix should override config toc_prefix. Got:\n{toc}"
+    );
+    assert!(
+        !toc.contains("(./"),
+        "Config toc_prefix should be suppressed when --prefix is given. Got:\n{toc}"
+    );
+
+    temp.close().unwrap();
+}
+
+/// When neither `[generate] toc_prefix` nor `--prefix` is set, TOC links
+/// use no prefix (just the filename).
+#[test]
+fn scenario_config_toc_prefix_absent_uses_default() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Step 1: Initialize repository
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Step 2: Create an ADR
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "No prefix test"])
+        .assert()
+        .success();
+
+    // Step 3: Generate TOC with no config and no --prefix
+    let output = adrs()
+        .current_dir(temp.path())
+        .args(["generate", "toc"])
+        .output()
+        .unwrap();
+
+    let toc = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "generate toc should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // The link should be directly to the filename with no prefix
+    assert!(
+        toc.contains("(0002-no-prefix-test.md)"),
+        "TOC links should use bare filename when no prefix is set. Got:\n{toc}"
+    );
+
+    temp.close().unwrap();
+}
