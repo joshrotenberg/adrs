@@ -87,7 +87,9 @@ pub fn new(
     };
 
     // Apply explicit CLI status if specified (superseding sets its own status).
-    if supersedes.is_none() && let Some(status) = cli_status {
+    if supersedes.is_none()
+        && let Some(status) = cli_status
+    {
         adr.status = status;
         repo.update_metadata(&adr)
             .context("Failed to update ADR status")?;
