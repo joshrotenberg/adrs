@@ -25,7 +25,7 @@ adrs new [OPTIONS] <TITLE>
 | `-s, --supersedes <N>` | ADR number this supersedes |
 | `-l, --link <LINK>` | Link to another ADR |
 | `-t, --tags <TAGS>` | Tags for categorization (comma-separated, requires --ng) |
-| `--no-edit` | Create ADR without opening editor (for scripting/CI) |
+| `--no-edit` | Create ADR without opening editor (for scripting/CI); also configurable via `no_edit = true` in `adrs.toml` |
 | `--ng` | Use NextGen mode (YAML frontmatter) |
 | `-C, --cwd <DIR>` | Working directory |
 | `-h, --help` | Print help |
@@ -33,6 +33,8 @@ adrs new [OPTIONS] <TITLE>
 ## Description
 
 Creates a new ADR file with the next available number. Opens your `$EDITOR` to edit the document. The ADR is saved when you close the editor.
+
+To skip the editor by default for all `adrs new` invocations in a repository, set `no_edit = true` in `adrs.toml`. The `--no-edit` CLI flag takes precedence over the config setting.
 
 ## Examples
 

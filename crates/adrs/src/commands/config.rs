@@ -27,6 +27,9 @@ pub fn config_with_discovery(start_dir: &Path, discovered: Option<DiscoveredConf
             if let Some(ref default_status) = disc.config.default_status {
                 println!("Default ADR status: {}", default_status);
             }
+            if disc.config.no_edit {
+                println!("No edit: true");
+            }
             if let Some(ref format) = disc.config.templates.format {
                 println!("Template format: {}", format);
             }

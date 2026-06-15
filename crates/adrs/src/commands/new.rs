@@ -127,8 +127,10 @@ pub fn new(
         }
     }
 
-    // Open in editor unless --no-edit was specified
-    if !no_edit {
+    // Open in editor unless --no-edit flag or config no_edit is set.
+    // Precedence: --no-edit CLI flag > no_edit config > built-in default (false).
+    let skip_editor = no_edit || config.no_edit;
+    if !skip_editor {
         edit::edit_file(&path).context("Failed to open editor")?;
     }
 

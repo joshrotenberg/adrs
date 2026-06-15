@@ -68,6 +68,7 @@ CONFIGURATION:
     format = \"madr\"     # nygard (default) or madr
     variant = \"full\"    # full (default), minimal, or bare
     default_status = \"accepted\" # proposed (default), accepted, deprecated, superseded, or custom
+    no_edit = true              # skip editor for new ADRs (default: false)
 
 Version:       ", env!("CARGO_PKG_VERSION"), "
 Documentation: https://joshrotenberg.com/adrs/"))]

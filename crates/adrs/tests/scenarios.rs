@@ -688,6 +688,102 @@ default_status = "accepted"
 }
 
 // ============================================================================
+// Scenario: config no_edit = true skips editor
+// ============================================================================
+
+/// When no_edit = true in adrs.toml, `adrs new` succeeds without launching
+/// an editor. In headless CI there is no TTY, so a successful non-interactive
+/// create (without EDITOR set and without --no-edit flag) proves the editor
+/// was skipped.
+///
+/// Note: the editor-OPENS path (no_edit false, no flag) is impractical to
+/// assert in headless CI because it would block waiting for user input.
+#[test]
+fn scenario_config_no_edit_skips_editor() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    // Step 1: Initialize repository
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    // Step 2: Write adrs.toml with no_edit = true
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\nmode = \"compatible\"\nno_edit = true\n",
+    )
+    .unwrap();
+
+    // Step 3: Create ADR without --no-edit flag; succeeds without editor.
+    // No EDITOR env set -- if the editor were launched, this would fail or block.
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Config no-edit test"])
+        .assert()
+        .success();
+
+    // Verify ADR was created
+    let adr = temp.child("doc/adr/0002-config-no-edit-test.md");
+    adr.assert(predicate::path::exists());
+
+    temp.close().unwrap();
+}
+
+/// --no-edit flag works without the config setting.
+#[test]
+fn scenario_no_edit_flag_without_config() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Flag only no-edit test"])
+        .assert()
+        .success();
+
+    let adr = temp.child("doc/adr/0002-flag-only-no-edit-test.md");
+    adr.assert(predicate::path::exists());
+
+    temp.close().unwrap();
+}
+
+/// --no-edit flag and config no_edit = true together are idempotent.
+#[test]
+fn scenario_no_edit_flag_and_config_together() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\nno_edit = true\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "Both flag and config no-edit"])
+        .assert()
+        .success();
+
+    let adr = temp.child("doc/adr/0002-both-flag-and-config-no-edit.md");
+    adr.assert(predicate::path::exists());
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // Scenario: Custom Template from Config
 // ============================================================================
 
