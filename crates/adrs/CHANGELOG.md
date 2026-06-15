@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-06-15
+
+### Features
+
+- Allow configuring default status
+- Make --no-edit default configurable in adrs.toml (closes #298)
+- Configurable default TOC prefix via [generate].toc_prefix in adrs.toml (closes #299)
+- Add export.base_url config for adrs export json (closes #300)
+
+
 ## [0.7.6] - 2026-06-08
 
 ### Features
