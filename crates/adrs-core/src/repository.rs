@@ -153,12 +153,11 @@ impl Repository {
 
         // Only create initial ADR if no ADRs exist
         if existing_adrs == 0 {
-            let mut adr = Adr::new(1, "Record architecture decisions");
+            let mut adr = Adr::new(1, crate::init_adr::TITLE);
             adr.status = AdrStatus::Accepted;
-            adr.context =
-                "We need to record the architectural decisions made on this project.".into();
-            adr.decision = "We will use Architecture Decision Records, as described by Michael Nygard in his article \"Documenting Architecture Decisions\".".into();
-            adr.consequences = "See Michael Nygard's article, linked above. For a lightweight ADR toolset, see Nat Pryce's adr-tools.".into();
+            adr.context = crate::init_adr::CONTEXT.into();
+            adr.decision = crate::init_adr::DECISION.into();
+            adr.consequences = crate::init_adr::CONSEQUENCES.into();
             repo.create(&adr)?;
         }
 
@@ -1200,11 +1199,42 @@ mod tests {
         let repo = Repository::init(temp.path(), None, false).unwrap();
 
         let adr = repo.get(1).unwrap();
-        assert_eq!(adr.title, "Record architecture decisions");
+        assert_eq!(adr.title, crate::init_adr::TITLE);
         assert_eq!(adr.status, AdrStatus::Accepted);
-        assert!(!adr.context.is_empty());
-        assert!(!adr.decision.is_empty());
-        assert!(!adr.consequences.is_empty());
+        assert_eq!(adr.context, crate::init_adr::CONTEXT);
+        assert_eq!(adr.decision, crate::init_adr::DECISION);
+        assert_eq!(adr.consequences, crate::init_adr::CONSEQUENCES);
+    }
+
+    #[test]
+    fn test_init_first_adr_has_markdown_links_in_both_modes() {
+        for ng in [false, true] {
+            let temp = TempDir::new().unwrap();
+            let repo = Repository::init(temp.path(), None, ng).unwrap();
+            let path = repo
+                .adr_path()
+                .join("0001-record-architecture-decisions.md");
+            let content = fs::read_to_string(path).unwrap();
+
+            assert!(
+                content.contains(
+                    "[Documenting Architecture Decisions](https://www.cognitect.com/blog/2011/11/15/documenting-architecture-decisions)"
+                ),
+                "expected Nygard article link (ng={ng})"
+            );
+            assert!(
+                content.contains("[adrs](https://github.com/joshrotenberg/adrs)"),
+                "expected adrs link (ng={ng})"
+            );
+            assert!(
+                content.contains("[adr-tools](https://github.com/npryce/adr-tools)"),
+                "expected adr-tools link (ng={ng})"
+            );
+            assert!(
+                content.ends_with('\n'),
+                "init ADR should end with a newline (ng={ng})"
+            );
+        }
     }
 
     // ========== Open Tests ==========

@@ -432,7 +432,8 @@ mod tests {
     fn test_lint_valid_nygard_adr() {
         // Uses the actual ADR #0001 text produced by `adrs init`. The word "described"
         // previously triggered an ADR014 false positive (fixed in mdbook-lint-rulesets 0.14.3).
-        let content = r#"# 1. Record architecture decisions
+        let content = format!(
+            r#"# 1. Record architecture decisions
 
 Date: 2024-03-04
 
@@ -442,16 +443,20 @@ Accepted
 
 ## Context
 
-We need to record the architectural decisions made on this project.
+{}
 
 ## Decision
 
-We will use Architecture Decision Records, as described by Michael Nygard in his article "Documenting Architecture Decisions".
+{}
 
 ## Consequences
 
-See Michael Nygard's article, linked above. For a lightweight ADR toolset, see Nat Pryce's adr-tools.
-"#;
+{}
+"#,
+            crate::init_adr::CONTEXT,
+            crate::init_adr::DECISION,
+            crate::init_adr::CONSEQUENCES,
+        );
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir
             .path()

@@ -85,6 +85,7 @@ mod config;
 pub mod doctor;
 mod error;
 pub mod export;
+mod init_adr;
 pub mod lint;
 mod parse;
 mod repository;
