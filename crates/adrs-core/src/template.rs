@@ -346,6 +346,7 @@ Date: {{ date }}
 ## Consequences
 
 {{ consequences if consequences else "What becomes easier or more difficult to do because of this change?" }}
+
 "#;
 
 /// MADR (Markdown Any Decision Records) 4.0.0 template.

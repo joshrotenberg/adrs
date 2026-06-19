@@ -624,6 +624,11 @@ fn test_init_adr_content() {
     assert!(content.contains("## Context"));
     assert!(content.contains("## Decision"));
     assert!(content.contains("## Consequences"));
+    assert!(content.contains(
+        "[Documenting Architecture Decisions](https://www.cognitect.com/blog/2011/11/15/documenting-architecture-decisions)"
+    ));
+    assert!(content.contains("[adrs](https://github.com/joshrotenberg/adrs)"));
+    assert!(content.contains("[adr-tools](https://github.com/npryce/adr-tools)"));
 
     temp.close().unwrap();
 }
