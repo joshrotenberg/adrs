@@ -302,6 +302,18 @@ Note: Use --by with 'superseded' to create a link to the replacing ADR.")]
     Config,
 
     /// Check repository health
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs doctor                  Run all health checks
+
+WHAT IT CHECKS:
+  Per-file lint rules (title format, required sections, dates) and
+  repository-level checks (sequential numbering, duplicates, broken links).
+
+NOTE ON --ng:
+  The global --ng flag has no effect on 'doctor'. Lint rules detect each ADR's
+  format (Nygard or MADR) from the file itself, so the repository mode does not
+  change which checks run. Passing --ng prints a note to that effect.")]
     Doctor,
 
     /// Generate documentation
@@ -690,7 +702,7 @@ fn main() -> Result<()> {
         }
         Commands::Doctor => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::doctor(&discovered.root)
+            commands::doctor(&discovered.root, cli.ng)
         }
         Commands::Generate { command } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;

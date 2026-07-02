@@ -1507,6 +1507,47 @@ fn test_smoke_full_workflow() {
     temp.close().unwrap();
 }
 
+#[test]
+fn test_doctor_ng_flag_prints_note() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // --ng is a no-op for doctor, but it should not be silently ignored (issue #306).
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "doctor"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("--ng has no effect on 'doctor'"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_doctor_without_ng_flag_prints_no_note() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("--ng").not());
+
+    temp.close().unwrap();
+}
+
 /// Smoke test for MCP feature availability (default since 0.6.1)
 #[test]
 #[cfg(feature = "mcp")]

@@ -12,13 +12,18 @@ adrs doctor [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--ng` | Use NextGen mode |
+| `--ng` | No-op for `doctor` (prints a note; see below) |
 | `-C, --cwd <DIR>` | Working directory |
 | `-h, --help` | Print help |
 
 ## Description
 
 Runs diagnostic checks on your ADR repository and reports any issues found.
+
+The global `--ng` flag has no effect on `doctor`. Lint rules detect each ADR's
+format (Nygard or MADR) from the file itself, so the repository mode does not
+change which checks run. Passing `--ng doctor` prints a note to that effect
+rather than ignoring the flag silently.
 
 ## Checks Performed
 
