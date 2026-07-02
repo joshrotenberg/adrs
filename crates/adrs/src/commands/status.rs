@@ -11,6 +11,13 @@ pub fn status(
     new_status: &str,
     superseded_by: Option<u32>,
 ) -> Result<()> {
+    // Reject empty or whitespace-only status values. Writing one produces a
+    // YAML null in the frontmatter, which fails to deserialize and silently
+    // drops the ADR from `repo.list()` (see issue #305).
+    if new_status.trim().is_empty() {
+        anyhow::bail!("Status cannot be empty or whitespace-only");
+    }
+
     let repo = Repository::open(root).context("Failed to open ADR repository")?;
 
     // Parse the status
@@ -46,4 +53,31 @@ pub fn status(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_status_rejects_empty_and_whitespace() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        repo.new_adr("Test decision").unwrap();
+
+        for bad in ["", " ", "   ", "\t"] {
+            let err = status(temp.path(), 1, bad, None).unwrap_err();
+            assert!(
+                err.to_string().contains("empty or whitespace-only"),
+                "expected empty-status error for {:?}, got: {}",
+                bad,
+                err
+            );
+        }
+
+        // The ADR must remain findable and its status unchanged.
+        let adr = repo.get(1).unwrap();
+        assert_eq!(adr.status, AdrStatus::Proposed);
+    }
 }
