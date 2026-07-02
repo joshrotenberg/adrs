@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2026-07-02
+
+### Bug Fixes
+
+- Reject empty or whitespace-only status values (closes #305)
+
+
 ## [0.8.0] - 2026-06-15
 
 ### Features
