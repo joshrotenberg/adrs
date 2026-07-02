@@ -64,7 +64,7 @@ mod tests {
     fn test_status_rejects_empty_and_whitespace() {
         let temp = TempDir::new().unwrap();
         let repo = Repository::init(temp.path(), None, true).unwrap();
-        repo.new_adr("Test decision").unwrap();
+        let before = repo.get(1).unwrap().status;
 
         for bad in ["", " ", "   ", "\t"] {
             let err = status(temp.path(), 1, bad, None).unwrap_err();
@@ -78,6 +78,6 @@ mod tests {
 
         // The ADR must remain findable and its status unchanged.
         let adr = repo.get(1).unwrap();
-        assert_eq!(adr.status, AdrStatus::Proposed);
+        assert_eq!(adr.status, before);
     }
 }
