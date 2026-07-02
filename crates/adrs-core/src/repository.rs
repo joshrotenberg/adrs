@@ -360,6 +360,17 @@ impl Repository {
         status: AdrStatus,
         superseded_by: Option<u32>,
     ) -> Result<PathBuf> {
+        // Reject empty or whitespace-only custom statuses. Serializing one
+        // yields a YAML null that fails to deserialize, silently dropping the
+        // ADR from `list()` (see issue #305).
+        if let AdrStatus::Custom(s) = &status
+            && s.trim().is_empty()
+        {
+            return Err(Error::InvalidStatus(
+                "status cannot be empty or whitespace-only".to_string(),
+            ));
+        }
+
         let mut adr = self.get(number)?;
         adr.status = status.clone();
 
@@ -1845,6 +1856,34 @@ Decision.
             "Should not have extra blank line before closing ---: {:?}",
             result
         );
+    }
+
+    #[test]
+    fn test_set_status_rejects_empty_custom() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = "---\nnumber: 2\ntitle: Test\ndate: 2026-01-15\nstatus: proposed\n---\n\n## Context\n\nContext.\n";
+        let adr_path = repo.adr_path().join("0002-test.md");
+        fs::write(&adr_path, content).unwrap();
+
+        // Whitespace-only and empty custom statuses must be rejected (#305).
+        for bad in ["", " ", "   ", "\t"] {
+            let err = repo
+                .set_status(2, AdrStatus::Custom(bad.to_string()), None)
+                .unwrap_err();
+            assert!(
+                matches!(err, Error::InvalidStatus(_)),
+                "expected InvalidStatus for {:?}, got {:?}",
+                bad,
+                err
+            );
+        }
+
+        // The file must be untouched and still parse.
+        let result = fs::read_to_string(&adr_path).unwrap();
+        assert!(result.contains("status: proposed"));
+        assert!(repo.get(2).is_ok());
     }
 
     #[test]
