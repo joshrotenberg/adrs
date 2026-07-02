@@ -7,7 +7,18 @@ use std::path::Path;
 /// Run health checks on the ADR repository.
 ///
 /// Runs all lint checks (per-file and repository-level).
-pub fn doctor(root: &Path) -> Result<()> {
+///
+/// `ng` reflects whether the global `--ng` flag was passed. It has no effect on
+/// linting: the lint rules detect each ADR's format (Nygard or MADR) from the
+/// file itself, so the repository mode does not change which checks run. When
+/// `--ng` is passed we say so rather than ignoring it silently (see issue #306).
+pub fn doctor(root: &Path, ng: bool) -> Result<()> {
+    if ng {
+        eprintln!(
+            "note: --ng has no effect on 'doctor'; lint rules detect each ADR's format automatically"
+        );
+    }
+
     let repo =
         Repository::open(root).context("Failed to open repository. Have you run 'adrs init'?")?;
 
