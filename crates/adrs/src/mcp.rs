@@ -2096,6 +2096,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_update_content_madr_preserves_decision() {
+        // MADR 4.0.0 ADRs must not be re-rendered as Nygard/adr-tools on update_content.
+        let (client, _tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use Redis for caching",
+                    "format": "madr",
+                    "context": "Original context about caching needs.",
+                    "decision": "Chosen option: \"Redis\", because it is fast."
+                }),
+            )
+            .await
+            .unwrap();
+
+        client
+            .call_tool_text(
+                "update_content",
+                json!({
+                    "number": 2,
+                    "context": "Updated context text."
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("get_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+        let adr: AdrDetail = serde_json::from_str(&result).unwrap();
+
+        assert!(
+            adr.content.contains("Updated context text."),
+            "context should be updated, got:\n{}",
+            adr.content
+        );
+        assert!(
+            adr.content.contains("Chosen option: \"Redis\""),
+            "decision should be preserved, got:\n{}",
+            adr.content
+        );
+        assert!(
+            adr.content.contains("Context and Problem Statement"),
+            "MADR 4.0.0 heading should be preserved, got:\n{}",
+            adr.content
+        );
+        assert!(
+            adr.content.contains("Decision Outcome"),
+            "MADR 4.0.0 heading should be preserved, got:\n{}",
+            adr.content
+        );
+        assert!(
+            !adr.content
+                .contains("What is the change that we're proposing"),
+            "Nygard/adr-tools placeholder should not appear, got:\n{}",
+            adr.content
+        );
+    }
+
+    #[tokio::test]
     async fn test_update_tags_ng_mode() {
         let (client, _tmp) = setup_client(true).await;
 

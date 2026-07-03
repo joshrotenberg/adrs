@@ -24,6 +24,19 @@ static FM_LINKS_RE: LazyLock<Regex> =
 static FM_TAGS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^tags:\n(?:(?:  .+\n)*)").unwrap());
 
+/// Regex for matching MADR 4.0.0 `decision-makers` in YAML frontmatter (scalar or list).
+static FM_DECISION_MAKERS_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?m)^decision-makers:(?: [^\n]+|\n(?:(?:  - [^\n]+\n)*))").unwrap()
+});
+
+/// Regex for matching MADR 4.0.0 `consulted` in YAML frontmatter (scalar or list).
+static FM_CONSULTED_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^consulted:(?: [^\n]+|\n(?:(?:  - [^\n]+\n)*))").unwrap());
+
+/// Regex for matching MADR 4.0.0 `informed` in YAML frontmatter (scalar or list).
+static FM_INFORMED_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^informed:(?: [^\n]+|\n(?:(?:  - [^\n]+\n)*))").unwrap());
+
 /// A repository of Architecture Decision Records.
 #[derive(Debug)]
 pub struct Repository {
@@ -430,17 +443,27 @@ impl Repository {
     }
 
     /// Update an existing ADR.
+    ///
+    /// Updates metadata (status, links, tags, and MADR 4.0.0 frontmatter fields) and
+    /// body sections (context, decision, consequences) in place, preserving the
+    /// on-disk heading names (Nygard/adr-tools or MADR 4.0.0) and any extra
+    /// MADR 4.0.0 sections (e.g. `Considered Options`).
     pub fn update(&self, adr: &Adr) -> Result<PathBuf> {
         let path = adr
             .path
             .clone()
             .unwrap_or_else(|| self.adr_path().join(adr.filename()));
 
-        let link_titles = self.resolve_link_titles(adr);
-        let content = self
-            .template_engine
-            .render(adr, &self.config, &link_titles)?;
-        fs::write(&path, content)?;
+        let content = fs::read_to_string(&path)?;
+
+        let content = if content.starts_with("---\n") {
+            self.update_frontmatter_metadata(adr, &content)?
+        } else {
+            self.update_legacy_metadata(adr, &content)?
+        };
+
+        let updated = self.update_body_sections(adr, &content)?;
+        fs::write(&path, updated)?;
 
         Ok(path)
     }
@@ -558,6 +581,23 @@ impl Repository {
             yaml_block
         };
 
+        // 4. Replace or remove MADR 4.0.0 metadata blocks
+        let yaml_block = Self::replace_optional_yaml_block(
+            &yaml_block,
+            &FM_DECISION_MAKERS_RE,
+            Self::format_string_list_yaml("decision-makers", &adr.decision_makers),
+        );
+        let yaml_block = Self::replace_optional_yaml_block(
+            &yaml_block,
+            &FM_CONSULTED_RE,
+            Self::format_string_list_yaml("consulted", &adr.consulted),
+        );
+        let yaml_block = Self::replace_optional_yaml_block(
+            &yaml_block,
+            &FM_INFORMED_RE,
+            Self::format_string_list_yaml("informed", &adr.informed),
+        );
+
         let yaml_block = yaml_block.trim_end_matches('\n');
         Ok(format!("---\n{}{}", yaml_block, after_yaml))
     }
@@ -632,6 +672,61 @@ impl Repository {
         Ok(result)
     }
 
+    /// Surgically replace context/decision/consequences section bodies in an ADR file.
+    ///
+    /// Preserves the original section headings (Nygard/adr-tools or MADR 4.0.0) and
+    /// all other content.
+    fn update_body_sections(&self, adr: &Adr, content: &str) -> Result<String> {
+        let lines: Vec<&str> = content.lines().collect();
+        let mut result = String::with_capacity(content.len());
+        let mut i = 0;
+
+        while i < lines.len() {
+            let line = lines[i];
+            if let Some(heading_text) = line.strip_prefix("## ")
+                && crate::parse::canonical_section_field(heading_text.trim()).is_some()
+            {
+                result.push_str(line);
+                result.push('\n');
+                i += 1;
+
+                // Skip the original section body up to the next H2 heading.
+                while i < lines.len() && !lines[i].starts_with("## ") {
+                    i += 1;
+                }
+
+                let new_body = Self::section_content_for_heading(heading_text.trim(), adr);
+                result.push('\n');
+                result.push_str(new_body);
+                if !new_body.ends_with('\n') {
+                    result.push('\n');
+                }
+                continue;
+            }
+
+            result.push_str(line);
+            if i < lines.len() - 1 || content.ends_with('\n') {
+                result.push('\n');
+            }
+            i += 1;
+        }
+
+        if content.ends_with('\n') && !result.ends_with('\n') {
+            result.push('\n');
+        }
+
+        Ok(result)
+    }
+
+    fn section_content_for_heading<'a>(heading: &str, adr: &'a Adr) -> &'a str {
+        match crate::parse::canonical_section_field(heading) {
+            Some("context") => &adr.context,
+            Some("decision") => &adr.decision,
+            Some("consequences") => &adr.consequences,
+            _ => "",
+        }
+    }
+
     /// Format links as YAML block for frontmatter insertion.
     fn format_links_yaml(links: &[AdrLink]) -> String {
         if links.is_empty() {
@@ -660,14 +755,35 @@ impl Repository {
 
     /// Format tags as YAML block for frontmatter insertion.
     fn format_tags_yaml(tags: &[String]) -> String {
-        if tags.is_empty() {
+        Self::format_string_list_yaml("tags", tags)
+    }
+
+    /// Format a YAML list field (or remove it when empty).
+    fn format_string_list_yaml(field: &str, values: &[String]) -> String {
+        if values.is_empty() {
             return String::new();
         }
-        let mut s = String::from("tags:\n");
-        for tag in tags {
-            s.push_str(&format!("  - {}\n", tag));
+        let mut s = format!("{field}:\n");
+        for value in values {
+            s.push_str(&format!("  - {value}\n"));
         }
         s
+    }
+
+    /// Replace, remove, or append an optional YAML block in frontmatter.
+    fn replace_optional_yaml_block(yaml_block: &str, regex: &Regex, new_yaml: String) -> String {
+        if regex.is_match(yaml_block) {
+            regex.replace(yaml_block, new_yaml.as_str()).into_owned()
+        } else if !new_yaml.is_empty() {
+            let mut s = yaml_block.to_string();
+            if !s.ends_with('\n') {
+                s.push('\n');
+            }
+            s.push_str(&new_yaml);
+            s
+        } else {
+            yaml_block.to_string()
+        }
     }
 }
 
@@ -1904,6 +2020,92 @@ Decision.
         let result = fs::read_to_string(&adr_path).unwrap();
         assert!(result.contains("status: proposed"));
         assert!(repo.get(2).is_ok());
+    }
+
+    /// `update_content` on a MADR 4.0.0 ADR must preserve unmodified sections and
+    /// headings (not re-render as Nygard/adr-tools).
+    #[test]
+    fn test_update_madr_content_preserves_unmodified_sections() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let madr_content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2026-01-15
+status: proposed
+---
+
+# Use Redis for caching
+
+## Context and Problem Statement
+
+Original context about caching needs.
+
+## Considered Options
+
+* Redis
+* Memcached
+
+## Decision Outcome
+
+Chosen option: "Redis", because it supports data structures beyond simple key-value.
+
+### Consequences
+
+* Good, because it provides pub/sub
+"#;
+        let adr_path = repo.adr_path().join("0002-use-redis-for-caching.md");
+        fs::write(&adr_path, madr_content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "Updated context text.".into();
+        repo.update(&adr).unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+
+        assert!(result.contains("## Context and Problem Statement"));
+        assert!(result.contains("Updated context text."));
+        assert!(result.contains("## Considered Options"));
+        assert!(result.contains("* Memcached"));
+        assert!(result.contains("## Decision Outcome"));
+        assert!(result.contains("Chosen option: \"Redis\""));
+        assert!(!result.contains("What is the change that we're proposing"));
+        assert!(!result.contains("## Context\n"));
+        assert!(!result.contains("## Decision\n"));
+    }
+
+    /// MADR 4.0.0 section bodies must round-trip through parse → update → parse.
+    #[test]
+    fn test_update_madr_content_round_trip_via_get() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let madr_content = r#"---
+number: 2
+title: Use PostgreSQL
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+We need a relational database.
+
+## Decision Outcome
+
+We will use PostgreSQL 16.
+"#;
+        let adr_path = repo.adr_path().join("0002-use-postgresql.md");
+        fs::write(&adr_path, madr_content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "Updated context only.".into();
+        repo.update(&adr).unwrap();
+
+        let reloaded = repo.get(2).unwrap();
+        assert_eq!(reloaded.context, "Updated context only.");
+        assert_eq!(reloaded.decision, "We will use PostgreSQL 16.");
     }
 
     #[test]
