@@ -16,6 +16,22 @@ static LINK_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// Regex for extracting ADR number from filename.
 static NUMBER_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\d{4})-.*\.md$").unwrap());
 
+/// Map a markdown H2 heading (normalized to lowercase) to a canonical ADR body field.
+///
+/// Recognizes section names from the two supported on-disk formats:
+/// - **Nygard/adr-tools** — `Context`, `Decision`, `Consequences` (Michael Nygard's
+///   layout, as implemented by [adr-tools](https://github.com/npryce/adr-tools))
+/// - **MADR 4.0.0** — `Context and Problem Statement`, `Decision Outcome`, and
+///   `Consequences` when present as a top-level H2
+pub(crate) fn canonical_section_field(section: &str) -> Option<&'static str> {
+    match section.trim().to_lowercase().as_str() {
+        "context" | "context and problem statement" => Some("context"),
+        "decision" | "decision outcome" => Some("decision"),
+        "consequences" => Some("consequences"),
+        _ => None,
+    }
+}
+
 /// Parser for ADR files.
 #[derive(Debug, Default)]
 pub struct Parser {
@@ -90,16 +106,15 @@ impl Parser {
             }
         }
 
-        // Parse body sections
+        // Parse body sections (Nygard/adr-tools and MADR 4.0.0 heading aliases)
         let sections = self.parse_sections(body);
-        if let Some(context) = sections.get("context") {
-            adr.context = context.clone();
-        }
-        if let Some(decision) = sections.get("decision") {
-            adr.decision = decision.clone();
-        }
-        if let Some(consequences) = sections.get("consequences") {
-            adr.consequences = consequences.clone();
+        for (key, value) in &sections {
+            match canonical_section_field(key) {
+                Some("context") => adr.context = value.clone(),
+                Some("decision") => adr.decision = value.clone(),
+                Some("consequences") => adr.consequences = value.clone(),
+                _ => {}
+            }
         }
 
         Ok(adr)
@@ -164,19 +179,14 @@ impl Parser {
     /// Apply a parsed section to the ADR.
     fn apply_section(&self, adr: &mut Adr, section: &str, content: &str) {
         let content = content.trim().to_string();
-        match section {
-            "status" => {
-                self.parse_status_section(adr, &content);
-            }
-            "context" => {
-                adr.context = content;
-            }
-            "decision" => {
-                adr.decision = content;
-            }
-            "consequences" => {
-                adr.consequences = content;
-            }
+        if section == "status" {
+            self.parse_status_section(adr, &content);
+            return;
+        }
+        match canonical_section_field(section) {
+            Some("context") => adr.context = content,
+            Some("decision") => adr.decision = content,
+            Some("consequences") => adr.consequences = content,
             _ => {}
         }
     }
@@ -899,6 +909,8 @@ We will use Redis.
         assert_eq!(adr.number, 2);
         assert_eq!(adr.title, "Use Redis for caching");
         assert_eq!(adr.status, AdrStatus::Proposed);
+        assert!(adr.context.contains("caching solution"));
+        assert!(adr.decision.contains("use Redis"));
     }
 
     #[test]
@@ -923,6 +935,32 @@ Context.
         assert_eq!(adr.number, 1);
         assert_eq!(adr.title, "Use MADR Format");
         assert_eq!(adr.status, AdrStatus::Accepted);
+        assert_eq!(adr.context, "Context.");
+    }
+
+    #[test]
+    fn test_parse_madr_frontmatter_populates_body_sections() {
+        let content = r#"---
+number: 1
+title: Use MADR Format
+date: 2024-09-15
+status: accepted
+---
+
+## Context and Problem Statement
+
+We need a standard format for ADRs.
+
+## Decision Outcome
+
+Chosen option: "MADR 4.0.0", because it provides rich metadata.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(adr.context.contains("standard format"));
+        assert!(adr.decision.contains("MADR 4.0.0"));
     }
 
     #[test]
