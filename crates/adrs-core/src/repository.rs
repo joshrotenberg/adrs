@@ -793,6 +793,11 @@ impl Repository {
             .is_some_and(|title| title.trim().eq_ignore_ascii_case("consequences"))
     }
 
+    fn is_consequences_h2(line: &str) -> bool {
+        line.strip_prefix("## ")
+            .is_some_and(|title| title.trim().eq_ignore_ascii_case("consequences"))
+    }
+
     /// Patch `## Decision` / `## Decision Outcome`, preserving MADR H3 subsections
     /// unless `patch.decision` or `patch.consequences` targets them.
     fn patch_decision_section(
@@ -808,6 +813,19 @@ impl Repository {
             return;
         }
 
+        // Nygard-style ADRs use a top-level `## Consequences` H2; that section is
+        // patched separately. Leave Decision bytes untouched when only consequences
+        // is set and a Consequences H2 exists later in the file.
+        if patch.decision.is_none()
+            && patch.consequences.is_some()
+            && lines[body_end..]
+                .iter()
+                .any(|l| Self::is_consequences_h2(l))
+        {
+            Self::append_lines(result, lines, body_start, body_end, content);
+            return;
+        }
+
         let body = &lines[body_start..body_end];
         let first_h3 = body.iter().position(|l| l.starts_with("### "));
         let intro_end = first_h3.map(|idx| body_start + idx).unwrap_or(body_end);
@@ -819,7 +837,11 @@ impl Repository {
         }
 
         if intro_end >= body_end {
-            if let Some(ref text) = patch.consequences {
+            if let Some(ref text) = patch.consequences
+                && !lines[body_end..]
+                    .iter()
+                    .any(|l| Self::is_consequences_h2(l))
+            {
                 Self::write_madr_consequences_subsection(result, text);
             }
             return;
@@ -858,6 +880,9 @@ impl Repository {
 
         if let Some(ref text) = patch.consequences
             && !consequences_written
+            && !lines[body_end..]
+                .iter()
+                .any(|l| Self::is_consequences_h2(l))
         {
             Self::write_madr_consequences_subsection(result, text);
         }

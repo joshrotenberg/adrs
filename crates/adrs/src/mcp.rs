@@ -2327,6 +2327,74 @@ Chosen option: "Redis", because it is fast.
     }
 
     #[tokio::test]
+    async fn test_update_content_nygard_consequences_only() {
+        // Nygard ADRs use top-level ## Consequences; consequences-only updates must
+        // patch that H2 and leave ## Decision untouched (no MADR ### injection).
+        let (client, tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use Redis for caching",
+                    "context": "Context.",
+                    "decision": "Original decision."
+                }),
+            )
+            .await
+            .unwrap();
+
+        let adr_path = tmp.path().join("doc/adr/0002-use-redis-for-caching.md");
+        let content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2026-01-15
+status: proposed
+---
+
+## Context
+
+Context.
+
+## Decision
+
+Original decision.
+
+## Consequences
+
+* Old item
+"#;
+        std::fs::write(&adr_path, content).unwrap();
+
+        client
+            .call_tool_text(
+                "update_content",
+                json!({
+                    "number": 2,
+                    "consequences": "* New item"
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("get_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+        let adr: AdrDetail = serde_json::from_str(&result).unwrap();
+
+        assert!(adr.content.contains("Original decision."));
+        assert!(adr.content.contains("## Consequences"));
+        assert!(adr.content.contains("* New item"));
+        assert!(!adr.content.contains("* Old item"));
+        assert!(
+            !adr.content.contains("### Consequences"),
+            "Nygard ADR should not get MADR ### Consequences under Decision, got:\n{}",
+            adr.content
+        );
+    }
+
+    #[tokio::test]
     async fn test_update_status_madr_preserves_rich_body() {
         let (client, tmp) = setup_client(true).await;
 
