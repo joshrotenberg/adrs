@@ -103,7 +103,7 @@ pub use lint::{
     lint_all,
 };
 pub use parse::Parser;
-pub use repository::Repository;
+pub use repository::{BodySectionPatch, Repository};
 pub use template::{Template, TemplateEngine, TemplateFormat, TemplateVariant};
 pub use types::{Adr, AdrLink, AdrStatus, LinkKind};
 
