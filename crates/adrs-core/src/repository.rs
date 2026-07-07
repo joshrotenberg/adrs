@@ -2464,7 +2464,6 @@ decision-makers: mschoettle
         let adr = adrs.iter().find(|a| a.number == 2).unwrap();
         assert_eq!(adr.decision_makers, vec!["mschoettle"]);
     }
-
     // ========== Link metadata round-trip Tests (#323, #325) ==========
 
     #[test]
@@ -2581,5 +2580,717 @@ Context.
             Repository::link_href(&target),
             "0003-use-rust-for-backend-services.md"
         );
+    // ========== BodySectionPatch preservation tests (issue #310) ==========
+
+    /// Extract from `## {heading}` through the line before the next H2 (inclusive).
+    fn extract_h2_block(content: &str, heading: &str) -> Option<String> {
+        let lines: Vec<&str> = content.lines().collect();
+        let marker = format!("## {heading}");
+        let start = lines.iter().position(|l| l.trim() == marker)?;
+        let end = lines[(start + 1)..]
+            .iter()
+            .position(|l| l.starts_with("## "))
+            .map(|p| start + 1 + p)
+            .unwrap_or(lines.len());
+        Some(lines[start..end].join("\n"))
+    }
+
+    fn assert_h2_block_unchanged(before: &str, after: &str, heading: &str) {
+        assert_eq!(
+            extract_h2_block(before, heading),
+            extract_h2_block(after, heading),
+            "section `{heading}` should be byte-identical"
+        );
+    }
+
+    #[test]
+    fn test_update_ng_nygard_rich_context_preserved_on_decision_patch() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Rich context ADR
+date: 2026-01-15
+status: proposed
+---
+
+## Context
+
+We need caching. See the [Redis docs](https://redis.io).
+
+* Requirement one
+* Requirement two
+
+Use `redis-cli` for debugging.
+
+## Decision
+
+Old decision.
+
+## Consequences
+
+Old consequences.
+"#;
+        let adr_path = repo.adr_path().join("0002-rich-context-adr.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New decision.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                decision: Some("New decision.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_h2_block_unchanged(&before, &after, "Context");
+        assert_h2_block_unchanged(&before, &after, "Consequences");
+        assert!(after.contains("New decision."));
+    }
+
+    #[test]
+    fn test_update_madr_rich_context_preserved_on_consequences_patch() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Rich MADR context
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+We need caching. See the [Redis docs](https://redis.io).
+
+* Requirement one
+* Requirement two
+
+Use `redis-cli` for debugging.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Old consequence
+"#;
+        let adr_path = repo.adr_path().join("0002-rich-madr-context.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.consequences = "* New consequence".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                consequences: Some("* New consequence".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_h2_block_unchanged(&before, &after, "Context and Problem Statement");
+        assert!(after.contains("Chosen option: \"Redis\", because it is fast."));
+        assert!(after.contains("* New consequence"));
+        assert!(!after.contains("* Old consequence"));
+    }
+
+    #[test]
+    fn test_update_legacy_rich_context_preserved_on_decision_patch() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = r#"# 2. Legacy rich context
+
+Date: 2026-01-15
+
+## Status
+
+Proposed
+
+## Context
+
+We need caching. See the [Redis docs](https://redis.io).
+
+* Requirement one
+* Requirement two
+
+Use `redis-cli` for debugging.
+
+## Decision
+
+Old decision.
+
+## Consequences
+
+Old consequences.
+"#;
+        let adr_path = repo.adr_path().join("0002-legacy-rich-context.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New decision.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                decision: Some("New decision.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_h2_block_unchanged(&before, &after, "Context");
+        assert_h2_block_unchanged(&before, &after, "Consequences");
+        assert!(after.contains("New decision."));
+    }
+
+    #[test]
+    fn test_update_madr_decision_only_preserves_h3_subsections() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Decision patch MADR
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Old intro text.
+
+### Consequences
+
+* Good, because it is fast
+* Bad, because it uses memory
+
+### Confirmation
+
+Confirm via load tests.
+"#;
+        let adr_path = repo.adr_path().join("0002-decision-patch-madr.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New intro text.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                decision: Some("New intro text.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("New intro text."));
+        assert!(!after.contains("Old intro text."));
+        assert!(after.contains("### Consequences"));
+        assert!(after.contains("* Good, because it is fast"));
+        assert!(after.contains("* Bad, because it uses memory"));
+        assert!(after.contains("### Confirmation"));
+        assert!(after.contains("Confirm via load tests."));
+        assert_h2_block_unchanged(&before, &after, "Context and Problem Statement");
+    }
+
+    #[test]
+    fn test_update_madr_decision_and_consequences_together_preserves_other_h3() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Combined patch MADR
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Old intro.
+
+### Consequences
+
+* Old consequence
+
+### Confirmation
+
+Confirm via load tests.
+"#;
+        let adr_path = repo.adr_path().join("0002-combined-patch-madr.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New intro.".into();
+        adr.consequences = "* New consequence".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                decision: Some("New intro.".into()),
+                consequences: Some("* New consequence".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("New intro."));
+        assert!(after.contains("* New consequence"));
+        assert!(!after.contains("Old intro."));
+        assert!(!after.contains("* Old consequence"));
+        assert!(after.contains("### Confirmation"));
+        assert!(after.contains("Confirm via load tests."));
+        assert_h2_block_unchanged(&before, &after, "Context and Problem Statement");
+    }
+
+    #[test]
+    fn test_update_ng_nygard_consequences_only_patch() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Nygard consequences patch
+date: 2026-01-15
+status: proposed
+---
+
+## Context
+
+Original context.
+
+## Decision
+
+Original decision.
+
+## Consequences
+
+* Old item
+"#;
+        let adr_path = repo.adr_path().join("0002-nygard-consequences-patch.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.consequences = "* New item".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                consequences: Some("* New item".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_h2_block_unchanged(&before, &after, "Context");
+        assert_h2_block_unchanged(&before, &after, "Decision");
+        assert!(after.contains("* New item"));
+        assert!(!after.contains("* Old item"));
+    }
+
+    #[test]
+    fn test_update_ng_nygard_context_only_preserves_consequences_section() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Nygard context patch
+date: 2026-01-15
+status: proposed
+---
+
+## Context
+
+Old context.
+
+## Decision
+
+Original decision.
+
+## Consequences
+
+* Good, because it is fast
+* Bad, because it uses memory
+"#;
+        let adr_path = repo.adr_path().join("0002-nygard-context-patch.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "New context.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("New context.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_h2_block_unchanged(&before, &after, "Decision");
+        assert_h2_block_unchanged(&before, &after, "Consequences");
+        assert!(after.contains("New context."));
+    }
+
+    #[test]
+    fn test_update_metadata_only_preserves_madr_body_byte_identical() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Metadata only MADR
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Intro.
+
+### Consequences
+
+* Good item
+
+### Confirmation
+
+Confirm via tests.
+"#;
+        let adr_path = repo.adr_path().join("0002-metadata-only-madr.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = fs::read_to_string(&adr_path).unwrap();
+        let body_start = before.find("\n\n## Context").unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.status = AdrStatus::Accepted;
+        repo.update(&adr, BodySectionPatch::default()).unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_eq!(
+            &before[body_start..],
+            &after[after.find("\n\n## Context").unwrap()..]
+        );
+        assert!(after.contains("status: accepted"));
+    }
+
+    #[test]
+    fn test_update_madr_consequences_appends_h3_when_missing() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Append consequences MADR
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Intro only, no consequences subsection yet.
+"#;
+        let adr_path = repo.adr_path().join("0002-append-consequences-madr.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.consequences = "* Appended consequence".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                consequences: Some("* Appended consequence".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("Intro only, no consequences subsection yet."));
+        assert!(after.contains("### Consequences"));
+        assert!(after.contains("* Appended consequence"));
+    }
+
+    #[test]
+    fn test_update_madr_in_compatible_mode_repo() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = r#"---
+number: 2
+title: Compatible repo MADR file
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Original context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Good item
+
+### Confirmation
+
+Confirm via tests.
+"#;
+        let adr_path = repo.adr_path().join("0002-compatible-repo-madr-file.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "Updated context.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("Updated context.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("Updated context."));
+        assert_h2_block_unchanged(&before, &after, "Decision Outcome");
+    }
+
+    #[test]
+    fn test_update_madr_decision_only_without_h3_subsections() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Simple decision MADR
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Old single-paragraph decision.
+"#;
+        let adr_path = repo.adr_path().join("0002-simple-decision-madr.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New single-paragraph decision.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                decision: Some("New single-paragraph decision.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("New single-paragraph decision."));
+        assert!(!after.contains("Old single-paragraph decision."));
+    }
+
+    #[test]
+    fn test_update_madr_optional_sections_preserved_byte_identical() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: MADR optional sections
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Original context.
+
+## Considered Options
+
+* Redis
+* Memcached
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Good item
+
+## Pros and Cons of the Options
+
+### Redis
+
+* Good, because fast
+* Bad, because memory
+
+### Memcached
+
+* Good, because simple
+* Bad, because strings only
+
+## More Information
+
+See [MADR](https://adr.github.io/madr/) for details.
+"#;
+        let adr_path = repo.adr_path().join("0002-madr-optional-sections.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "Updated context.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("Updated context.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("Updated context."));
+        assert_h2_block_unchanged(&before, &after, "Considered Options");
+        assert_h2_block_unchanged(&before, &after, "Decision Outcome");
+        assert_h2_block_unchanged(&before, &after, "Pros and Cons of the Options");
+        assert_h2_block_unchanged(&before, &after, "More Information");
+    }
+
+    #[test]
+    fn test_update_unchanged_sections_byte_identical_after_context_patch() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Byte identity check
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Original context.
+
+## Decision Outcome
+
+Intro.
+
+### Consequences
+
+* Good item
+
+### Confirmation
+
+Confirm via tests.
+"#;
+        let adr_path = repo.adr_path().join("0002-byte-identity-check.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "Updated context.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("Updated context.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_h2_block_unchanged(&before, &after, "Decision Outcome");
+    }
+
+    #[test]
+    fn test_update_madr_context_patch_does_not_round_trip_lossy_fields() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Lossy parse guard
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Original context.
+
+## Decision Outcome
+
+See [Redis docs](https://redis.io) and use `redis-cli`.
+
+* Chosen option: "Redis"
+* Because it is **fast**
+
+### Consequences
+
+* Good item
+"#;
+        let adr_path = repo.adr_path().join("0002-lossy-parse-guard.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        // Simulate MCP path: get() lossy-parses decision, but we only patch context.
+        adr.context = "Updated context.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("Updated context.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_h2_block_unchanged(&before, &after, "Decision Outcome");
+        assert!(after.contains("[Redis docs](https://redis.io)"));
+        assert!(after.contains("`redis-cli`"));
+        assert!(after.contains("**fast**"));
     }
 }
