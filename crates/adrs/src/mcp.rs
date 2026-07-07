@@ -2166,6 +2166,230 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_update_content_madr_preserves_h3_subsections() {
+        let (client, tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use Redis for caching",
+                    "format": "madr",
+                    "context": "Original context.",
+                    "decision": "Chosen option: \"Redis\", because it is fast."
+                }),
+            )
+            .await
+            .unwrap();
+
+        let adr_path = tmp.path().join("doc/adr/0002-use-redis-for-caching.md");
+        let rich_content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Original context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Good, because it provides pub/sub
+* Bad, because it needs memory
+
+### Confirmation
+
+We will confirm via load tests.
+"#;
+        std::fs::write(&adr_path, rich_content).unwrap();
+
+        client
+            .call_tool_text(
+                "update_content",
+                json!({
+                    "number": 2,
+                    "context": "Updated context text."
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("get_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+        let adr: AdrDetail = serde_json::from_str(&result).unwrap();
+
+        assert!(adr.content.contains("Updated context text."));
+        assert!(adr.content.contains("### Consequences"));
+        assert!(adr.content.contains("* Good, because it provides pub/sub"));
+        assert!(adr.content.contains("* Bad, because it needs memory"));
+        assert!(adr.content.contains("### Confirmation"));
+        assert!(adr.content.contains("We will confirm via load tests."));
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_madr_with_consequences() {
+        let (client, _tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use Redis for caching",
+                    "format": "madr",
+                    "context": "We need caching.",
+                    "decision": "Chosen option: \"Redis\", because it is fast.",
+                    "consequences": "* Good, because it provides pub/sub"
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("get_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+        let adr: AdrDetail = serde_json::from_str(&result).unwrap();
+
+        assert!(adr.content.contains("### Consequences"));
+        assert!(adr.content.contains("* Good, because it provides pub/sub"));
+    }
+
+    #[tokio::test]
+    async fn test_update_content_madr_consequences_only() {
+        let (client, tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use Redis for caching",
+                    "format": "madr",
+                    "context": "Context.",
+                    "decision": "Chosen option: \"Redis\", because it is fast."
+                }),
+            )
+            .await
+            .unwrap();
+
+        let adr_path = tmp.path().join("doc/adr/0002-use-redis-for-caching.md");
+        let rich_content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Old consequence
+"#;
+        std::fs::write(&adr_path, rich_content).unwrap();
+
+        client
+            .call_tool_text(
+                "update_content",
+                json!({
+                    "number": 2,
+                    "consequences": "* New consequence"
+                }),
+            )
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("get_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+        let adr: AdrDetail = serde_json::from_str(&result).unwrap();
+
+        assert!(
+            adr.content
+                .contains("Chosen option: \"Redis\", because it is fast.")
+        );
+        assert!(adr.content.contains("* New consequence"));
+        assert!(!adr.content.contains("* Old consequence"));
+    }
+
+    #[tokio::test]
+    async fn test_update_status_madr_preserves_rich_body() {
+        let (client, tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use Redis for caching",
+                    "format": "madr",
+                    "context": "Context.",
+                    "decision": "Chosen option: \"Redis\", because it is fast."
+                }),
+            )
+            .await
+            .unwrap();
+
+        let adr_path = tmp.path().join("doc/adr/0002-use-redis-for-caching.md");
+        let rich_content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Good item
+
+### Confirmation
+
+Confirm via tests.
+"#;
+        std::fs::write(&adr_path, rich_content).unwrap();
+
+        client
+            .call_tool_text("update_status", json!({"number": 2, "status": "accepted"}))
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool_text("get_adr", json!({"number": 2}))
+            .await
+            .unwrap();
+        let adr: AdrDetail = serde_json::from_str(&result).unwrap();
+
+        assert!(
+            adr.content.contains("status: accepted") || adr.status.eq_ignore_ascii_case("accepted")
+        );
+        assert!(adr.content.contains("### Consequences"));
+        assert!(adr.content.contains("* Good item"));
+        assert!(adr.content.contains("### Confirmation"));
+        assert!(adr.content.contains("Confirm via tests."));
+    }
+
+    #[tokio::test]
     async fn test_update_tags_ng_mode() {
         let (client, _tmp) = setup_client(true).await;
 
