@@ -37,6 +37,28 @@ static FM_CONSULTED_RE: LazyLock<Regex> =
 static FM_INFORMED_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^informed:(?: [^\n]+|\n(?:(?:  - [^\n]+\n)*))").unwrap());
 
+/// Selects which ADR body sections to patch on [`Repository::update`].
+///
+/// `None` for a field means leave that section's on-disk bytes untouched.
+/// `Some(text)` replaces the targeted portion (for MADR 4.0.0 `## Decision Outcome`,
+/// only the intro before `###` subsections unless `consequences` is also set).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct BodySectionPatch {
+    /// Patch the context section (`## Context` / `## Context and Problem Statement`).
+    pub context: Option<String>,
+    /// Patch the decision intro (`## Decision` / `## Decision Outcome` body before H3 subsections).
+    pub decision: Option<String>,
+    /// Patch consequences (`## Consequences`, or MADR `### Consequences` under Decision Outcome).
+    pub consequences: Option<String>,
+}
+
+impl BodySectionPatch {
+    /// Returns true when no body sections should be modified.
+    pub fn is_empty(&self) -> bool {
+        self.context.is_none() && self.decision.is_none() && self.consequences.is_none()
+    }
+}
+
 /// A repository of Architecture Decision Records.
 #[derive(Debug)]
 pub struct Repository {
@@ -444,11 +466,12 @@ impl Repository {
 
     /// Update an existing ADR.
     ///
-    /// Updates metadata (status, links, tags, and MADR 4.0.0 frontmatter fields) and
-    /// body sections (context, decision, consequences) in place, preserving the
-    /// on-disk heading names (Nygard/adr-tools or MADR 4.0.0) and any extra
-    /// MADR 4.0.0 sections (e.g. `Considered Options`).
-    pub fn update(&self, adr: &Adr) -> Result<PathBuf> {
+    /// Updates metadata (status, links, tags, and MADR 4.0.0 frontmatter fields) and,
+    /// for each field set in `body`, the matching body section in place.
+    ///
+    /// Unlisted sections are left byte-for-byte unchanged on disk, including MADR
+    /// `### Consequences` / `### Confirmation` subsections under `## Decision Outcome`.
+    pub fn update(&self, adr: &Adr, body: BodySectionPatch) -> Result<PathBuf> {
         let path = adr
             .path
             .clone()
@@ -462,7 +485,11 @@ impl Repository {
             self.update_legacy_metadata(adr, &content)?
         };
 
-        let updated = self.update_body_sections(adr, &content)?;
+        let updated = if body.is_empty() {
+            content
+        } else {
+            self.update_body_sections(&content, &body)?
+        };
         fs::write(&path, updated)?;
 
         Ok(path)
@@ -672,11 +699,8 @@ impl Repository {
         Ok(result)
     }
 
-    /// Surgically replace context/decision/consequences section bodies in an ADR file.
-    ///
-    /// Preserves the original section headings (Nygard/adr-tools or MADR 4.0.0) and
-    /// all other content.
-    fn update_body_sections(&self, adr: &Adr, content: &str) -> Result<String> {
+    /// Patch only the body sections listed in `patch`, preserving everything else.
+    fn update_body_sections(&self, content: &str, patch: &BodySectionPatch) -> Result<String> {
         let lines: Vec<&str> = content.lines().collect();
         let mut result = String::with_capacity(content.len());
         let mut i = 0;
@@ -684,23 +708,44 @@ impl Repository {
         while i < lines.len() {
             let line = lines[i];
             if let Some(heading_text) = line.strip_prefix("## ")
-                && crate::parse::canonical_section_field(heading_text.trim()).is_some()
+                && let Some(field) = crate::parse::canonical_section_field(heading_text.trim())
             {
                 result.push_str(line);
                 result.push('\n');
                 i += 1;
+                let body_end = Self::next_h2_index(&lines, i);
 
-                // Skip the original section body up to the next H2 heading.
-                while i < lines.len() && !lines[i].starts_with("## ") {
-                    i += 1;
+                match field {
+                    "context" => {
+                        if let Some(ref text) = patch.context {
+                            Self::write_section_body(&mut result, text);
+                        } else {
+                            Self::append_lines(&mut result, &lines, i, body_end, content);
+                        }
+                    }
+                    "decision" => {
+                        Self::patch_decision_section(
+                            &mut result,
+                            &lines,
+                            content,
+                            i,
+                            body_end,
+                            patch,
+                        );
+                    }
+                    "consequences" => {
+                        if let Some(ref text) = patch.consequences {
+                            Self::write_section_body(&mut result, text);
+                        } else {
+                            Self::append_lines(&mut result, &lines, i, body_end, content);
+                        }
+                    }
+                    _ => {
+                        Self::append_lines(&mut result, &lines, i, body_end, content);
+                    }
                 }
 
-                let new_body = Self::section_content_for_heading(heading_text.trim(), adr);
-                result.push('\n');
-                result.push_str(new_body);
-                if !new_body.ends_with('\n') {
-                    result.push('\n');
-                }
+                i = body_end;
                 continue;
             }
 
@@ -718,13 +763,109 @@ impl Repository {
         Ok(result)
     }
 
-    fn section_content_for_heading<'a>(heading: &str, adr: &'a Adr) -> &'a str {
-        match crate::parse::canonical_section_field(heading) {
-            Some("context") => &adr.context,
-            Some("decision") => &adr.decision,
-            Some("consequences") => &adr.consequences,
-            _ => "",
+    fn next_h2_index(lines: &[&str], start: usize) -> usize {
+        lines[start..]
+            .iter()
+            .position(|l| l.starts_with("## "))
+            .map(|p| start + p)
+            .unwrap_or(lines.len())
+    }
+
+    fn append_lines(result: &mut String, lines: &[&str], start: usize, end: usize, content: &str) {
+        for (offset, line) in lines[start..end].iter().enumerate() {
+            result.push_str(line);
+            if start + offset < end - 1 || content.ends_with('\n') {
+                result.push('\n');
+            }
         }
+    }
+
+    fn write_section_body(result: &mut String, text: &str) {
+        result.push('\n');
+        result.push_str(text);
+        if !text.ends_with('\n') {
+            result.push('\n');
+        }
+    }
+
+    fn is_consequences_h3(line: &str) -> bool {
+        line.strip_prefix("### ")
+            .is_some_and(|title| title.trim().eq_ignore_ascii_case("consequences"))
+    }
+
+    /// Patch `## Decision` / `## Decision Outcome`, preserving MADR H3 subsections
+    /// unless `patch.decision` or `patch.consequences` targets them.
+    fn patch_decision_section(
+        result: &mut String,
+        lines: &[&str],
+        content: &str,
+        body_start: usize,
+        body_end: usize,
+        patch: &BodySectionPatch,
+    ) {
+        if patch.decision.is_none() && patch.consequences.is_none() {
+            Self::append_lines(result, lines, body_start, body_end, content);
+            return;
+        }
+
+        let body = &lines[body_start..body_end];
+        let first_h3 = body.iter().position(|l| l.starts_with("### "));
+        let intro_end = first_h3.map(|idx| body_start + idx).unwrap_or(body_end);
+
+        if let Some(ref text) = patch.decision {
+            Self::write_section_body(result, text);
+        } else {
+            Self::append_lines(result, lines, body_start, intro_end, content);
+        }
+
+        if intro_end >= body_end {
+            if let Some(ref text) = patch.consequences {
+                Self::write_madr_consequences_subsection(result, text);
+            }
+            return;
+        }
+
+        let mut j = intro_end;
+        let mut consequences_written = false;
+
+        while j < body_end {
+            if !lines[j].starts_with("### ") {
+                j += 1;
+                continue;
+            }
+
+            let sub_start = j;
+            let sub_end = lines[sub_start + 1..body_end]
+                .iter()
+                .position(|l| l.starts_with("## ") || l.starts_with("### "))
+                .map(|p| sub_start + 1 + p)
+                .unwrap_or(body_end);
+
+            if Self::is_consequences_h3(lines[sub_start]) {
+                consequences_written = true;
+                if let Some(ref text) = patch.consequences {
+                    result.push_str(lines[sub_start]);
+                    result.push('\n');
+                    Self::write_section_body(result, text);
+                    j = sub_end;
+                    continue;
+                }
+            }
+
+            Self::append_lines(result, lines, sub_start, sub_end, content);
+            j = sub_end;
+        }
+
+        if let Some(ref text) = patch.consequences
+            && !consequences_written
+        {
+            Self::write_madr_consequences_subsection(result, text);
+        }
+    }
+
+    fn write_madr_consequences_subsection(result: &mut String, text: &str) {
+        result.push_str("### Consequences\n");
+        Self::write_section_body(result, text);
     }
 
     /// Format links as YAML block for frontmatter insertion.
@@ -1393,7 +1534,7 @@ default_status = "draft"
         let mut adr = repo.get(1).unwrap();
         adr.status = AdrStatus::Deprecated;
 
-        repo.update(&adr).unwrap();
+        repo.update(&adr, BodySectionPatch::default()).unwrap();
 
         let updated = repo.get(1).unwrap();
         assert_eq!(updated.status, AdrStatus::Deprecated);
@@ -1408,7 +1549,7 @@ default_status = "draft"
         let original_title = adr.title.clone();
         adr.status = AdrStatus::Deprecated;
 
-        repo.update(&adr).unwrap();
+        repo.update(&adr, BodySectionPatch::default()).unwrap();
 
         let updated = repo.get(1).unwrap();
         assert_eq!(updated.title, original_title);
@@ -2060,7 +2201,14 @@ Chosen option: "Redis", because it supports data structures beyond simple key-va
 
         let mut adr = repo.get(2).unwrap();
         adr.context = "Updated context text.".into();
-        repo.update(&adr).unwrap();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("Updated context text.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
         let result = fs::read_to_string(&adr_path).unwrap();
 
@@ -2070,9 +2218,109 @@ Chosen option: "Redis", because it supports data structures beyond simple key-va
         assert!(result.contains("* Memcached"));
         assert!(result.contains("## Decision Outcome"));
         assert!(result.contains("Chosen option: \"Redis\""));
+        assert!(result.contains("### Consequences"));
+        assert!(result.contains("* Good, because it provides pub/sub"));
         assert!(!result.contains("What is the change that we're proposing"));
         assert!(!result.contains("## Context\n"));
         assert!(!result.contains("## Decision\n"));
+    }
+
+    #[test]
+    fn test_update_madr_context_preserves_decision_h3_subsections() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let madr_content = r#"---
+number: 2
+title: Use Redis
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Original context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Good, because it provides pub/sub
+* Bad, because it needs memory
+
+### Confirmation
+
+We will confirm via load tests.
+"#;
+        let adr_path = repo.adr_path().join("0002-use-redis.md");
+        fs::write(&adr_path, madr_content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "Updated context only.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("Updated context only.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+        assert!(result.contains("Updated context only."));
+        assert!(result.contains("Chosen option: \"Redis\", because it is fast."));
+        assert!(result.contains("### Consequences"));
+        assert!(result.contains("* Good, because it provides pub/sub"));
+        assert!(result.contains("* Bad, because it needs memory"));
+        assert!(result.contains("### Confirmation"));
+        assert!(result.contains("We will confirm via load tests."));
+    }
+
+    #[test]
+    fn test_update_madr_consequences_patches_h3_subsection() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let madr_content = r#"---
+number: 2
+title: Use Redis
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Old consequence
+"#;
+        let adr_path = repo.adr_path().join("0002-use-redis.md");
+        fs::write(&adr_path, madr_content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.consequences = "* New consequence".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                consequences: Some("* New consequence".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let result = fs::read_to_string(&adr_path).unwrap();
+        assert!(result.contains("Chosen option: \"Redis\", because it is fast."));
+        assert!(result.contains("### Consequences"));
+        assert!(result.contains("* New consequence"));
+        assert!(!result.contains("* Old consequence"));
     }
 
     /// MADR 4.0.0 section bodies must round-trip through parse → update → parse.
@@ -2101,7 +2349,14 @@ We will use PostgreSQL 16.
 
         let mut adr = repo.get(2).unwrap();
         adr.context = "Updated context only.".into();
-        repo.update(&adr).unwrap();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("Updated context only.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
         let reloaded = repo.get(2).unwrap();
         assert_eq!(reloaded.context, "Updated context only.");

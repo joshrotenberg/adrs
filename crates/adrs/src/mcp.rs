@@ -989,16 +989,20 @@ impl AdrState {
 
         // Update content sections if provided.
         let mut content_updated = false;
+        let mut body = adrs_core::BodySectionPatch::default();
         if let Some(context) = params.context {
-            adr.context = context;
+            adr.context = context.clone();
+            body.context = Some(context);
             content_updated = true;
         }
         if let Some(decision) = params.decision {
-            adr.decision = decision;
+            adr.decision = decision.clone();
+            body.decision = Some(decision);
             content_updated = true;
         }
         if let Some(consequences) = params.consequences {
-            adr.consequences = consequences;
+            adr.consequences = consequences.clone();
+            body.consequences = Some(consequences);
             content_updated = true;
         }
 
@@ -1040,7 +1044,7 @@ impl AdrState {
 
         // Re-render if any content or metadata was provided.
         let final_path = if content_updated {
-            repo.update(&adr).map_err(|e| e.to_string())?
+            repo.update(&adr, body).map_err(|e| e.to_string())?
         } else {
             path
         };
@@ -1149,18 +1153,21 @@ impl AdrState {
         let repo = self.open_repo()?;
         let mut adr = repo.get(params.number).map_err(|e| e.to_string())?;
 
-        // Update only provided fields
+        let mut body = adrs_core::BodySectionPatch::default();
         if let Some(context) = params.context {
-            adr.context = context;
+            adr.context = context.clone();
+            body.context = Some(context);
         }
         if let Some(decision) = params.decision {
-            adr.decision = decision;
+            adr.decision = decision.clone();
+            body.decision = Some(decision);
         }
         if let Some(consequences) = params.consequences {
-            adr.consequences = consequences;
+            adr.consequences = consequences.clone();
+            body.consequences = Some(consequences);
         }
 
-        let path = repo.update(&adr).map_err(|e| e.to_string())?;
+        let path = repo.update(&adr, body).map_err(|e| e.to_string())?;
 
         #[derive(Serialize)]
         struct ContentResponse {
