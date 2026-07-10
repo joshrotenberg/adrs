@@ -1836,3 +1836,198 @@ fn test_smoke_nextgen_workflow() {
 
     temp.close().unwrap();
 }
+
+// ============================================================================
+// -C Relative Path Resolution
+// ============================================================================
+
+#[test]
+fn test_generate_book_with_cwd_flag_relative_output() {
+    // Regression test: `adrs -C <dir> generate book` must write its output
+    // relative to the -C directory, not the process cwd, and must not
+    // clobber an existing book/ in the process cwd.
+    let repo = assert_fs::TempDir::new().unwrap();
+    let elsewhere = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(repo.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Pre-existing book/ in the process cwd that must survive untouched
+    let sentinel = "# pre-existing book.toml, do not overwrite\n";
+    elsewhere.child("book/src").create_dir_all().unwrap();
+    elsewhere
+        .child("book/book.toml")
+        .write_str(sentinel)
+        .unwrap();
+
+    adrs()
+        .current_dir(elsewhere.path())
+        .args(["-C", repo.path().to_str().unwrap(), "generate", "book"])
+        .assert()
+        .success();
+
+    // Output lands in the -C directory
+    repo.child("book/book.toml")
+        .assert(predicate::path::exists());
+    repo.child("book/src/SUMMARY.md")
+        .assert(predicate::path::exists());
+    repo.child("book/src/0001-record-architecture-decisions.md")
+        .assert(predicate::path::exists());
+
+    // The process cwd's book/ is untouched
+    elsewhere.child("book/book.toml").assert(sentinel);
+    elsewhere
+        .child("book/src/SUMMARY.md")
+        .assert(predicate::path::missing());
+
+    repo.close().unwrap();
+    elsewhere.close().unwrap();
+}
+
+#[test]
+fn test_import_json_with_cwd_flag_relative_paths() {
+    // Both the JSON file argument and --dir must resolve against the -C
+    // directory, not the process cwd.
+    let workdir = assert_fs::TempDir::new().unwrap();
+    let elsewhere = assert_fs::TempDir::new().unwrap();
+
+    // Build a source repo and export it to JSON inside workdir
+    adrs()
+        .current_dir(workdir.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    let export_out = adrs()
+        .current_dir(workdir.path())
+        .args(["export", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    workdir
+        .child("adrs.json")
+        .write_binary(&export_out)
+        .unwrap();
+
+    // Run from elsewhere with -C and relative file + --dir arguments
+    adrs()
+        .current_dir(elsewhere.path())
+        .args([
+            "-C",
+            workdir.path().to_str().unwrap(),
+            "import",
+            "json",
+            "--dir",
+            "imported",
+            "adrs.json",
+        ])
+        .assert()
+        .success();
+
+    workdir
+        .child("imported/0001-record-architecture-decisions.md")
+        .assert(predicate::path::exists());
+    elsewhere
+        .child("imported")
+        .assert(predicate::path::missing());
+
+    workdir.close().unwrap();
+    elsewhere.close().unwrap();
+}
+
+#[test]
+fn test_export_json_with_cwd_flag_relative_dir() {
+    // A relative --dir must resolve against the -C directory.
+    let workdir = assert_fs::TempDir::new().unwrap();
+    let elsewhere = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(workdir.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(elsewhere.path())
+        .args([
+            "-C",
+            workdir.path().to_str().unwrap(),
+            "export",
+            "json",
+            "--dir",
+            "doc/adr",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Record architecture decisions"));
+
+    workdir.close().unwrap();
+    elsewhere.close().unwrap();
+}
+
+#[test]
+fn test_generate_toc_with_cwd_flag_relative_intro() {
+    // A relative --intro file must resolve against the -C directory.
+    let workdir = assert_fs::TempDir::new().unwrap();
+    let elsewhere = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(workdir.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    workdir
+        .child("intro.md")
+        .write_str("Intro from workdir\n")
+        .unwrap();
+
+    adrs()
+        .current_dir(elsewhere.path())
+        .args([
+            "-C",
+            workdir.path().to_str().unwrap(),
+            "generate",
+            "toc",
+            "--intro",
+            "intro.md",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Intro from workdir"));
+
+    workdir.close().unwrap();
+    elsewhere.close().unwrap();
+}
+
+#[test]
+fn test_generate_book_relative_output_without_cwd_flag() {
+    // Without -C, a relative --output still resolves against the process
+    // cwd and prints the path as given.
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["generate", "book", "--output", "mybook"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("mybook"));
+
+    temp.child("mybook/book.toml")
+        .assert(predicate::path::exists());
+    temp.child("mybook/src/SUMMARY.md")
+        .assert(predicate::path::exists());
+
+    temp.close().unwrap();
+}
