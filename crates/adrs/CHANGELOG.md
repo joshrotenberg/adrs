@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-07-10
+
+### Bug Fixes
+
+- Reject empty or whitespace-only status values (closes #305)
+- Surface --ng as a no-op for adrs doctor (closes #306)
+- Resolve relative CLI paths against the -C working directory
+
+### Documentation
+
+- Fix drift found by v0.9.0 release readiness audit
+- Add bare-minimal to MCP create_adr variant error message
+
+### Features
+
+- Configurable doctor rules and warnings-as-errors via adrs.toml
+
+### Testing
+
+- Assert against original status instead of hardcoded Proposed
+
+
 ## [0.8.0] - 2026-06-15
 
 ### Features
