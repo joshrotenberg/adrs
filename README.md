@@ -12,10 +12,10 @@ A command-line tool for creating and managing [Architecture Decision Records](ht
 
 - **adr-tools compatible** - works with existing ADR repositories
 - **Multiple formats** - supports Nygard (classic) and [MADR 4.0.0](https://adr.github.io/madr/) formats
-- **Template variants** - full, minimal, and bare templates
+- **Template variants** - full, minimal, bare, and bare-minimal templates
 - **Tags support** - categorize ADRs with tags (NextGen mode)
 - **Full-text search** - search ADR titles and content
-- **Repository health checks** - `doctor` command finds issues
+- **Repository health checks** - `doctor` command with configurable rules (`[doctor]` in adrs.toml) and a pre-commit hook
 - **Config discovery** - automatically finds ADR directory from subdirectories
 - **Import/Export** - JSON-ADR format with federation support
 - **MCP server** - AI agent integration via Model Context Protocol
@@ -38,7 +38,7 @@ cargo install adrs
 ### Docker
 
 ```sh
-docker run --rm -v $(pwd):/work ghcr.io/joshrotenberg/adrs init
+docker run --rm -v $(pwd):/workspace -w /workspace ghcr.io/joshrotenberg/adrs init
 ```
 
 ### Binary releases
@@ -81,6 +81,7 @@ Commands:
   import       Import ADRs from different formats
   template     Manage ADR templates
   completions  Generate shell completions
+  mcp          Start MCP server for AI agent integration (included by default)
   cheatsheet   Show quick reference for common workflows
 
 Options:
@@ -151,7 +152,7 @@ adrs generate book && cd book && mdbook serve
 adrs export json > decisions.json
 
 # Import from another repository
-adrs import decisions.json --renumber
+adrs import json decisions.json --renumber
 ```
 
 ## MCP Server (AI Integration)
@@ -172,7 +173,7 @@ Add to Claude Desktop config (`claude_desktop_config.json`):
 }
 ```
 
-The MCP server provides 15 tools for reading, creating, and managing ADRs.
+The MCP server provides tools for reading, creating, and managing ADRs.
 
 ## Library
 
@@ -180,7 +181,7 @@ The MCP server provides 15 tools for reading, creating, and managing ADRs.
 
 ```toml
 [dependencies]
-adrs-core = "0.7"
+adrs-core = "0.9"
 ```
 
 ```rust

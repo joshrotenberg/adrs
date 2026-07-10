@@ -18,7 +18,7 @@ Each format has four variants:
 | Variant | Description |
 |---------|-------------|
 | `full` | Complete template with all sections and guidance comments |
-| `minimal` | Essential sections only, no guidance |
+| `minimal` | Essential sections only; some formats (e.g. MADR) still include placeholder guidance text |
 | `bare` | All sections, but empty (no guidance) |
 | `bare-minimal` | Core sections only, empty content |
 

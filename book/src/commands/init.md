@@ -26,7 +26,9 @@ adrs init [OPTIONS] [DIRECTORY]
 
 The `init` command creates:
 
-1. A `.adr-dir` file in the current directory containing the ADR directory path
+1. A configuration file in the current directory: `.adr-dir` (containing the
+   ADR directory path) in compatible mode, or `adrs.toml` in NextGen mode
+   (`--ng`)
 2. The ADR directory (creates parent directories if needed)
 3. An initial ADR: `0001-record-architecture-decisions.md`
 
@@ -73,15 +75,18 @@ Creates the full directory path.
 adrs init --ng
 ```
 
-Creates the initial ADR with YAML frontmatter:
+Writes `adrs.toml` instead of `.adr-dir`, and creates the initial ADR with
+YAML frontmatter:
 
 ```markdown
 ---
-status: accepted
+number: 1
+title: Record architecture decisions
 date: 2024-01-15
+status: accepted
 ---
 
-# Record Architecture Decisions
+# 1. Record architecture decisions
 
 ...
 ```

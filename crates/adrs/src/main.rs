@@ -58,17 +58,18 @@ ENVIRONMENT VARIABLES:
 
 CONFIGURATION:
   adrs.toml is discovered by walking up from the current directory. A global config
-  is also read from $XDG_CONFIG_HOME/adrs/adrs.toml (~/.config/adrs/adrs.toml on
-  Linux/macOS, %APPDATA%/adrs/adrs.toml on Windows), and ~/.adrs.toml as a fallback.
+  is also read from $XDG_CONFIG_HOME/adrs/config.toml (~/.config/adrs/config.toml on
+  Linux/macOS, %APPDATA%/adrs/config.toml on Windows).
 
   Compatible mode (default): metadata stored in the markdown body (adr-tools compatible).
   NextGen mode (--ng):       YAML frontmatter with extended fields (tags, deciders).
 
   Template format and variant can be set in adrs.toml:
-    format = \"madr\"     # nygard (default) or madr
-    variant = \"full\"    # full (default), minimal, or bare
     default_status = \"accepted\" # proposed (default), accepted, deprecated, superseded, or custom
     no_edit = true              # skip editor for new ADRs (default: false)
+    [templates]
+    format = \"madr\"     # nygard (default) or madr
+    variant = \"full\"    # full (default), minimal, bare, or bare-minimal
     [generate]
     toc_prefix = \"./\"          # default prefix for 'generate toc' links (default: empty)
     [export]
@@ -146,7 +147,7 @@ LINK FORMAT:
         #[arg(short, long, value_name = "FORMAT")]
         format: Option<String>,
 
-        /// Template variant: full, minimal, bare [default: full]
+        /// Template variant: full, minimal, bare, bare-minimal [default: full]
         #[arg(short, long, value_name = "VARIANT")]
         variant: Option<String>,
 
@@ -390,10 +391,11 @@ FISH:
     #[command(after_long_help = "\
 Starts an MCP (Model Context Protocol) server on stdio for AI agent integration.
 
-TOOLS PROVIDED (15):
+TOOLS PROVIDED (17):
   Read-only:
     list_adrs, get_adr, search_adrs, get_repository_info, get_related_adrs,
-    validate_adr, get_adr_sections, compare_adrs, suggest_tags
+    validate_adr, get_adr_sections, compare_adrs, suggest_tags, run_doctor,
+    export_adrs
   Write:
     create_adr, update_status, update_content, update_tags, link_adrs,
     bulk_update_status

@@ -8,8 +8,11 @@ how to verify a complete release, and how to recover from failures.
 Releases are fully automated via two tools:
 
 1. **release-plz** -- opens a "Release PR" on every push to `main` that bumps
-   `Cargo.toml` versions and updates `CHANGELOG.md` based on conventional
-   commits. Merging that PR triggers step 2.
+   `Cargo.toml` versions and updates each crate's `CHANGELOG.md`
+   (`crates/adrs/CHANGELOG.md`, `crates/adrs-core/CHANGELOG.md`) based on
+   conventional commits. The root `CHANGELOG.md` is just a pointer to those
+   two files and is not updated by release-plz. Merging that PR triggers
+   step 2.
 
 2. **cargo-dist** -- when `release-plz` merges its PR it also pushes a version
    tag (e.g. `v0.7.4`). The tag triggers `.github/workflows/release.yml`, which
@@ -61,12 +64,15 @@ cargo-dist builds for five targets (configured in `dist-workspace.toml`):
 
 A complete release produces the following artifacts attached to the GitHub Release:
 
-- Five platform tarballs (one per target above): `adrs-v<VERSION>-<target>.tar.gz`
-- One SHA256 checksum file: `adrs-v<VERSION>-<target>.tar.gz.sha256` per tarball
-  (or a single `dist-manifest.json` containing all checksums)
+- Five platform archives (one per target above), unversioned names: `adrs-<target>.tar.xz`
+  for the four Linux/macOS targets, `adrs-x86_64-pc-windows-msvc.zip` for Windows
+- One SHA256 checksum file per archive: `<archive-name>.sha256`
+- A combined checksum file: `sha256.sum`
 - Shell installer: `adrs-installer.sh`
 - PowerShell installer: `adrs-installer.ps1`
 - Homebrew formula: committed to `joshrotenberg/homebrew-brew` as `Formula/adrs.rb`
+  (also attached to the release as `adrs.rb`)
+- Source archive and checksum: `source.tar.gz`, `source.tar.gz.sha256`
 - `dist-manifest.json`: the dist manifest for the release
 
 To verify:
@@ -82,8 +88,10 @@ gh release view v<VERSION> --repo joshrotenberg/adrs --json assets --jq '[.asset
 gh api repos/joshrotenberg/homebrew-brew/commits --jq '.[0].commit.message'
 ```
 
-Expected: the release should have at least 12-14 assets (5 tarballs + 5 checksums
-+ 2 installers + `dist-manifest.json`).
+`verify-release` (`.github/workflows/release.yml`) fails the release if there
+are fewer than 14 assets (5 archives + 5 checksums + 2 installers +
+`sha256.sum` + `dist-manifest.json`). A typical release has 17 assets, once
+the Homebrew formula and source archive are included.
 
 ## Required secrets
 
@@ -155,10 +163,11 @@ the PR in place on each push to `main`. Common issues:
 
 ### PR has a merge conflict
 
-release-plz manages `Cargo.toml` version fields and `CHANGELOG.md`. If
-another PR touching those files merges while the release-plz PR is open,
-close the release-plz PR and let release-plz open a fresh one on the next
-push to `main` (or trigger `release-plz.yml` via `workflow_dispatch`).
+release-plz manages `Cargo.toml` version fields and the per-crate
+`CHANGELOG.md` files. If another PR touching those files merges while the
+release-plz PR is open, close the release-plz PR and let release-plz open a
+fresh one on the next push to `main` (or trigger `release-plz.yml` via
+`workflow_dispatch`).
 
 ### Clippy or CI failure blocking the release PR
 
@@ -174,7 +183,8 @@ release PR and its resolution.
 If you need to release without release-plz (e.g. emergency patch):
 
 1. Update `version` in `Cargo.toml` (workspace root and all crate `Cargo.toml` files).
-2. Update `CHANGELOG.md` manually.
+2. Update the per-crate `CHANGELOG.md` files manually (`crates/adrs/CHANGELOG.md`,
+   `crates/adrs-core/CHANGELOG.md`).
 3. Commit and push to `main`.
 4. Push the tag manually:
 

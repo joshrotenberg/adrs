@@ -19,7 +19,7 @@ adrs new [OPTIONS] <TITLE>
 | Option | Description |
 |--------|-------------|
 | `-f, --format <FORMAT>` | Template format: `nygard` or `madr` (default: `nygard`) |
-| `-v, --variant <VARIANT>` | Template variant: `full`, `minimal`, or `bare` (default: `full`) |
+| `-v, --variant <VARIANT>` | Template variant: `full`, `minimal`, `bare`, or `bare-minimal` (default: `full`) |
 | `--template <PATH>` | Path to a custom template file (overrides `--format`/`--variant` and config) |
 | `--status <STATUS>` | Initial status (default: `default_status` from config, else `Proposed`) |
 | `-s, --supersedes <N>` | ADR number this supersedes |

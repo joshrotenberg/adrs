@@ -8,7 +8,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-adrs-core = "0.7"
+adrs-core = "0.9"
 ```
 
 ## Basic Usage
@@ -23,8 +23,8 @@ fn main() -> anyhow::Result<()> {
     // Open existing repository
     let repo = Repository::open(Path::new("."))?;
     
-    // Or create with defaults if it doesn't exist
-    let repo = Repository::open_or_default(Path::new("."))?;
+    // Or create with defaults if it doesn't exist (returns Self, not Result)
+    let repo = Repository::open_or_default(Path::new("."));
     
     Ok(())
 }
@@ -34,6 +34,7 @@ fn main() -> anyhow::Result<()> {
 
 ```rust
 use adrs_core::Repository;
+use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
     let repo = Repository::open(Path::new("."))?;
@@ -49,7 +50,8 @@ fn main() -> anyhow::Result<()> {
 ### Creating an ADR
 
 ```rust
-use adrs_core::{Repository, Adr, AdrStatus};
+use adrs_core::{Repository, Adr};
+use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
     let repo = Repository::open(Path::new("."))?;
@@ -70,6 +72,7 @@ fn main() -> anyhow::Result<()> {
 
 ```rust
 use adrs_core::Repository;
+use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
     let repo = Repository::open(Path::new("."))?;
@@ -88,6 +91,7 @@ fn main() -> anyhow::Result<()> {
 
 ```rust
 use adrs_core::{Repository, LinkKind};
+use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
     let repo = Repository::open(Path::new("."))?;
@@ -139,14 +143,23 @@ let config = Config {
 
 ### Using Built-in Templates
 
+`TemplateEngine` is a builder: start with `new()`, then chain `with_format`
+and `with_variant`. `render` takes the `Adr`, the repository `Config` (used
+for things like MADR field toggles), and a map of link titles keyed by ADR
+number.
+
 ```rust
-use adrs_core::{TemplateEngine, TemplateFormat, TemplateVariant, Adr};
+use adrs_core::{Adr, Config, TemplateEngine, TemplateFormat, TemplateVariant};
+use std::collections::HashMap;
 
 fn main() -> anyhow::Result<()> {
-    let engine = TemplateEngine::new(TemplateFormat::Madr, TemplateVariant::Minimal);
+    let engine = TemplateEngine::new()
+        .with_format(TemplateFormat::Madr)
+        .with_variant(TemplateVariant::Minimal);
     
     let adr = Adr::new(1, "My Decision".to_string());
-    let content = engine.render(&adr)?;
+    let config = Config::default();
+    let content = engine.render(&adr, &config, &HashMap::new())?;
     
     println!("{}", content);
     
@@ -157,14 +170,19 @@ fn main() -> anyhow::Result<()> {
 ### Custom Templates
 
 ```rust
-use adrs_core::{TemplateEngine, Adr};
+use adrs_core::{Adr, Config, TemplateEngine};
+use std::collections::HashMap;
 use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
-    let engine = TemplateEngine::from_file(Path::new("templates/custom.md"))?;
+    let engine = TemplateEngine::new()
+        .with_custom_template_file(Path::new("templates/custom.md"))?;
     
     let adr = Adr::new(1, "My Decision".to_string());
-    let content = engine.render(&adr)?;
+    let config = Config::default();
+    let content = engine.render(&adr, &config, &HashMap::new())?;
+    
+    println!("{}", content);
     
     Ok(())
 }
@@ -223,7 +241,8 @@ None significant.
 "#;
 
     let parser = Parser::new();
-    let adr = parser.parse(content, Some(1))?;
+    let adr = parser.parse(content)?;
+    println!("{}: {}", adr.number, adr.title);
     
     Ok(())
 }
@@ -283,12 +302,13 @@ The library uses `thiserror` for error types:
 
 ```rust
 use adrs_core::{Repository, Error};
+use std::path::Path;
 
 fn main() {
     match Repository::open(Path::new(".")) {
         Ok(repo) => { /* use repo */ }
-        Err(Error::NotFound(path)) => {
-            eprintln!("ADR repository not found at {}", path.display());
+        Err(Error::AdrDirNotFound) => {
+            eprintln!("ADR repository not found. Run 'adrs init' to create one.");
         }
         Err(e) => {
             eprintln!("Error: {}", e);
