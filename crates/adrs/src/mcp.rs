@@ -965,7 +965,10 @@ impl AdrState {
 
         let template_variant = match &params.variant {
             Some(v) => v.parse::<TemplateVariant>().map_err(|_| {
-                format!("Invalid variant '{}'. Use 'full', 'minimal', or 'bare'.", v)
+                format!(
+                    "Invalid variant '{}'. Use 'full', 'minimal', 'bare', or 'bare-minimal'.",
+                    v
+                )
             })?,
             None => TemplateVariant::default(),
         };
