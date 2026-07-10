@@ -98,7 +98,10 @@ pub use export::{
     JsonAdrBulkExport, JsonAdrLink, JsonAdrSingle, RepositoryInfo, ToolInfo, export_adr,
     export_directory, export_directory_with_warnings, export_repository, import_to_directory,
 };
-pub use lint::{Issue, IssueSeverity, LintReport, check_all, check_repository, lint_adr, lint_all};
+pub use lint::{
+    Issue, IssueSeverity, LintReport, check_all, check_all_filtered, check_repository, lint_adr,
+    lint_all,
+};
 pub use parse::Parser;
 pub use repository::Repository;
 pub use template::{Template, TemplateEngine, TemplateFormat, TemplateVariant};

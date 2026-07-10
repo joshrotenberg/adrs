@@ -1548,6 +1548,158 @@ fn test_doctor_without_ng_flag_prints_no_note() {
     temp.close().unwrap();
 }
 
+// Tests for [doctor].ignore / --ignore and warnings-as-errors config (issue #316)
+
+/// Nygard-format ADR content that trips only warning-severity collection rules
+/// when used to create a numbering gap (mirrors adrs-core's lint.rs test helper).
+fn nygard_adr(number: u32, title: &str) -> String {
+    format!(
+        "# {number}. {title}\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\nSome consequences.\n"
+    )
+}
+
+#[test]
+fn test_doctor_config_ignore_suppresses_diagnostic() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create a numbering gap (ADR #1 already exists from init; add #2 and #4,
+    // skipping #3) to trip the ADR011 sequential-gap warning.
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        nygard_adr(2, "Second"),
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("doc/adr/0004-fourth.md"),
+        nygard_adr(4, "Fourth"),
+    )
+    .unwrap();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\n\n[doctor]\nignore = [\"ADR011\"]\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ADR011").not())
+        .stdout(predicate::str::contains("suppressed by ignore rules"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_doctor_warnings_as_errors_flag_exits_1_on_warnings_only() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Numbering gap trips only ADR011 (Warning), no errors.
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        nygard_adr(2, "Second"),
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("doc/adr/0004-fourth.md"),
+        nygard_adr(4, "Fourth"),
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["doctor", "--warnings-as-errors"])
+        .assert()
+        .failure()
+        .code(1);
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_doctor_config_warnings_as_errors_exits_1_without_flag() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        nygard_adr(2, "Second"),
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("doc/adr/0004-fourth.md"),
+        nygard_adr(4, "Fourth"),
+    )
+    .unwrap();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\n\n[doctor]\nwarnings_as_errors = true\n",
+    )
+    .unwrap();
+
+    // Plain `adrs doctor`, no --warnings-as-errors flag.
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .failure()
+        .code(1);
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_doctor_ignore_flag_works_without_config() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Numbering gap is the only issue in this repo; no adrs.toml is written.
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        nygard_adr(2, "Second"),
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("doc/adr/0004-fourth.md"),
+        nygard_adr(4, "Fourth"),
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["doctor", "--ignore", "ADR011"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ADR011").not());
+
+    temp.close().unwrap();
+}
+
 /// Smoke test for MCP feature availability (default since 0.6.1)
 #[test]
 #[cfg(feature = "mcp")]

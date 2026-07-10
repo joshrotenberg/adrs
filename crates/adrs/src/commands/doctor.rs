@@ -1,6 +1,6 @@
 //! Doctor command implementation.
 
-use adrs_core::{IssueSeverity, Repository, check_all};
+use adrs_core::{IssueSeverity, Repository, check_all_filtered};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -12,7 +12,11 @@ use std::path::Path;
 /// linting: the lint rules detect each ADR's format (Nygard or MADR) from the
 /// file itself, so the repository mode does not change which checks run. When
 /// `--ng` is passed we say so rather than ignoring it silently (see issue #306).
-pub fn doctor(root: &Path, ng: bool) -> Result<()> {
+///
+/// `ignore` is merged with `[doctor].ignore` from `adrs.toml` (see
+/// `check_all_filtered`). `warnings_as_errors` is OR'd with
+/// `[doctor].warnings_as_errors` from config (issue #316).
+pub fn doctor(root: &Path, ng: bool, ignore: Vec<String>, warnings_as_errors: bool) -> Result<()> {
     if ng {
         eprintln!(
             "note: --ng has no effect on 'doctor'; lint rules detect each ADR's format automatically"
@@ -22,10 +26,15 @@ pub fn doctor(root: &Path, ng: bool) -> Result<()> {
     let repo =
         Repository::open(root).context("Failed to open repository. Have you run 'adrs init'?")?;
 
-    let report = check_all(&repo).context("Failed to run health checks")?;
+    let (report, suppressed_count) =
+        check_all_filtered(&repo, &ignore).context("Failed to run health checks")?;
+    let warnings_as_errors = warnings_as_errors || repo.config().doctor.warnings_as_errors;
 
     if report.issues.is_empty() {
         println!("No issues found. Your ADR repository is healthy!");
+        if suppressed_count > 0 {
+            println!("{} issue(s) suppressed by ignore rules", suppressed_count);
+        }
         return Ok(());
     }
 
@@ -60,8 +69,11 @@ pub fn doctor(root: &Path, ng: bool) -> Result<()> {
         "Found {} error(s), {} warning(s), {} info(s)",
         error_count, warning_count, info_count
     );
+    if suppressed_count > 0 {
+        println!("{} issue(s) suppressed by ignore rules", suppressed_count);
+    }
 
-    if report.has_errors() {
+    if report.has_errors() || (warnings_as_errors && report.has_warnings()) {
         std::process::exit(1);
     }
 
