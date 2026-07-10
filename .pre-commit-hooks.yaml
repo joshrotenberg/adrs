@@ -1,0 +1,7 @@
+- id: adrs-doctor
+  name: adrs doctor
+  description: Check ADR repository health (naming, numbering, links, superseded status).
+  entry: adrs doctor
+  language: system
+  files: \.md$
+  pass_filenames: false

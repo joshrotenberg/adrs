@@ -100,6 +100,34 @@ This allows using `doctor` in CI pipelines:
   run: adrs doctor
 ```
 
+## Pre-commit Hook
+
+`adrs` ships a [pre-commit](https://pre-commit.com) hook (also compatible
+with [prek](https://prek.j178.dev)) that runs `doctor` whenever a markdown
+file changes. Add it to your `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/joshrotenberg/adrs
+    rev: v0.8.0
+    hooks:
+      - id: adrs-doctor
+```
+
+The hook uses `language: system`, so it expects `adrs` to already be on
+`PATH`. See [Installation](../installation.md) for ways to install it
+(`cargo install adrs`, a release binary, Homebrew, etc.).
+
+The hook triggers on any staged `.md` file but always checks the whole
+repository, since `doctor`'s checks (numbering, links, superseded status)
+are repository-wide. If your ADRs live outside the default directory, scope
+the trigger further with `files:` in your own config, e.g.:
+
+```yaml
+      - id: adrs-doctor
+        files: ^doc/adr/.*\.md$
+```
+
 ## Related
 
 - [list](./list.md) - List ADRs
