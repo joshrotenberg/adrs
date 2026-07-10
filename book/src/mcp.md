@@ -71,7 +71,7 @@ The MCP server provides 17 tools organized by function:
 
 | Tool | Description |
 |------|-------------|
-| `create_adr` | Create a new ADR (always 'proposed' status) |
+| `create_adr` | Create a new ADR (uses the repository's configured default status; proposed if not configured) |
 | `update_status` | Change an ADR's status |
 | `link_adrs` | Create bidirectional links between ADRs |
 | `update_content` | Update ADR sections (context, decision, consequences) |
@@ -135,7 +135,9 @@ Search ADRs for matching text.
 
 ### create_adr
 
-Create a new ADR. Always creates with 'proposed' status for human review.
+Create a new ADR. Uses the repository's configured default status (proposed
+if not configured); the created ADR still requires human review before
+acceptance.
 
 **Parameters:**
 - `title` (required): ADR title
@@ -144,7 +146,7 @@ Create a new ADR. Always creates with 'proposed' status for human review.
 - `consequences` (optional): Consequences section content
 - `supersedes` (optional): ADR number this supersedes
 - `format` (optional): Template format -- `nygard` (default) or `madr` for MADR 4.0.0 format
-- `variant` (optional): Template variant -- `full` (default), `minimal`, or `bare`
+- `variant` (optional): Template variant -- `full` (default), `minimal`, `bare`, or `bare-minimal`
 - `decision_makers` (optional): List of people who made the decision (most useful with MADR format)
 - `consulted` (optional): List of people consulted for input (most useful with MADR format)
 - `informed` (optional): List of people kept informed (most useful with MADR format)
@@ -248,7 +250,8 @@ Claude will use `compare_adrs` to show the differences.
 
 ## Best Practices
 
-1. **Human Review**: All ADRs created by AI are set to 'proposed' status. Review before accepting.
+1. **Human Review**: ADRs created by AI use the repository's configured
+   default status (proposed if not configured). Review before accepting.
 
 2. **Provide Context**: Give Claude context about your architecture when asking it to create ADRs.
 

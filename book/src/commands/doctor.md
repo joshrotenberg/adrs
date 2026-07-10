@@ -49,16 +49,7 @@ adrs doctor
 Output:
 
 ```
-Checking ADR repository health...
-
-[OK] File naming: All 5 ADRs follow naming convention
-[OK] Duplicate numbers: No duplicates found
-[OK] Numbering gaps: Numbers are sequential
-[OK] Broken links: All links are valid
-[OK] Superseded status: All superseded ADRs have links
-[OK] Parse errors: All ADRs parsed successfully
-
-Health check passed!
+No issues found. Your ADR repository is healthy!
 ```
 
 ### Repository with Issues
@@ -70,32 +61,33 @@ adrs doctor
 Output:
 
 ```
-Checking ADR repository health...
+error: [ADR012] doc/adr/0003-duplicate.md: Duplicate ADR number 2. Also used in: doc/adr/0002-use-postgresql.md
+warning: [ADR009] Filename number (0003) does not match title number (2) [doc/adr/0003-duplicate.md:1]
 
-[OK] File naming: All 5 ADRs follow naming convention
-[WARN] Numbering gaps: Gap after ADR 3 (next is 5)
-[ERROR] Broken links: ADR 4 links to non-existent ADR 99
-[WARN] Superseded status: ADR 2 is superseded but has no "Superseded by" link
-
-Health check found 3 issue(s)
+Found 1 error(s), 1 warning(s), 0 info(s)
 ```
+
+Each line has the form `<severity>: [<rule ID>] <message> [<location>]`. Rule
+IDs like `ADR009` and `ADR012` map to the checks below.
 
 ## Severity Levels
 
 | Level | Description |
 |-------|-------------|
-| OK | Check passed |
-| WARN | Potential issue, but not critical |
-| ERROR | Problem that should be fixed |
+| info | Informational, no action needed |
+| warning | Potential issue, but not critical |
+| error | Problem that should be fixed |
 
 ## Exit Codes
 
 | Code | Description |
 |------|-------------|
-| 0 | All checks passed |
-| 1 | One or more checks failed |
+| 0 | No issues, or only warnings/info (default) |
+| 1 | One or more errors, or warnings with `--warnings-as-errors` / `warnings_as_errors = true` |
 
-This allows using `doctor` in CI pipelines:
+By default, warnings alone do not fail the check; only errors do. Pass
+`--warnings-as-errors` (or set `warnings_as_errors = true` in `[doctor]`) to
+also fail on warnings. This allows using `doctor` in CI pipelines:
 
 ```yaml
 - name: Check ADR health
@@ -130,7 +122,7 @@ file changes. Add it to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/joshrotenberg/adrs
-    rev: v0.8.0
+    rev: v0.9.0
     hooks:
       - id: adrs-doctor
 ```

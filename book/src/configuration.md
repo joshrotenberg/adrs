@@ -72,7 +72,7 @@ no_edit = false
 # Default format: "nygard" or "madr"
 format = "nygard"
 
-# Default variant: "full", "minimal", or "bare"
+# Default variant: "full", "minimal", "bare", or "bare-minimal"
 variant = "full"
 
 # Path to custom template file (optional)

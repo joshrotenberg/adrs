@@ -28,10 +28,10 @@ Download the appropriate binary from the [releases page](https://github.com/josh
 
 | Platform | Architecture | Download |
 |----------|--------------|----------|
-| Linux | x86_64 | `adrs-x86_64-unknown-linux-gnu.tar.gz` |
-| Linux | aarch64 | `adrs-aarch64-unknown-linux-gnu.tar.gz` |
-| macOS | x86_64 (Intel) | `adrs-x86_64-apple-darwin.tar.gz` |
-| macOS | aarch64 (Apple Silicon) | `adrs-aarch64-apple-darwin.tar.gz` |
+| Linux | x86_64 | `adrs-x86_64-unknown-linux-gnu.tar.xz` |
+| Linux | aarch64 | `adrs-aarch64-unknown-linux-gnu.tar.xz` |
+| macOS | x86_64 (Intel) | `adrs-x86_64-apple-darwin.tar.xz` |
+| macOS | aarch64 (Apple Silicon) | `adrs-aarch64-apple-darwin.tar.xz` |
 | Windows | x86_64 | `adrs-x86_64-pc-windows-msvc.zip` |
 
 ## From Source
