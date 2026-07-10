@@ -161,15 +161,11 @@ fn frontmatter_fixtures_parse_as_expected() {
 }
 
 #[test]
-fn legacy_date_lines_are_ignored() {
-    // KNOWN-QUIRK (#324): the Nygard `Date: 2024-01-15` line is not parsed;
-    // adr.date defaults to today for every legacy file.
+fn legacy_date_lines_are_parsed() {
+    // The Nygard `Date: 2024-01-15` line under the H1 is now parsed into
+    // adr.date instead of defaulting to today.
     let adr = parse_fixture(1);
-    assert_ne!(
-        adr.date.to_string(),
-        "2024-01-15",
-        "legacy Date: line is now parsed; tighten this test and close #324"
-    );
+    assert_eq!(adr.date.to_string(), "2024-01-15");
 }
 
 #[test]
@@ -217,21 +213,16 @@ fn non_canonical_status_prose_pins_current_behavior() {
 }
 
 #[test]
-fn crlf_frontmatter_pins_current_behavior() {
-    // KNOWN-QUIRK (#326): frontmatter is not recognized when a file has CRLF
-    // line endings, so all frontmatter fields silently revert to defaults.
-    // Constructed in memory so the pin is deterministic on every platform
-    // regardless of git eol settings (a .gitattributes rule keeps the on-disk
-    // fixtures LF).
+fn crlf_frontmatter_parses_like_lf() {
+    // A file with CRLF line endings parses its YAML frontmatter identically
+    // to the same content with LF line endings. Constructed in memory so the
+    // assertion is deterministic on every platform regardless of git eol
+    // settings (a .gitattributes rule keeps the on-disk fixtures LF).
     let lf = fs::read_to_string(fixture_path(4)).unwrap();
     let crlf = lf.replace('\n', "\r\n");
     let adr = Parser::new().parse(&crlf).unwrap();
-    assert_eq!(
-        adr.status,
-        AdrStatus::Proposed,
-        "CRLF frontmatter parses correctly now; tighten this test and close #326"
-    );
-    assert!(adr.decision_makers.is_empty());
+    assert_eq!(adr.status, AdrStatus::Accepted);
+    assert_eq!(adr.decision_makers, ["Alice Smith", "Bob Jones"]);
 }
 
 #[test]

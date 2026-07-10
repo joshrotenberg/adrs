@@ -5,6 +5,7 @@ use pulldown_cmark::{Event, HeadingLevel, Parser as MdParser, Tag, TagEnd};
 use regex::Regex;
 use std::path::Path;
 use std::sync::LazyLock;
+use time::format_description::well_known::Iso8601;
 use time::{Date, Month, OffsetDateTime};
 
 /// Regex for parsing legacy status links like "Supersedes [1. Title](0001-title.md)".
@@ -43,6 +44,18 @@ impl Parser {
 
     /// Parse an ADR from a string.
     pub fn parse(&self, content: &str) -> Result<Adr> {
+        // Normalize CRLF line endings for parsing only. This is read-side
+        // tolerance: the normalized copy is local to this call and is never
+        // written back anywhere, so on-disk files keep whatever line endings
+        // they already have.
+        let normalized;
+        let content: &str = if content.contains("\r\n") {
+            normalized = content.replace("\r\n", "\n");
+            &normalized
+        } else {
+            content
+        };
+
         // Check for YAML frontmatter
         if content.starts_with("---\n") {
             self.parse_frontmatter(content)
@@ -103,6 +116,13 @@ impl Parser {
         if let Some((num, title)) = extract_h1_title(content) {
             adr.number = num;
             adr.title = title;
+        }
+
+        // Parse the `Date:` line from the preamble (between the H1 and the
+        // first `## ` section), if present. `Adr::new` already defaulted
+        // `adr.date` to today, so an absent or unparseable line is a no-op.
+        if let Some(date) = extract_legacy_date(content) {
+            adr.date = date;
         }
 
         // Apply sections
@@ -270,6 +290,25 @@ fn extract_h1_title(content: &str) -> Option<(u32, String)> {
     } else {
         Some((0, title_str.to_string()))
     }
+}
+
+/// Extract the date from a Nygard-style `Date: YYYY-MM-DD` line.
+///
+/// Only lines in the preamble before the ADR's first `## ` section heading
+/// are considered, so a `Date:` mentioned later in the document (e.g. in
+/// prose) is not mistaken for the ADR's date. Returns `None` if no such line
+/// exists or its value does not parse as an ISO 8601 date, in which case the
+/// caller should keep the default (today).
+fn extract_legacy_date(content: &str) -> Option<Date> {
+    for line in content.lines() {
+        if line.starts_with("## ") {
+            break;
+        }
+        if let Some(rest) = line.trim().strip_prefix("Date:") {
+            return Date::parse(rest.trim(), &Iso8601::DATE).ok();
+        }
+    }
+    None
 }
 
 /// Parse a numbered title like "1. Use Rust" into (1, "Use Rust").
@@ -1409,5 +1448,196 @@ Context.
         let adr = parser.parse(content).unwrap();
 
         assert_eq!(adr.title, "Frontmatter Title");
+    }
+
+    // ========== CRLF Line Endings (#326) ==========
+
+    #[test]
+    fn test_parse_crlf_frontmatter_matches_lf() {
+        let lf = r#"---
+number: 4
+title: Use MADR format for ADRs
+date: 2024-02-15
+status: accepted
+decision-makers:
+  - Alice Smith
+  - Bob Jones
+consulted:
+  - Carol White
+informed:
+  - David Brown
+  - Eve Green
+---
+
+## Context
+
+We need a richer metadata format.
+
+## Decision
+
+We will use MADR.
+
+## Consequences
+
+More structured metadata.
+"#;
+        let crlf = lf.replace('\n', "\r\n");
+
+        let parser = Parser::new();
+        let lf_adr = parser.parse(lf).unwrap();
+        let crlf_adr = parser.parse(&crlf).unwrap();
+
+        assert_eq!(crlf_adr.status, AdrStatus::Accepted);
+        assert_eq!(crlf_adr.status, lf_adr.status);
+        assert_eq!(crlf_adr.date, lf_adr.date);
+        assert_eq!(
+            crlf_adr.decision_makers,
+            vec!["Alice Smith".to_string(), "Bob Jones".to_string()]
+        );
+        assert_eq!(crlf_adr.decision_makers, lf_adr.decision_makers);
+        assert_eq!(crlf_adr.consulted, lf_adr.consulted);
+        assert_eq!(crlf_adr.informed, lf_adr.informed);
+        assert_eq!(crlf_adr.context, lf_adr.context);
+        assert_eq!(crlf_adr.decision, lf_adr.decision);
+        assert_eq!(crlf_adr.consequences, lf_adr.consequences);
+
+        // No stray `\r` should leak into any parsed string field.
+        assert!(!crlf_adr.title.contains('\r'));
+        assert!(!crlf_adr.context.contains('\r'));
+        assert!(!crlf_adr.decision.contains('\r'));
+        assert!(!crlf_adr.consequences.contains('\r'));
+        for person in crlf_adr
+            .decision_makers
+            .iter()
+            .chain(crlf_adr.consulted.iter())
+            .chain(crlf_adr.informed.iter())
+        {
+            assert!(!person.contains('\r'));
+        }
+    }
+
+    #[test]
+    fn test_parse_crlf_legacy_format() {
+        let lf = r#"# 1. Use Rust
+
+## Status
+
+Accepted
+
+## Context
+
+We need a systems programming language.
+
+## Decision
+
+We will use Rust.
+
+## Consequences
+
+We get memory safety without garbage collection.
+"#;
+        let crlf = lf.replace('\n', "\r\n");
+
+        let parser = Parser::new();
+        let adr = parser.parse(&crlf).unwrap();
+
+        assert_eq!(adr.number, 1);
+        assert_eq!(adr.title, "Use Rust");
+        assert_eq!(adr.status, AdrStatus::Accepted);
+        assert!(adr.context.contains("systems programming"));
+        assert!(adr.decision.contains("use Rust"));
+        assert!(adr.consequences.contains("memory safety"));
+
+        assert!(!adr.title.contains('\r'));
+        assert!(!adr.context.contains('\r'));
+        assert!(!adr.decision.contains('\r'));
+        assert!(!adr.consequences.contains('\r'));
+    }
+
+    // ========== Legacy Date Line (#324) ==========
+
+    #[test]
+    fn test_parse_legacy_date_line_is_parsed() {
+        let content = r#"# 1. Record architecture decisions
+
+Date: 2024-01-15
+
+## Status
+
+Accepted
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.date.to_string(), "2024-01-15");
+    }
+
+    #[test]
+    fn test_parse_legacy_no_date_line_falls_back_to_today() {
+        let content = r#"# 1. Record architecture decisions
+
+## Status
+
+Accepted
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.date, today());
+    }
+
+    #[test]
+    fn test_parse_legacy_unparseable_date_line_falls_back_to_today() {
+        let content = r#"# 1. Record architecture decisions
+
+Date: not-a-date
+
+## Status
+
+Accepted
+
+## Context
+
+Context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.date, today());
     }
 }
