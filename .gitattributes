@@ -1,0 +1,2 @@
+# Corpus fixtures are byte-exact test inputs; never convert line endings.
+crates/adrs-core/tests/fixtures/adr-corpus/*.md text eol=lf

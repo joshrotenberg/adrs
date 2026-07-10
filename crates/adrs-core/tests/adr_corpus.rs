@@ -217,6 +217,24 @@ fn non_canonical_status_prose_pins_current_behavior() {
 }
 
 #[test]
+fn crlf_frontmatter_pins_current_behavior() {
+    // KNOWN-QUIRK (#326): frontmatter is not recognized when a file has CRLF
+    // line endings, so all frontmatter fields silently revert to defaults.
+    // Constructed in memory so the pin is deterministic on every platform
+    // regardless of git eol settings (a .gitattributes rule keeps the on-disk
+    // fixtures LF).
+    let lf = fs::read_to_string(fixture_path(4)).unwrap();
+    let crlf = lf.replace('\n', "\r\n");
+    let adr = Parser::new().parse(&crlf).unwrap();
+    assert_eq!(
+        adr.status,
+        AdrStatus::Proposed,
+        "CRLF frontmatter parses correctly now; tighten this test and close #326"
+    );
+    assert!(adr.decision_makers.is_empty());
+}
+
+#[test]
 fn repository_lists_full_corpus() {
     let (_tmp, repo) = corpus_repo();
     let (adrs, errors) = repo.list_with_errors().unwrap();
