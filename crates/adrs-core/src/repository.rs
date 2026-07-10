@@ -299,11 +299,28 @@ impl Repository {
             if let Ok(target_adr) = self.get(link.target) {
                 map.insert(
                     link.target,
-                    (target_adr.title.clone(), target_adr.filename()),
+                    (target_adr.title.clone(), Self::link_href(&target_adr)),
                 );
             }
         }
         map
+    }
+
+    /// The href to use when rendering a link to `target_adr`.
+    ///
+    /// Prefers the target's actual on-disk filename over a filename
+    /// re-derived from its title. The two can diverge (hand-named files,
+    /// files renamed after a title edit), and re-deriving produces hrefs
+    /// that point at files that don't exist (#325). Falls back to the
+    /// title-derived filename only when the target has no resolvable path.
+    fn link_href(target_adr: &Adr) -> String {
+        target_adr
+            .path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|f| f.to_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| target_adr.filename())
     }
 
     /// Create a new ADR.
@@ -634,6 +651,9 @@ impl Repository {
                 "  - target: {}\n    kind: {}\n",
                 link.target, kind_str
             ));
+            if let Some(description) = &link.description {
+                s.push_str(&format!("    description: {}\n", description));
+            }
         }
         s
     }
@@ -1986,5 +2006,123 @@ decision-makers: mschoettle
 
         let adr = adrs.iter().find(|a| a.number == 2).unwrap();
         assert_eq!(adr.decision_makers, vec!["mschoettle"]);
+    }
+
+    // ========== Link metadata round-trip Tests (#323, #325) ==========
+
+    #[test]
+    fn test_update_metadata_preserves_link_descriptions() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Linked ADR
+date: 2026-01-15
+status: proposed
+links:
+  - target: 1
+    kind: relatesto
+    description: Explains the connection
+---
+
+## Context
+
+Context.
+"#;
+        let adr_path = repo.adr_path().join("0002-linked-adr.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(
+            adr.links[0].description.as_deref(),
+            Some("Explains the connection")
+        );
+
+        // No-op update_metadata must not drop the description.
+        repo.update_metadata(&adr).unwrap();
+        let result = fs::read_to_string(&adr_path).unwrap();
+        assert!(result.contains("kind: relatesto"));
+        assert!(result.contains("description: Explains the connection"));
+    }
+
+    #[test]
+    fn test_update_metadata_kebab_case_kind_round_trips_verbatim() {
+        // KNOWN-QUIRK (#323, deferred): kebab-case `kind: relates-to` deserializes
+        // as LinkKind::Custom("relates-to") rather than LinkKind::RelatesTo (see
+        // the note on LinkKind). update_metadata must at least not silently
+        // rewrite it to the canonical "relatesto" spelling on write-back.
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Linked ADR
+date: 2026-01-15
+status: proposed
+links:
+  - target: 1
+    kind: relates-to
+---
+
+## Context
+
+Context.
+"#;
+        let adr_path = repo.adr_path().join("0002-linked-adr.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        assert_eq!(adr.links[0].kind, LinkKind::Custom("relates-to".into()));
+
+        repo.update_metadata(&adr).unwrap();
+        let result = fs::read_to_string(&adr_path).unwrap();
+        assert!(result.contains("kind: relates-to"));
+    }
+
+    #[test]
+    fn test_resolve_link_titles_uses_actual_filename_for_hand_named_target() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        // Target's on-disk filename deliberately differs from a slug of its title.
+        let target_content = "# 2. Use Rust for backend services\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nContext.\n";
+        fs::write(
+            repo.adr_path().join("0002-use-rust-for-backend.md"),
+            target_content,
+        )
+        .unwrap();
+
+        let mut source = repo.get(1).unwrap();
+        source.add_link(AdrLink::new(2, LinkKind::Amends));
+
+        let titles = repo.resolve_link_titles(&source);
+        let (title, filename) = titles.get(&2).unwrap();
+        assert_eq!(title, "Use Rust for backend services");
+        assert_eq!(filename, "0002-use-rust-for-backend.md");
+    }
+
+    #[test]
+    fn test_link_href_prefers_actual_path_over_slugified_title() {
+        let target = Adr {
+            path: Some(PathBuf::from("/repo/doc/adr/0003-use-rust-for-backend.md")),
+            ..Adr::new(3, "Use Rust for backend services")
+        };
+        assert_eq!(
+            Repository::link_href(&target),
+            "0003-use-rust-for-backend.md"
+        );
+    }
+
+    #[test]
+    fn test_link_href_falls_back_to_slugified_title_when_path_missing() {
+        let target = Adr {
+            path: None,
+            ..Adr::new(3, "Use Rust for backend services")
+        };
+        assert_eq!(
+            Repository::link_href(&target),
+            "0003-use-rust-for-backend-services.md"
+        );
     }
 }

@@ -240,10 +240,11 @@ fn noop_metadata_update_is_byte_identical_for_well_formed_files() {
     // A get() followed by update_metadata() with nothing changed must leave
     // these files untouched, byte for byte. This is the core write-path
     // guarantee the corpus protects: canonical Nygard files, frontmatter
-    // files with people fields (0004), fence content (0008), and a file
-    // without a trailing newline (0009).
+    // files with people fields (0004), a legacy Amends link to a hand-named
+    // file (0005), fence content (0008), a file without a trailing newline
+    // (0009), and frontmatter links with descriptions (0007).
     let (tmp, repo) = corpus_repo();
-    for number in [1u32, 2, 3, 4, 8, 9] {
+    for number in [1u32, 2, 3, 4, 5, 7, 8, 9] {
         let file = tmp
             .path()
             .join("doc/adr")
@@ -271,17 +272,6 @@ fn noop_metadata_update_pins_known_rewrites() {
             .join(fixture_path(n).file_name().unwrap())
     };
 
-    // KNOWN-LOSSY (#325): 0005's Amends link href (`0003-use-rust-for-backend.md`,
-    // the file's real name) is regenerated from the target's title, producing
-    // a link to a file that does not exist.
-    let adr = repo.get(5).unwrap();
-    repo.update_metadata(&adr).unwrap();
-    let after = fs::read_to_string(file(5)).unwrap();
-    assert!(
-        after.contains("(0003-use-rust-for-backend-services.md)"),
-        "link hrefs are preserved now; tighten this pin and close #325"
-    );
-
     // KNOWN-LOSSY: 0006's explicit `Deprecated` status is materialized as
     // `Superseded` (the parse-side quirk written back to disk). The H1 and
     // body prose still mention "Deprecated", so assert on the Status section.
@@ -292,16 +282,6 @@ fn noop_metadata_update_pins_known_rewrites() {
     assert!(
         !after.contains("## Status\n\nDeprecated"),
         "0006 keeps its Deprecated status now; tighten this pin"
-    );
-
-    // KNOWN-LOSSY (#323): frontmatter link descriptions are dropped by the
-    // metadata writer.
-    let adr = repo.get(7).unwrap();
-    repo.update_metadata(&adr).unwrap();
-    let after = fs::read_to_string(file(7)).unwrap();
-    assert!(
-        !after.contains("Database choice affects token storage"),
-        "link descriptions survive update_metadata now; tighten this pin and close #323"
     );
 
     // KNOWN-LOSSY (#310): non-canonical status prose is rewritten to the
