@@ -16,11 +16,11 @@ row here.
 |------|--------|--------|----------|
 | 0001-record-architecture-decisions.md | Nygard | Accepted | Basic ADR |
 | 0002-use-postgresql-for-persistence.md | Nygard | Accepted | Supersedes link |
-| 0003-use-rust-for-backend.md | Nygard | Proposed | Multi-line consequences; filename deliberately differs from slugified title (#325) |
+| 0003-use-rust-for-backend.md | Nygard | Proposed | Multi-line consequences; filename deliberately differs from slugified title |
 | 0004-use-madr-format.md | MADR 4.0 | Accepted | YAML frontmatter, decision-makers, consulted, informed |
-| 0005-api-versioning-strategy.md | Nygard | Accepted | Amends link to a hand-named file (#325) |
+| 0005-api-versioning-strategy.md | Nygard | Accepted | Amends link to a hand-named file |
 | 0006-deprecated-xml-api.md | Nygard | Deprecated (parses as Superseded) | Superseded by link overrides declared status |
-| 0007-authentication-mechanism.md | MADR 4.0 | Accepted | Structured frontmatter links with descriptions (#323) |
+| 0007-authentication-mechanism.md | MADR 4.0 | Accepted | Structured frontmatter links with descriptions |
 | 0008-fenced-heading-examples.md | MADR 4.0 frontmatter | Accepted | Fenced code block containing heading-lookalike lines |
 | 0009-no-trailing-newline.md | Nygard | Accepted | File ends without a trailing newline |
 | 0010-non-canonical-status.md | Nygard | Free-form prose (parses as Proposed, #310) | Non-canonical status text |

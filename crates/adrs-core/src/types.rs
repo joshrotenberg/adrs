@@ -242,6 +242,18 @@ impl AdrLink {
 }
 
 /// The kind of link between ADRs.
+///
+/// Note (#323): kebab-case frontmatter forms like `kind: relates-to` do not
+/// match the `#[serde(rename_all = "lowercase")]` names below (`relatesto`,
+/// `supersededby`, `amendedby`) and deserialize into `Custom` instead of the
+/// canonical variant. Mapping those forms onto the canonical variants via
+/// serde `alias`es would be straightforward, but the writer serializes
+/// canonical variants back out through the same `rename_all` (e.g.
+/// `RelatesTo` -> `"relatesto"`), so accepting `relates-to` as `RelatesTo`
+/// on read would silently rewrite it to `relatesto` on the next metadata
+/// write. That conflicts with the corpus's byte-identity goal for fixture
+/// 0007, so the kind-mapping fix is deferred; only the link-description
+/// round-trip is fixed here.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkKind {
