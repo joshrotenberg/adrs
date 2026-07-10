@@ -489,6 +489,8 @@ Date: {{ date }}
 /// Nygard bare-minimal template - fewest sections, empty content.
 const NYGARD_BARE_MINIMAL_TEMPLATE: &str = r#"# {{ number }}. {{ title }}
 
+Date: {{ date }}
+
 ## Status
 
 {{ status }}
@@ -1262,15 +1264,16 @@ mod tests {
         let config = Config::default();
         let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
-        // Should have basic structure without Date line
+        // Should have basic structure including the Date line (#330: without
+        // it, `adrs doctor` flags the file with ADR003).
         assert!(output.contains("# 1. Nygard Bare Minimal"));
+        assert!(output.contains("Date:"));
         assert!(output.contains("## Status"));
         assert!(output.contains("## Context"));
         assert!(output.contains("## Decision"));
         assert!(output.contains("## Consequences"));
-        // No frontmatter, no date
+        // No frontmatter (compatible-mode layout).
         assert!(!output.contains("---"));
-        assert!(!output.contains("Date:"));
     }
 
     #[test]

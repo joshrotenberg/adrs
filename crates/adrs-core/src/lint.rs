@@ -519,6 +519,43 @@ Some consequences.
     }
 
     #[test]
+    fn test_nygard_bare_minimal_template_passes_doctor() {
+        // Regression for #330: a file produced by the Nygard bare-minimal
+        // template must not trip any doctor error (it previously emitted no
+        // `Date:` line and failed with ADR003). Empty-section ADR014 warnings
+        // are inherent to the variant and are not errors.
+        use crate::{Adr, Config, Repository, Template, TemplateFormat, TemplateVariant};
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let template =
+            Template::builtin_with_variant(TemplateFormat::Nygard, TemplateVariant::BareMinimal);
+        let adr = Adr::new(2, "Bare minimal regression");
+        let rendered = template
+            .render(&adr, &Config::default(), &std::collections::HashMap::new())
+            .unwrap();
+        let path = repo.adr_path().join("0002-bare-minimal-regression.md");
+        std::fs::write(&path, rendered).unwrap();
+
+        let report = check_all(&repo).unwrap();
+        let file_errors: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.severity == IssueSeverity::Error)
+            .filter(|i| {
+                i.path
+                    .as_ref()
+                    .is_some_and(|p| p.to_string_lossy().contains("0002-bare-minimal-regression"))
+            })
+            .collect();
+        assert!(
+            file_errors.is_empty(),
+            "nygard bare-minimal output should have no doctor errors, got: {file_errors:?}"
+        );
+    }
+
+    #[test]
     fn test_check_all_reports_parse_errors() {
         use crate::Repository;
 
