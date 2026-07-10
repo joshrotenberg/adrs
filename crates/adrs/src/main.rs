@@ -666,7 +666,7 @@ fn main() -> Result<()> {
                 link,
                 format,
                 variant,
-                template,
+                template.map(|t| resolve_cli_path(cli.working_dir.as_deref(), t)),
                 status,
                 tags,
                 no_edit,
@@ -738,8 +738,8 @@ fn main() -> Result<()> {
                 } => commands::generate_toc(
                     &discovered.root,
                     ordered,
-                    intro,
-                    outro,
+                    intro.map(|p| resolve_cli_path(cli.working_dir.as_deref(), p)),
+                    outro.map(|p| resolve_cli_path(cli.working_dir.as_deref(), p)),
                     prefix,
                     discovered.config.generate.toc_prefix,
                 ),
@@ -750,7 +750,12 @@ fn main() -> Result<()> {
                     output,
                     title,
                     description,
-                } => commands::generate_book(&discovered.root, &output, title, description),
+                } => commands::generate_book(
+                    &discovered.root,
+                    &resolve_cli_path(cli.working_dir.as_deref(), output),
+                    title,
+                    description,
+                ),
             }
         }
         Commands::Export { command } => match command {
@@ -761,6 +766,7 @@ fn main() -> Result<()> {
                 metadata_only,
                 base_url,
             } => {
+                let dir = dir.map(|d| resolve_cli_path(cli.working_dir.as_deref(), d));
                 if let Some(ref dir_path) = dir {
                     // Export from arbitrary directory - no repo needed, no config available
                     commands::export_json(
@@ -796,6 +802,13 @@ fn main() -> Result<()> {
                 dry_run,
                 ng,
             } => {
+                // "-" means stdin; leave it alone.
+                let file = if file.to_str() == Some("-") {
+                    file
+                } else {
+                    resolve_cli_path(cli.working_dir.as_deref(), file)
+                };
+                let dir = dir.map(|d| resolve_cli_path(cli.working_dir.as_deref(), d));
                 if let Some(ref dir_path) = dir {
                     // Import to arbitrary directory - no repo needed
                     commands::import_json(
@@ -931,6 +944,19 @@ For detailed help: adrs <command> --help
 Documentation: https://joshrotenberg.com/adrs/
 "#
     );
+}
+
+/// Resolve a user-supplied CLI path against the `-C` working directory.
+///
+/// `-C` means "run from a different directory", so relative paths given on
+/// the command line resolve against that directory rather than the process
+/// cwd. Absolute paths, and all paths when `-C` is not given, are returned
+/// unchanged.
+fn resolve_cli_path(working_dir: Option<&std::path::Path>, path: PathBuf) -> PathBuf {
+    match working_dir {
+        Some(dir) if path.is_relative() => dir.join(path),
+        _ => path,
+    }
 }
 
 /// Discover config or return a helpful error.
