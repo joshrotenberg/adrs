@@ -73,6 +73,9 @@ CONFIGURATION:
     toc_prefix = \"./\"          # default prefix for 'generate toc' links (default: empty)
     [export]
     base_url = \"https://github.com/org/repo/blob/main/doc/adr\"  # default base URL for 'export json' (default: none)
+    [doctor]
+    ignore = [\"ADR011\"]          # rule IDs/names to suppress (default: none)
+    warnings_as_errors = false   # exit 1 on warnings too (default: false)
 
 Version:       ", env!("CARGO_PKG_VERSION"), "
 Documentation: https://joshrotenberg.com/adrs/"))]
@@ -304,7 +307,9 @@ Note: Use --by with 'superseded' to create a link to the replacing ADR.")]
     /// Check repository health
     #[command(after_long_help = "\
 EXAMPLES:
-  adrs doctor                  Run all health checks
+  adrs doctor                                Run all health checks
+  adrs doctor --ignore ADR011                Suppress a specific rule for this run
+  adrs doctor --warnings-as-errors           Exit 1 on warnings too, not just errors
 
 WHAT IT CHECKS:
   Per-file lint rules (title format, required sections, dates) and
@@ -313,8 +318,23 @@ WHAT IT CHECKS:
 NOTE ON --ng:
   The global --ng flag has no effect on 'doctor'. Lint rules detect each ADR's
   format (Nygard or MADR) from the file itself, so the repository mode does not
-  change which checks run. Passing --ng prints a note to that effect.")]
-    Doctor,
+  change which checks run. Passing --ng prints a note to that effect.
+
+CONFIGURATION:
+  [doctor].ignore in adrs.toml lists rule IDs/names to suppress permanently;
+  --ignore flags on the command line merge with (do not replace) that list.
+  [doctor].warnings_as_errors in adrs.toml, or --warnings-as-errors on the
+  command line, makes 'adrs doctor' exit with status 1 when there are
+  warnings, not just errors.")]
+    Doctor {
+        /// Ignore a rule by ID or name (repeatable); merged with [doctor].ignore in adrs.toml
+        #[arg(long, value_name = "RULE")]
+        ignore: Vec<String>,
+
+        /// Exit with status 1 if there are warnings, not just errors
+        #[arg(long)]
+        warnings_as_errors: bool,
+    },
 
     /// Generate documentation
     Generate {
@@ -700,9 +720,12 @@ fn main() -> Result<()> {
             let discovered = discover(&start_dir).ok();
             commands::config_with_discovery(&start_dir, discovered)
         }
-        Commands::Doctor => {
+        Commands::Doctor {
+            ignore,
+            warnings_as_errors,
+        } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::doctor(&discovered.root, cli.ng)
+            commands::doctor(&discovered.root, cli.ng, ignore, warnings_as_errors)
         }
         Commands::Generate { command } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;

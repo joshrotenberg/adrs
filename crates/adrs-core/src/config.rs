@@ -49,6 +49,10 @@ pub struct Config {
     /// Export command configuration.
     #[serde(default)]
     pub export: ExportConfig,
+
+    /// Doctor command configuration.
+    #[serde(default)]
+    pub doctor: DoctorConfig,
 }
 
 impl Default for Config {
@@ -61,6 +65,7 @@ impl Default for Config {
             templates: TemplateConfig::default(),
             generate: GenerateConfig::default(),
             export: ExportConfig::default(),
+            doctor: DoctorConfig::default(),
         }
     }
 }
@@ -103,6 +108,7 @@ impl Config {
                 templates: TemplateConfig::default(),
                 generate: GenerateConfig::default(),
                 export: ExportConfig::default(),
+                doctor: DoctorConfig::default(),
             });
         }
 
@@ -178,6 +184,12 @@ impl Config {
         }
         if other.export.base_url.is_some() {
             self.export.base_url = other.export.base_url.clone();
+        }
+        if !other.doctor.ignore.is_empty() {
+            self.doctor.ignore = other.doctor.ignore.clone();
+        }
+        if other.doctor.warnings_as_errors {
+            self.doctor.warnings_as_errors = other.doctor.warnings_as_errors;
         }
     }
 }
@@ -291,6 +303,7 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
                 templates: TemplateConfig::default(),
                 generate: GenerateConfig::default(),
                 export: ExportConfig::default(),
+                doctor: DoctorConfig::default(),
             };
             return Ok(Some((current, config, ConfigSource::Project(legacy_path))));
         }
@@ -399,6 +412,18 @@ pub struct GenerateConfig {
 pub struct ExportConfig {
     /// Default base URL for source_uri in JSON export (used by `adrs export json` if `--base-url` is not given).
     pub base_url: Option<String>,
+}
+
+/// Doctor command configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DoctorConfig {
+    /// Rule IDs or rule names to suppress (e.g. "ADR011", "adr-numbering-sequential").
+    /// Matched case-insensitively against both Issue.rule_id and Issue.rule_name.
+    pub ignore: Vec<String>,
+
+    /// When true, `adrs doctor` exits with status 1 if there are warnings, not just errors.
+    pub warnings_as_errors: bool,
 }
 
 #[cfg(test)]
@@ -645,6 +670,7 @@ mode = "nextgen"
             templates: TemplateConfig::default(),
             generate: GenerateConfig::default(),
             export: ExportConfig::default(),
+            doctor: DoctorConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -666,6 +692,7 @@ mode = "nextgen"
             templates: TemplateConfig::default(),
             generate: GenerateConfig::default(),
             export: ExportConfig::default(),
+            doctor: DoctorConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -692,6 +719,7 @@ mode = "nextgen"
             },
             generate: GenerateConfig::default(),
             export: ExportConfig::default(),
+            doctor: DoctorConfig::default(),
         };
 
         config.save(temp.path()).unwrap();
@@ -712,6 +740,7 @@ mode = "nextgen"
             templates: TemplateConfig::default(),
             generate: GenerateConfig::default(),
             export: ExportConfig::default(),
+            doctor: DoctorConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -736,6 +765,7 @@ mode = "nextgen"
             },
             generate: GenerateConfig::default(),
             export: ExportConfig::default(),
+            doctor: DoctorConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -1076,6 +1106,7 @@ mode = "nextgen"
             },
             generate: GenerateConfig::default(),
             export: ExportConfig::default(),
+            doctor: DoctorConfig::default(),
         };
 
         base.merge(&other);
@@ -1325,6 +1356,7 @@ custom = "templates/my-adr.md"
             },
             generate: GenerateConfig::default(),
             export: ExportConfig::default(),
+            doctor: DoctorConfig::default(),
         };
 
         original.save(temp.path()).unwrap();
@@ -1594,5 +1626,132 @@ base_url = "https://github.com/org/repo/blob/main/doc/adr"
             Some("https://github.com/org/repo/blob/main/doc/adr".to_string()),
             "export.base_url should survive a save/load round-trip"
         );
+    }
+
+    // ========== DoctorConfig / ignore, warnings_as_errors Tests ==========
+
+    #[test]
+    fn test_doctor_config_default() {
+        let config = DoctorConfig::default();
+        assert!(config.ignore.is_empty());
+        assert!(!config.warnings_as_errors);
+    }
+
+    #[test]
+    fn test_doctor_ignore_from_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+
+[doctor]
+ignore = ["ADR011", "MD013"]
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(
+            config.doctor.ignore,
+            vec!["ADR011".to_string(), "MD013".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_doctor_warnings_as_errors_from_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+
+[doctor]
+warnings_as_errors = true
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert!(config.doctor.warnings_as_errors);
+    }
+
+    #[test]
+    fn test_doctor_config_absent_defaults() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert!(config.doctor.ignore.is_empty());
+        assert!(!config.doctor.warnings_as_errors);
+    }
+
+    #[test]
+    fn test_config_merge_doctor_ignore() {
+        let mut base = Config::default();
+        let other = Config {
+            doctor: DoctorConfig {
+                ignore: vec!["ADR011".to_string()],
+                warnings_as_errors: false,
+            },
+            ..Default::default()
+        };
+
+        base.merge(&other);
+        assert_eq!(base.doctor.ignore, vec!["ADR011".to_string()]);
+
+        // An empty ignore list in `other` must not clobber an existing base list.
+        let mut base = Config {
+            doctor: DoctorConfig {
+                ignore: vec!["ADR011".to_string()],
+                warnings_as_errors: false,
+            },
+            ..Default::default()
+        };
+        let other = Config::default(); // doctor.ignore is empty
+
+        base.merge(&other);
+        assert_eq!(
+            base.doctor.ignore,
+            vec!["ADR011".to_string()],
+            "merge with empty doctor.ignore should not overwrite existing value"
+        );
+    }
+
+    #[test]
+    fn test_config_merge_doctor_warnings_as_errors() {
+        // merge: other.warnings_as_errors=false should NOT overwrite base.warnings_as_errors=true
+        let mut base = Config {
+            doctor: DoctorConfig {
+                ignore: vec![],
+                warnings_as_errors: true,
+            },
+            ..Default::default()
+        };
+        let other = Config::default(); // warnings_as_errors = false
+        base.merge(&other);
+        assert!(
+            base.doctor.warnings_as_errors,
+            "merge with warnings_as_errors=false should not overwrite true"
+        );
+    }
+
+    #[test]
+    fn test_doctor_config_save_load_roundtrip() {
+        let temp = TempDir::new().unwrap();
+        let original = Config {
+            mode: ConfigMode::NextGen,
+            doctor: DoctorConfig {
+                ignore: vec!["ADR011".to_string()],
+                warnings_as_errors: true,
+            },
+            ..Default::default()
+        };
+
+        original.save(temp.path()).unwrap();
+        let loaded = Config::load(temp.path()).unwrap();
+
+        assert_eq!(loaded.doctor.ignore, vec!["ADR011".to_string()]);
+        assert!(loaded.doctor.warnings_as_errors);
     }
 }

@@ -13,6 +13,8 @@ adrs doctor [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `--ng` | No-op for `doctor` (prints a note; see below) |
+| `--ignore <RULE>` | Ignore a rule by ID or name (repeatable); merged with `[doctor].ignore` in `adrs.toml` |
+| `--warnings-as-errors` | Exit with status 1 if there are warnings, not just errors |
 | `-C, --cwd <DIR>` | Working directory |
 | `-h, --help` | Print help |
 
@@ -99,6 +101,25 @@ This allows using `doctor` in CI pipelines:
 - name: Check ADR health
   run: adrs doctor
 ```
+
+## Configuration
+
+`doctor` reads a `[doctor]` section from `adrs.toml`:
+
+```toml
+[doctor]
+# Rule IDs or rule names to suppress (matched case-insensitively)
+ignore = ["ADR011"]
+
+# Exit with status 1 if there are warnings, not just errors
+warnings_as_errors = false
+```
+
+`--ignore` flags on the command line merge with (do not replace) `[doctor].ignore`
+from config, so you can suppress an extra rule for a single run without editing
+`adrs.toml`. `--warnings-as-errors` on the command line ORs with
+`[doctor].warnings_as_errors`, so either one being set is enough to make warnings
+fail the check.
 
 ## Pre-commit Hook
 

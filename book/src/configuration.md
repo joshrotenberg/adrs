@@ -55,6 +55,18 @@ no_edit = false
 # If omitted, defaults to none (no source_uri fields)
 # base_url = "https://github.com/org/repo/blob/main/doc/adr"
 
+# Doctor command configuration
+[doctor]
+# Rule IDs or rule names to suppress permanently (matched case-insensitively).
+# '--ignore' flags on the command line merge with this list, they do not replace it.
+# If omitted, defaults to an empty list (no rules suppressed)
+# ignore = ["ADR011"]
+
+# When true, 'adrs doctor' exits with status 1 if there are warnings, not just errors.
+# '--warnings-as-errors' on the command line ORs with this setting.
+# If omitted, defaults to false
+# warnings_as_errors = false
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"

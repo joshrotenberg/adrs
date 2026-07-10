@@ -314,11 +314,17 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
     Ok(report)
 }
 
-/// Run all checks: per-file lint + repository-level checks.
+/// Run all checks and filter out issues matching ignored rule IDs/names.
 ///
-/// Also reports files that look like ADRs (digit-prefixed `.md` files in the
-/// ADR directory) but could not be parsed (e.g., invalid YAML frontmatter).
-pub fn check_all(repo: &Repository) -> Result<LintReport> {
+/// Ignored rules are `repo.config().doctor.ignore` unioned with `extra_ignore`
+/// (e.g. CLI `--ignore` flags for a single invocation). Matching is
+/// case-insensitive against both `Issue.rule_id` and `Issue.rule_name`.
+///
+/// Returns the filtered report and the count of issues that were suppressed.
+pub fn check_all_filtered(
+    repo: &Repository,
+    extra_ignore: &[String],
+) -> Result<(LintReport, usize)> {
     let mut report = LintReport::new();
 
     // Use list_with_errors to capture parse failures
@@ -351,7 +357,36 @@ pub fn check_all(repo: &Repository) -> Result<LintReport> {
     report.issues.extend(repo_report.issues);
 
     report.sort();
-    Ok(report)
+
+    let ignore_set: std::collections::HashSet<String> = repo
+        .config()
+        .doctor
+        .ignore
+        .iter()
+        .chain(extra_ignore.iter())
+        .map(|s| s.to_lowercase())
+        .collect();
+
+    if ignore_set.is_empty() {
+        return Ok((report, 0));
+    }
+
+    let before = report.issues.len();
+    report.issues.retain(|issue| {
+        !ignore_set.contains(&issue.rule_id.to_lowercase())
+            && !ignore_set.contains(&issue.rule_name.to_lowercase())
+    });
+    let suppressed = before - report.issues.len();
+
+    Ok((report, suppressed))
+}
+
+/// Run all checks: per-file lint + repository-level checks.
+///
+/// Also reports files that look like ADRs (digit-prefixed `.md` files in the
+/// ADR directory) but could not be parsed (e.g., invalid YAML frontmatter).
+pub fn check_all(repo: &Repository) -> Result<LintReport> {
+    check_all_filtered(repo, &[]).map(|(report, _)| report)
 }
 
 #[cfg(test)]
@@ -679,6 +714,118 @@ Some consequences.
         assert_eq!(
             adr011, 0,
             "Single valid ADR should have no sequential-gap issue"
+        );
+    }
+
+    // ========== check_all_filtered / [doctor].ignore (issue #316) ==========
+
+    #[test]
+    fn test_check_all_filtered_suppresses_ignored_rule() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // init creates ADR #1 automatically; write #2 and #4 to create a gap at #3,
+        // which trips ADR011 (Warning severity, confirmed via
+        // test_check_repository_sequential_gap_adr011).
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(2, "Second", "Accepted", ""),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0004-fourth.md"),
+            make_nygard_adr(4, "Fourth", "Accepted", ""),
+        )
+        .unwrap();
+
+        // Unfiltered: check_repository still reports ADR011.
+        let unfiltered = check_repository(&repo).unwrap();
+        let unfiltered_adr011 = unfiltered
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR011")
+            .count();
+        assert!(
+            unfiltered_adr011 > 0,
+            "expected check_repository to report ADR011 before filtering"
+        );
+
+        // Write adrs.toml with a lowercase ignore entry, then re-open the repository
+        // so the config is loaded from disk (Repository::init keeps the in-memory
+        // config it built at creation time).
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\n\n[doctor]\nignore = [\"adr011\"]\n",
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+        assert_eq!(repo.config().doctor.ignore, vec!["adr011".to_string()]);
+
+        // check_all (and check_all_filtered) should no longer contain ADR011,
+        // proving case-insensitive matching against the real rule_id "ADR011".
+        let filtered = check_all(&repo).unwrap();
+        let filtered_adr011 = filtered
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR011")
+            .count();
+        assert_eq!(
+            filtered_adr011, 0,
+            "check_all should suppress ADR011 issues per [doctor].ignore"
+        );
+
+        // check_repository (unfiltered) should still report ADR011 -- filtering
+        // is check_all-level only.
+        let still_unfiltered = check_repository(&repo).unwrap();
+        assert!(
+            still_unfiltered
+                .issues
+                .iter()
+                .any(|i| i.rule_id == "ADR011"),
+            "check_repository should remain unfiltered"
+        );
+    }
+
+    #[test]
+    fn test_check_all_filtered_returns_suppressed_count() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(2, "Second", "Accepted", ""),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0004-fourth.md"),
+            make_nygard_adr(4, "Fourth", "Accepted", ""),
+        )
+        .unwrap();
+
+        let unfiltered = check_all(&repo).unwrap();
+        let unfiltered_adr011 = unfiltered
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR011")
+            .count();
+        assert!(unfiltered_adr011 > 0);
+
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\n\n[doctor]\nignore = [\"ADR011\"]\n",
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (filtered, suppressed_count) = check_all_filtered(&repo, &[]).unwrap();
+        assert_eq!(suppressed_count, unfiltered_adr011);
+        assert!(
+            filtered.issues.iter().all(|i| i.rule_id != "ADR011"),
+            "filtered report should not contain ADR011"
         );
     }
 }
