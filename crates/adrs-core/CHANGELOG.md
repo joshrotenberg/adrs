@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-07-10
+
+### Bug Fixes
+
+- Reject empty or whitespace-only status values (closes #305)
+- Parse CRLF frontmatter and legacy Date lines (closes #326, #324)
+- Preserve link descriptions and hrefs in metadata writer
+- Add Date line to nygard bare-minimal template (closes #330)
+
+### Documentation
+
+- Fix drift found by v0.9.0 release readiness audit
+
+### Features
+
+- Configurable doctor rules and warnings-as-errors via adrs.toml
+
+### Testing
+
+- Wire up adr-corpus fixtures as a round-trip harness (closes #318)
+- Pin CRLF frontmatter behavior and force LF checkout for corpus fixtures
+
+
 ## [0.8.0] - 2026-06-15
 
 ### Features
