@@ -747,6 +747,8 @@ impl Repository {
                         }
                     }
                     "decision" => {
+                        let madr_decision_outcome =
+                            heading_text.trim().eq_ignore_ascii_case("Decision Outcome");
                         let (decision_found, consequences_applied) = Self::patch_decision_section(
                             &mut result,
                             &lines,
@@ -754,6 +756,7 @@ impl Repository {
                             i,
                             body_end,
                             patch,
+                            madr_decision_outcome,
                         );
                         if decision_found {
                             found_decision = true;
@@ -884,6 +887,7 @@ impl Repository {
         body_start: usize,
         body_end: usize,
         patch: &BodySectionPatch,
+        madr_decision_outcome: bool,
     ) -> (bool, bool) {
         if patch.decision.is_none() && patch.consequences.is_none() {
             Self::append_lines(result, lines, body_start, body_end, content);
@@ -920,6 +924,7 @@ impl Repository {
         if intro_end >= body_end {
             if let Some(ref text) = patch.consequences
                 && !Self::has_consequences_h2_after(lines, body_end)
+                && madr_decision_outcome
             {
                 Self::write_madr_consequences_subsection(result, text);
                 consequences_applied = true;
@@ -964,6 +969,7 @@ impl Repository {
         if let Some(ref text) = patch.consequences
             && !consequences_applied
             && !Self::has_consequences_h2_after(lines, body_end)
+            && madr_decision_outcome
         {
             Self::write_madr_consequences_subsection(result, text);
             consequences_applied = true;
@@ -3634,5 +3640,90 @@ Context only.
             )
             .unwrap_err();
         assert!(err.to_string().contains("consequences patch requested"));
+    }
+
+    #[test]
+    fn test_nygard_consequences_patch_errors_without_consequences_section() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = r#"# 3. Nygard decision without consequences section
+
+Date: 2026-01-15
+
+## Status
+
+Accepted
+
+## Context
+
+Context.
+
+## Decision
+
+We decided X.
+"#;
+        let adr_path = repo.adr_path().join("0003-nygard-no-consequences.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let mut adr = repo.get(3).unwrap();
+        adr.consequences = "New consequences.".into();
+        let err = repo
+            .update(
+                &adr,
+                BodySectionPatch {
+                    consequences: Some("New consequences.".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("consequences patch requested"));
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(!after.contains("### Consequences"));
+        assert!(!after.contains("New consequences."));
+    }
+
+    #[test]
+    fn test_decision_patch_preserves_fence_in_context() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = r#"# 4. Fence in context
+
+Date: 2026-01-15
+
+## Status
+
+Accepted
+
+## Context
+
+Example:
+
+```
+## Decision
+not a real heading
+```
+
+## Decision
+
+We decided.
+"#;
+        let adr_path = repo.adr_path().join("0004-fence-in-context.md");
+        fs::write(&adr_path, content).unwrap();
+
+        repo.update(
+            &repo.get(4).unwrap(),
+            BodySectionPatch {
+                decision: Some("Updated decision.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("## Decision\nnot a real heading"));
+        assert!(after.contains("Updated decision."));
+        assert!(!after.contains("We decided."));
     }
 }

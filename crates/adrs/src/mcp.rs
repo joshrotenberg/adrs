@@ -1183,6 +1183,12 @@ impl AdrState {
             body.consequences = Some(consequences);
         }
 
+        if body.is_empty() {
+            return Err(
+                "At least one of context, decision, or consequences must be provided".to_string(),
+            );
+        }
+
         let path = repo.update(&adr, body).map_err(|e| e.to_string())?;
 
         #[derive(Serialize)]
