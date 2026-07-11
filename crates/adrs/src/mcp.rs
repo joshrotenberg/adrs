@@ -1007,6 +1007,13 @@ impl AdrState {
         }
 
         // Set MADR metadata fields if provided.
+        let metadata_fields_updated = params
+            .decision_makers
+            .as_ref()
+            .is_some_and(|m| !m.is_empty())
+            || params.consulted.as_ref().is_some_and(|c| !c.is_empty())
+            || params.informed.as_ref().is_some_and(|i| !i.is_empty());
+
         if let Some(makers) = params.decision_makers
             && !makers.is_empty()
         {
@@ -1027,6 +1034,10 @@ impl AdrState {
         }
 
         // Handle tags.
+        let tags_updated = params
+            .tags
+            .as_ref()
+            .is_some_and(|tag_list| !tag_list.is_empty() && repo.config().is_next_gen());
         if let Some(tag_list) = params.tags
             && !tag_list.is_empty()
         {
@@ -1042,12 +1053,17 @@ impl AdrState {
             }
         }
 
-        // Re-render if any content or metadata was provided.
-        let final_path = if content_updated {
-            repo.update(&adr, body).map_err(|e| e.to_string())?
-        } else {
-            path
-        };
+        // Apply metadata and body updates separately so body patches never rewrite metadata.
+        let metadata_updated = metadata_fields_updated || tags_updated;
+        let body_updated = !body.is_empty();
+
+        let mut final_path = path;
+        if metadata_updated {
+            final_path = repo.update_metadata(&adr).map_err(|e| e.to_string())?;
+        }
+        if body_updated {
+            final_path = repo.update(&adr, body).map_err(|e| e.to_string())?;
+        }
 
         #[derive(Serialize)]
         struct CreateResponse {
