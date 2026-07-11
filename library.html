@@ -186,7 +186,7 @@
 <h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
 <p>Add to your <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-adrs-core = "0.7"
+adrs-core = "0.9"
 </code></pre>
 <h2 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h2>
 <h3 id="opening-a-repository"><a class="header" href="#opening-a-repository">Opening a Repository</a></h3>
@@ -197,13 +197,14 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     // Open existing repository
     let repo = Repository::open(Path::new("."))?;
     
-    // Or create with defaults if it doesn't exist
-    let repo = Repository::open_or_default(Path::new("."))?;
+    // Or create with defaults if it doesn't exist (returns Self, not Result)
+    let repo = Repository::open_or_default(Path::new("."));
     
     Ok(())
 }</code></pre></pre>
 <h3 id="listing-adrs"><a class="header" href="#listing-adrs">Listing ADRs</a></h3>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::Repository;
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -215,7 +216,8 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     Ok(())
 }</code></pre></pre>
 <h3 id="creating-an-adr"><a class="header" href="#creating-an-adr">Creating an ADR</a></h3>
-<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Adr, AdrStatus};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Adr};
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -232,6 +234,7 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
 }</code></pre></pre>
 <h3 id="finding-an-adr"><a class="header" href="#finding-an-adr">Finding an ADR</a></h3>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::Repository;
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -246,6 +249,7 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
 }</code></pre></pre>
 <h3 id="linking-adrs"><a class="header" href="#linking-adrs">Linking ADRs</a></h3>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, LinkKind};
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -287,27 +291,40 @@ let config = Config {
 <span class="boring">}</span></code></pre></pre>
 <h2 id="templates"><a class="header" href="#templates">Templates</a></h2>
 <h3 id="using-built-in-templates"><a class="header" href="#using-built-in-templates">Using Built-in Templates</a></h3>
-<pre><pre class="playground"><code class="language-rust">use adrs_core::{TemplateEngine, TemplateFormat, TemplateVariant, Adr};
+<p><code>TemplateEngine</code> is a builder: start with <code>new()</code>, then chain <code>with_format</code>
+and <code>with_variant</code>. <code>render</code> takes the <code>Adr</code>, the repository <code>Config</code> (used
+for things like MADR field toggles), and a map of link titles keyed by ADR
+number.</p>
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Adr, Config, TemplateEngine, TemplateFormat, TemplateVariant};
+use std::collections::HashMap;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
-    let engine = TemplateEngine::new(TemplateFormat::Madr, TemplateVariant::Minimal);
+    let engine = TemplateEngine::new()
+        .with_format(TemplateFormat::Madr)
+        .with_variant(TemplateVariant::Minimal);
     
     let adr = Adr::new(1, "My Decision".to_string());
-    let content = engine.render(&amp;adr)?;
+    let config = Config::default();
+    let content = engine.render(&amp;adr, &amp;config, &amp;HashMap::new())?;
     
     println!("{}", content);
     
     Ok(())
 }</code></pre></pre>
 <h3 id="custom-templates"><a class="header" href="#custom-templates">Custom Templates</a></h3>
-<pre><pre class="playground"><code class="language-rust">use adrs_core::{TemplateEngine, Adr};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Adr, Config, TemplateEngine};
+use std::collections::HashMap;
 use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
-    let engine = TemplateEngine::from_file(Path::new("templates/custom.md"))?;
+    let engine = TemplateEngine::new()
+        .with_custom_template_file(Path::new("templates/custom.md"))?;
     
     let adr = Adr::new(1, "My Decision".to_string());
-    let content = engine.render(&amp;adr)?;
+    let config = Config::default();
+    let content = engine.render(&amp;adr, &amp;config, &amp;HashMap::new())?;
+    
+    println!("{}", content);
     
     Ok(())
 }</code></pre></pre>
@@ -357,7 +374,8 @@ None significant.
 "#;
 
     let parser = Parser::new();
-    let adr = parser.parse(content, Some(1))?;
+    let adr = parser.parse(content)?;
+    println!("{}: {}", adr.number, adr.title);
     
     Ok(())
 }</code></pre></pre>
@@ -405,12 +423,13 @@ let kind = LinkKind::Custom("Depends on".to_string());
 <h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
 <p>The library uses <code>thiserror</code> for error types:</p>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Error};
+use std::path::Path;
 
 fn main() {
     match Repository::open(Path::new(".")) {
         Ok(repo) =&gt; { /* use repo */ }
-        Err(Error::NotFound(path)) =&gt; {
-            eprintln!("ADR repository not found at {}", path.display());
+        Err(Error::AdrDirNotFound) =&gt; {
+            eprintln!("ADR repository not found. Run 'adrs init' to create one.");
         }
         Err(e) =&gt; {
             eprintln!("Error: {}", e);

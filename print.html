@@ -253,10 +253,10 @@
 <h3 id="manual-download"><a class="header" href="#manual-download">Manual Download</a></h3>
 <p>Download the appropriate binary from the <a href="https://github.com/joshrotenberg/adrs/releases">releases page</a>.</p>
 <div class="table-wrapper"><table><thead><tr><th>Platform</th><th>Architecture</th><th>Download</th></tr></thead><tbody>
-<tr><td>Linux</td><td>x86_64</td><td><code>adrs-x86_64-unknown-linux-gnu.tar.gz</code></td></tr>
-<tr><td>Linux</td><td>aarch64</td><td><code>adrs-aarch64-unknown-linux-gnu.tar.gz</code></td></tr>
-<tr><td>macOS</td><td>x86_64 (Intel)</td><td><code>adrs-x86_64-apple-darwin.tar.gz</code></td></tr>
-<tr><td>macOS</td><td>aarch64 (Apple Silicon)</td><td><code>adrs-aarch64-apple-darwin.tar.gz</code></td></tr>
+<tr><td>Linux</td><td>x86_64</td><td><code>adrs-x86_64-unknown-linux-gnu.tar.xz</code></td></tr>
+<tr><td>Linux</td><td>aarch64</td><td><code>adrs-aarch64-unknown-linux-gnu.tar.xz</code></td></tr>
+<tr><td>macOS</td><td>x86_64 (Intel)</td><td><code>adrs-x86_64-apple-darwin.tar.xz</code></td></tr>
+<tr><td>macOS</td><td>aarch64 (Apple Silicon)</td><td><code>adrs-aarch64-apple-darwin.tar.xz</code></td></tr>
 <tr><td>Windows</td><td>x86_64</td><td><code>adrs-x86_64-pc-windows-msvc.zip</code></td></tr>
 </tbody></table>
 </div>
@@ -342,12 +342,24 @@ no_edit = false
 # If omitted, defaults to none (no source_uri fields)
 # base_url = "https://github.com/org/repo/blob/main/doc/adr"
 
+# Doctor command configuration
+[doctor]
+# Rule IDs or rule names to suppress permanently (matched case-insensitively).
+# '--ignore' flags on the command line merge with this list, they do not replace it.
+# If omitted, defaults to an empty list (no rules suppressed)
+# ignore = ["ADR011"]
+
+# When true, 'adrs doctor' exits with status 1 if there are warnings, not just errors.
+# '--warnings-as-errors' on the command line ORs with this setting.
+# If omitted, defaults to false
+# warnings_as_errors = false
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"
 format = "nygard"
 
-# Default variant: "full", "minimal", or "bare"
+# Default variant: "full", "minimal", "bare", or "bare-minimal"
 variant = "full"
 
 # Path to custom template file (optional)
@@ -683,7 +695,7 @@ mode = "nextgen"
 <p>Each format has four variants:</p>
 <div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>full</code></td><td>Complete template with all sections and guidance comments</td></tr>
-<tr><td><code>minimal</code></td><td>Essential sections only, no guidance</td></tr>
+<tr><td><code>minimal</code></td><td>Essential sections only; some formats (e.g. MADR) still include placeholder guidance text</td></tr>
 <tr><td><code>bare</code></td><td>All sections, but empty (no guidance)</td></tr>
 <tr><td><code>bare-minimal</code></td><td>Core sections only, empty content</td></tr>
 </tbody></table>
@@ -948,7 +960,9 @@ Options:
 <h2 id="description"><a class="header" href="#description">Description</a></h2>
 <p>The <code>init</code> command creates:</p>
 <ol>
-<li>A <code>.adr-dir</code> file in the current directory containing the ADR directory path</li>
+<li>A configuration file in the current directory: <code>.adr-dir</code> (containing the
+ADR directory path) in compatible mode, or <code>adrs.toml</code> in NextGen mode
+(<code>--ng</code>)</li>
 <li>The ADR directory (creates parent directories if needed)</li>
 <li>An initial ADR: <code>0001-record-architecture-decisions.md</code></li>
 </ol>
@@ -977,13 +991,16 @@ decisions/
 <h3 id="nextgen-mode-2"><a class="header" href="#nextgen-mode-2">NextGen Mode</a></h3>
 <pre><code class="language-sh">adrs init --ng
 </code></pre>
-<p>Creates the initial ADR with YAML frontmatter:</p>
+<p>Writes <code>adrs.toml</code> instead of <code>.adr-dir</code>, and creates the initial ADR with
+YAML frontmatter:</p>
 <pre><code class="language-markdown">---
-status: accepted
+number: 1
+title: Record architecture decisions
 date: 2024-01-15
+status: accepted
 ---
 
-# Record Architecture Decisions
+# 1. Record architecture decisions
 
 ...
 </code></pre>
@@ -1011,7 +1028,7 @@ ADRs yet, so re-initializing will not add a duplicate.</p>
 <h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>-f, --format &lt;FORMAT&gt;</code></td><td>Template format: <code>nygard</code> or <code>madr</code> (default: <code>nygard</code>)</td></tr>
-<tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: <code>full</code>, <code>minimal</code>, or <code>bare</code> (default: <code>full</code>)</td></tr>
+<tr><td><code>-v, --variant &lt;VARIANT&gt;</code></td><td>Template variant: <code>full</code>, <code>minimal</code>, <code>bare</code>, or <code>bare-minimal</code> (default: <code>full</code>)</td></tr>
 <tr><td><code>--template &lt;PATH&gt;</code></td><td>Path to a custom template file (overrides <code>--format</code>/<code>--variant</code> and config)</td></tr>
 <tr><td><code>--status &lt;STATUS&gt;</code></td><td>Initial status (default: <code>default_status</code> from config, else <code>Proposed</code>)</td></tr>
 <tr><td><code>-s, --supersedes &lt;N&gt;</code></td><td>ADR number this supersedes</td></tr>
@@ -1452,7 +1469,7 @@ adrs export json -d path/to/adrs  # Export from directory (no repo needed)
   "generated_at": "2024-01-15T10:30:00Z",
   "tool": {
     "name": "adrs",
-    "version": "0.7.4"
+    "version": "0.9.0"
   },
   "repository": {
     "adr_directory": "doc/adr"
@@ -1891,13 +1908,19 @@ Mode: Compatible
 </code></pre>
 <h2 id="options-14"><a class="header" href="#options-14">Options</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
+<tr><td><code>--ng</code></td><td>No-op for <code>doctor</code> (prints a note; see below)</td></tr>
+<tr><td><code>--ignore &lt;RULE&gt;</code></td><td>Ignore a rule by ID or name (repeatable); merged with <code>[doctor].ignore</code> in <code>adrs.toml</code></td></tr>
+<tr><td><code>--warnings-as-errors</code></td><td>Exit with status 1 if there are warnings, not just errors</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
 </tbody></table>
 </div>
 <h2 id="description-5"><a class="header" href="#description-5">Description</a></h2>
 <p>Runs diagnostic checks on your ADR repository and reports any issues found.</p>
+<p>The global <code>--ng</code> flag has no effect on <code>doctor</code>. Lint rules detect each ADR's
+format (Nygard or MADR) from the file itself, so the repository mode does not
+change which checks run. Passing <code>--ng doctor</code> prints a note to that effect
+rather than ignoring the flag silently.</p>
 <h2 id="checks-performed"><a class="header" href="#checks-performed">Checks Performed</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Check</th><th>Description</th></tr></thead><tbody>
 <tr><td>File Naming</td><td>ADR files follow the <code>NNNN-title.md</code> pattern</td></tr>
@@ -1913,46 +1936,71 @@ Mode: Compatible
 <pre><code class="language-sh">adrs doctor
 </code></pre>
 <p>Output:</p>
-<pre><code>Checking ADR repository health...
-
-[OK] File naming: All 5 ADRs follow naming convention
-[OK] Duplicate numbers: No duplicates found
-[OK] Numbering gaps: Numbers are sequential
-[OK] Broken links: All links are valid
-[OK] Superseded status: All superseded ADRs have links
-[OK] Parse errors: All ADRs parsed successfully
-
-Health check passed!
+<pre><code>No issues found. Your ADR repository is healthy!
 </code></pre>
 <h3 id="repository-with-issues"><a class="header" href="#repository-with-issues">Repository with Issues</a></h3>
 <pre><code class="language-sh">adrs doctor
 </code></pre>
 <p>Output:</p>
-<pre><code>Checking ADR repository health...
+<pre><code>error: [ADR012] doc/adr/0003-duplicate.md: Duplicate ADR number 2. Also used in: doc/adr/0002-use-postgresql.md
+warning: [ADR009] Filename number (0003) does not match title number (2) [doc/adr/0003-duplicate.md:1]
 
-[OK] File naming: All 5 ADRs follow naming convention
-[WARN] Numbering gaps: Gap after ADR 3 (next is 5)
-[ERROR] Broken links: ADR 4 links to non-existent ADR 99
-[WARN] Superseded status: ADR 2 is superseded but has no "Superseded by" link
-
-Health check found 3 issue(s)
+Found 1 error(s), 1 warning(s), 0 info(s)
 </code></pre>
+<p>Each line has the form <code>&lt;severity&gt;: [&lt;rule ID&gt;] &lt;message&gt; [&lt;location&gt;]</code>. Rule
+IDs like <code>ADR009</code> and <code>ADR012</code> map to the checks below.</p>
 <h2 id="severity-levels"><a class="header" href="#severity-levels">Severity Levels</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Level</th><th>Description</th></tr></thead><tbody>
-<tr><td>OK</td><td>Check passed</td></tr>
-<tr><td>WARN</td><td>Potential issue, but not critical</td></tr>
-<tr><td>ERROR</td><td>Problem that should be fixed</td></tr>
+<tr><td>info</td><td>Informational, no action needed</td></tr>
+<tr><td>warning</td><td>Potential issue, but not critical</td></tr>
+<tr><td>error</td><td>Problem that should be fixed</td></tr>
 </tbody></table>
 </div>
 <h2 id="exit-codes"><a class="header" href="#exit-codes">Exit Codes</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Code</th><th>Description</th></tr></thead><tbody>
-<tr><td>0</td><td>All checks passed</td></tr>
-<tr><td>1</td><td>One or more checks failed</td></tr>
+<tr><td>0</td><td>No issues, or only warnings/info (default)</td></tr>
+<tr><td>1</td><td>One or more errors, or warnings with <code>--warnings-as-errors</code> / <code>warnings_as_errors = true</code></td></tr>
 </tbody></table>
 </div>
-<p>This allows using <code>doctor</code> in CI pipelines:</p>
+<p>By default, warnings alone do not fail the check; only errors do. Pass
+<code>--warnings-as-errors</code> (or set <code>warnings_as_errors = true</code> in <code>[doctor]</code>) to
+also fail on warnings. This allows using <code>doctor</code> in CI pipelines:</p>
 <pre><code class="language-yaml">- name: Check ADR health
   run: adrs doctor
+</code></pre>
+<h2 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h2>
+<p><code>doctor</code> reads a <code>[doctor]</code> section from <code>adrs.toml</code>:</p>
+<pre><code class="language-toml">[doctor]
+# Rule IDs or rule names to suppress (matched case-insensitively)
+ignore = ["ADR011"]
+
+# Exit with status 1 if there are warnings, not just errors
+warnings_as_errors = false
+</code></pre>
+<p><code>--ignore</code> flags on the command line merge with (do not replace) <code>[doctor].ignore</code>
+from config, so you can suppress an extra rule for a single run without editing
+<code>adrs.toml</code>. <code>--warnings-as-errors</code> on the command line ORs with
+<code>[doctor].warnings_as_errors</code>, so either one being set is enough to make warnings
+fail the check.</p>
+<h2 id="pre-commit-hook"><a class="header" href="#pre-commit-hook">Pre-commit Hook</a></h2>
+<p><code>adrs</code> ships a <a href="https://pre-commit.com">pre-commit</a> hook (also compatible
+with <a href="https://prek.j178.dev">prek</a>) that runs <code>doctor</code> whenever a markdown
+file changes. Add it to your <code>.pre-commit-config.yaml</code>:</p>
+<pre><code class="language-yaml">repos:
+  - repo: https://github.com/joshrotenberg/adrs
+    rev: v0.9.0
+    hooks:
+      - id: adrs-doctor
+</code></pre>
+<p>The hook uses <code>language: system</code>, so it expects <code>adrs</code> to already be on
+<code>PATH</code>. See <a href="commands/../installation.html">Installation</a> for ways to install it
+(<code>cargo install adrs</code>, a release binary, Homebrew, etc.).</p>
+<p>The hook triggers on any staged <code>.md</code> file but always checks the whole
+repository, since <code>doctor</code>'s checks (numbering, links, superseded status)
+are repository-wide. If your ADRs live outside the default directory, scope
+the trigger further with <code>files:</code> in your own config, e.g.:</p>
+<pre><code class="language-yaml">      - id: adrs-doctor
+        files: ^doc/adr/.*\.md$
 </code></pre>
 <h2 id="related-7"><a class="header" href="#related-7">Related</a></h2>
 <ul>
@@ -2110,7 +2158,7 @@ More: adrs --help, adrs &lt;command&gt; --help
 <p>For HTTP transport support (independent server mode):</p>
 <pre><code class="language-sh">cargo install adrs --features mcp-http
 </code></pre>
-<h2 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h2>
+<h2 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h2>
 <h3 id="claude-desktop"><a class="header" href="#claude-desktop">Claude Desktop</a></h3>
 <p>Add to your <code>claude_desktop_config.json</code>:</p>
 <pre><code class="language-json">{
@@ -2152,7 +2200,7 @@ More: adrs --help, adrs &lt;command&gt; --help
 </div>
 <h3 id="write-operations"><a class="header" href="#write-operations">Write Operations</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>create_adr</code></td><td>Create a new ADR (always 'proposed' status)</td></tr>
+<tr><td><code>create_adr</code></td><td>Create a new ADR (uses the repository's configured default status; proposed if not configured)</td></tr>
 <tr><td><code>update_status</code></td><td>Change an ADR's status</td></tr>
 <tr><td><code>link_adrs</code></td><td>Create bidirectional links between ADRs</td></tr>
 <tr><td><code>update_content</code></td><td>Update ADR sections (context, decision, consequences)</td></tr>
@@ -2207,7 +2255,9 @@ More: adrs --help, adrs &lt;command&gt; --help
 </ul>
 <p><strong>Returns:</strong> List of matching ADRs with match snippets showing which section matched and context around the match.</p>
 <h3 id="create_adr"><a class="header" href="#create_adr">create_adr</a></h3>
-<p>Create a new ADR. Always creates with 'proposed' status for human review.</p>
+<p>Create a new ADR. Uses the repository's configured default status (proposed
+if not configured); the created ADR still requires human review before
+acceptance.</p>
 <p><strong>Parameters:</strong></p>
 <ul>
 <li><code>title</code> (required): ADR title</li>
@@ -2216,7 +2266,7 @@ More: adrs --help, adrs &lt;command&gt; --help
 <li><code>consequences</code> (optional): Consequences section content</li>
 <li><code>supersedes</code> (optional): ADR number this supersedes</li>
 <li><code>format</code> (optional): Template format -- <code>nygard</code> (default) or <code>madr</code> for MADR 4.0.0 format</li>
-<li><code>variant</code> (optional): Template variant -- <code>full</code> (default), <code>minimal</code>, or <code>bare</code></li>
+<li><code>variant</code> (optional): Template variant -- <code>full</code> (default), <code>minimal</code>, <code>bare</code>, or <code>bare-minimal</code></li>
 <li><code>decision_makers</code> (optional): List of people who made the decision (most useful with MADR format)</li>
 <li><code>consulted</code> (optional): List of people consulted for input (most useful with MADR format)</li>
 <li><code>informed</code> (optional): List of people kept informed (most useful with MADR format)</li>
@@ -2301,7 +2351,8 @@ More: adrs --help, adrs &lt;command&gt; --help
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
 <ol>
 <li>
-<p><strong>Human Review</strong>: All ADRs created by AI are set to 'proposed' status. Review before accepting.</p>
+<p><strong>Human Review</strong>: ADRs created by AI use the repository's configured
+default status (proposed if not configured). Review before accepting.</p>
 </li>
 <li>
 <p><strong>Provide Context</strong>: Give Claude context about your architecture when asking it to create ADRs.</p>
@@ -2327,7 +2378,7 @@ More: adrs --help, adrs &lt;command&gt; --help
 <h2 id="installation-4"><a class="header" href="#installation-4">Installation</a></h2>
 <p>Add to your <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-adrs-core = "0.7"
+adrs-core = "0.9"
 </code></pre>
 <h2 id="basic-usage-3"><a class="header" href="#basic-usage-3">Basic Usage</a></h2>
 <h3 id="opening-a-repository"><a class="header" href="#opening-a-repository">Opening a Repository</a></h3>
@@ -2338,13 +2389,14 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     // Open existing repository
     let repo = Repository::open(Path::new("."))?;
     
-    // Or create with defaults if it doesn't exist
-    let repo = Repository::open_or_default(Path::new("."))?;
+    // Or create with defaults if it doesn't exist (returns Self, not Result)
+    let repo = Repository::open_or_default(Path::new("."));
     
     Ok(())
 }</code></pre></pre>
 <h3 id="listing-adrs"><a class="header" href="#listing-adrs">Listing ADRs</a></h3>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::Repository;
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -2356,7 +2408,8 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     Ok(())
 }</code></pre></pre>
 <h3 id="creating-an-adr"><a class="header" href="#creating-an-adr">Creating an ADR</a></h3>
-<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Adr, AdrStatus};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Adr};
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -2373,6 +2426,7 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
 }</code></pre></pre>
 <h3 id="finding-an-adr"><a class="header" href="#finding-an-adr">Finding an ADR</a></h3>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::Repository;
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -2387,6 +2441,7 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
 }</code></pre></pre>
 <h3 id="linking-adrs"><a class="header" href="#linking-adrs">Linking ADRs</a></h3>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, LinkKind};
+use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
     let repo = Repository::open(Path::new("."))?;
@@ -2400,7 +2455,7 @@ fn main() -&gt; anyhow::Result&lt;()&gt; {
     
     Ok(())
 }</code></pre></pre>
-<h2 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h2>
+<h2 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h2>
 <h3 id="loading-configuration"><a class="header" href="#loading-configuration">Loading Configuration</a></h3>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::{Config, discover};
 use std::path::Path;
@@ -2428,27 +2483,40 @@ let config = Config {
 <span class="boring">}</span></code></pre></pre>
 <h2 id="templates-1"><a class="header" href="#templates-1">Templates</a></h2>
 <h3 id="using-built-in-templates-1"><a class="header" href="#using-built-in-templates-1">Using Built-in Templates</a></h3>
-<pre><pre class="playground"><code class="language-rust">use adrs_core::{TemplateEngine, TemplateFormat, TemplateVariant, Adr};
+<p><code>TemplateEngine</code> is a builder: start with <code>new()</code>, then chain <code>with_format</code>
+and <code>with_variant</code>. <code>render</code> takes the <code>Adr</code>, the repository <code>Config</code> (used
+for things like MADR field toggles), and a map of link titles keyed by ADR
+number.</p>
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Adr, Config, TemplateEngine, TemplateFormat, TemplateVariant};
+use std::collections::HashMap;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
-    let engine = TemplateEngine::new(TemplateFormat::Madr, TemplateVariant::Minimal);
+    let engine = TemplateEngine::new()
+        .with_format(TemplateFormat::Madr)
+        .with_variant(TemplateVariant::Minimal);
     
     let adr = Adr::new(1, "My Decision".to_string());
-    let content = engine.render(&amp;adr)?;
+    let config = Config::default();
+    let content = engine.render(&amp;adr, &amp;config, &amp;HashMap::new())?;
     
     println!("{}", content);
     
     Ok(())
 }</code></pre></pre>
 <h3 id="custom-templates-1"><a class="header" href="#custom-templates-1">Custom Templates</a></h3>
-<pre><pre class="playground"><code class="language-rust">use adrs_core::{TemplateEngine, Adr};
+<pre><pre class="playground"><code class="language-rust">use adrs_core::{Adr, Config, TemplateEngine};
+use std::collections::HashMap;
 use std::path::Path;
 
 fn main() -&gt; anyhow::Result&lt;()&gt; {
-    let engine = TemplateEngine::from_file(Path::new("templates/custom.md"))?;
+    let engine = TemplateEngine::new()
+        .with_custom_template_file(Path::new("templates/custom.md"))?;
     
     let adr = Adr::new(1, "My Decision".to_string());
-    let content = engine.render(&amp;adr)?;
+    let config = Config::default();
+    let content = engine.render(&amp;adr, &amp;config, &amp;HashMap::new())?;
+    
+    println!("{}", content);
     
     Ok(())
 }</code></pre></pre>
@@ -2498,7 +2566,8 @@ None significant.
 "#;
 
     let parser = Parser::new();
-    let adr = parser.parse(content, Some(1))?;
+    let adr = parser.parse(content)?;
+    println!("{}: {}", adr.number, adr.title);
     
     Ok(())
 }</code></pre></pre>
@@ -2546,12 +2615,13 @@ let kind = LinkKind::Custom("Depends on".to_string());
 <h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
 <p>The library uses <code>thiserror</code> for error types:</p>
 <pre><pre class="playground"><code class="language-rust">use adrs_core::{Repository, Error};
+use std::path::Path;
 
 fn main() {
     match Repository::open(Path::new(".")) {
         Ok(repo) =&gt; { /* use repo */ }
-        Err(Error::NotFound(path)) =&gt; {
-            eprintln!("ADR repository not found at {}", path.display());
+        Err(Error::AdrDirNotFound) =&gt; {
+            eprintln!("ADR repository not found. Run 'adrs init' to create one.");
         }
         Err(e) =&gt; {
             eprintln!("Error: {}", e);

@@ -188,13 +188,19 @@
 </code></pre>
 <h2 id="options"><a class="header" href="#options">Options</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Option</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>--ng</code></td><td>Use NextGen mode</td></tr>
+<tr><td><code>--ng</code></td><td>No-op for <code>doctor</code> (prints a note; see below)</td></tr>
+<tr><td><code>--ignore &lt;RULE&gt;</code></td><td>Ignore a rule by ID or name (repeatable); merged with <code>[doctor].ignore</code> in <code>adrs.toml</code></td></tr>
+<tr><td><code>--warnings-as-errors</code></td><td>Exit with status 1 if there are warnings, not just errors</td></tr>
 <tr><td><code>-C, --cwd &lt;DIR&gt;</code></td><td>Working directory</td></tr>
 <tr><td><code>-h, --help</code></td><td>Print help</td></tr>
 </tbody></table>
 </div>
 <h2 id="description"><a class="header" href="#description">Description</a></h2>
 <p>Runs diagnostic checks on your ADR repository and reports any issues found.</p>
+<p>The global <code>--ng</code> flag has no effect on <code>doctor</code>. Lint rules detect each ADR's
+format (Nygard or MADR) from the file itself, so the repository mode does not
+change which checks run. Passing <code>--ng doctor</code> prints a note to that effect
+rather than ignoring the flag silently.</p>
 <h2 id="checks-performed"><a class="header" href="#checks-performed">Checks Performed</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Check</th><th>Description</th></tr></thead><tbody>
 <tr><td>File Naming</td><td>ADR files follow the <code>NNNN-title.md</code> pattern</td></tr>
@@ -210,46 +216,71 @@
 <pre><code class="language-sh">adrs doctor
 </code></pre>
 <p>Output:</p>
-<pre><code>Checking ADR repository health...
-
-[OK] File naming: All 5 ADRs follow naming convention
-[OK] Duplicate numbers: No duplicates found
-[OK] Numbering gaps: Numbers are sequential
-[OK] Broken links: All links are valid
-[OK] Superseded status: All superseded ADRs have links
-[OK] Parse errors: All ADRs parsed successfully
-
-Health check passed!
+<pre><code>No issues found. Your ADR repository is healthy!
 </code></pre>
 <h3 id="repository-with-issues"><a class="header" href="#repository-with-issues">Repository with Issues</a></h3>
 <pre><code class="language-sh">adrs doctor
 </code></pre>
 <p>Output:</p>
-<pre><code>Checking ADR repository health...
+<pre><code>error: [ADR012] doc/adr/0003-duplicate.md: Duplicate ADR number 2. Also used in: doc/adr/0002-use-postgresql.md
+warning: [ADR009] Filename number (0003) does not match title number (2) [doc/adr/0003-duplicate.md:1]
 
-[OK] File naming: All 5 ADRs follow naming convention
-[WARN] Numbering gaps: Gap after ADR 3 (next is 5)
-[ERROR] Broken links: ADR 4 links to non-existent ADR 99
-[WARN] Superseded status: ADR 2 is superseded but has no "Superseded by" link
-
-Health check found 3 issue(s)
+Found 1 error(s), 1 warning(s), 0 info(s)
 </code></pre>
+<p>Each line has the form <code>&lt;severity&gt;: [&lt;rule ID&gt;] &lt;message&gt; [&lt;location&gt;]</code>. Rule
+IDs like <code>ADR009</code> and <code>ADR012</code> map to the checks below.</p>
 <h2 id="severity-levels"><a class="header" href="#severity-levels">Severity Levels</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Level</th><th>Description</th></tr></thead><tbody>
-<tr><td>OK</td><td>Check passed</td></tr>
-<tr><td>WARN</td><td>Potential issue, but not critical</td></tr>
-<tr><td>ERROR</td><td>Problem that should be fixed</td></tr>
+<tr><td>info</td><td>Informational, no action needed</td></tr>
+<tr><td>warning</td><td>Potential issue, but not critical</td></tr>
+<tr><td>error</td><td>Problem that should be fixed</td></tr>
 </tbody></table>
 </div>
 <h2 id="exit-codes"><a class="header" href="#exit-codes">Exit Codes</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Code</th><th>Description</th></tr></thead><tbody>
-<tr><td>0</td><td>All checks passed</td></tr>
-<tr><td>1</td><td>One or more checks failed</td></tr>
+<tr><td>0</td><td>No issues, or only warnings/info (default)</td></tr>
+<tr><td>1</td><td>One or more errors, or warnings with <code>--warnings-as-errors</code> / <code>warnings_as_errors = true</code></td></tr>
 </tbody></table>
 </div>
-<p>This allows using <code>doctor</code> in CI pipelines:</p>
+<p>By default, warnings alone do not fail the check; only errors do. Pass
+<code>--warnings-as-errors</code> (or set <code>warnings_as_errors = true</code> in <code>[doctor]</code>) to
+also fail on warnings. This allows using <code>doctor</code> in CI pipelines:</p>
 <pre><code class="language-yaml">- name: Check ADR health
   run: adrs doctor
+</code></pre>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p><code>doctor</code> reads a <code>[doctor]</code> section from <code>adrs.toml</code>:</p>
+<pre><code class="language-toml">[doctor]
+# Rule IDs or rule names to suppress (matched case-insensitively)
+ignore = ["ADR011"]
+
+# Exit with status 1 if there are warnings, not just errors
+warnings_as_errors = false
+</code></pre>
+<p><code>--ignore</code> flags on the command line merge with (do not replace) <code>[doctor].ignore</code>
+from config, so you can suppress an extra rule for a single run without editing
+<code>adrs.toml</code>. <code>--warnings-as-errors</code> on the command line ORs with
+<code>[doctor].warnings_as_errors</code>, so either one being set is enough to make warnings
+fail the check.</p>
+<h2 id="pre-commit-hook"><a class="header" href="#pre-commit-hook">Pre-commit Hook</a></h2>
+<p><code>adrs</code> ships a <a href="https://pre-commit.com">pre-commit</a> hook (also compatible
+with <a href="https://prek.j178.dev">prek</a>) that runs <code>doctor</code> whenever a markdown
+file changes. Add it to your <code>.pre-commit-config.yaml</code>:</p>
+<pre><code class="language-yaml">repos:
+  - repo: https://github.com/joshrotenberg/adrs
+    rev: v0.9.0
+    hooks:
+      - id: adrs-doctor
+</code></pre>
+<p>The hook uses <code>language: system</code>, so it expects <code>adrs</code> to already be on
+<code>PATH</code>. See <a href="../installation.html">Installation</a> for ways to install it
+(<code>cargo install adrs</code>, a release binary, Homebrew, etc.).</p>
+<p>The hook triggers on any staged <code>.md</code> file but always checks the whole
+repository, since <code>doctor</code>'s checks (numbering, links, superseded status)
+are repository-wide. If your ADRs live outside the default directory, scope
+the trigger further with <code>files:</code> in your own config, e.g.:</p>
+<pre><code class="language-yaml">      - id: adrs-doctor
+        files: ^doc/adr/.*\.md$
 </code></pre>
 <h2 id="related"><a class="header" href="#related">Related</a></h2>
 <ul>

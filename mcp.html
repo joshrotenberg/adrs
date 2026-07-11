@@ -230,7 +230,7 @@
 </div>
 <h3 id="write-operations"><a class="header" href="#write-operations">Write Operations</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>create_adr</code></td><td>Create a new ADR (always 'proposed' status)</td></tr>
+<tr><td><code>create_adr</code></td><td>Create a new ADR (uses the repository's configured default status; proposed if not configured)</td></tr>
 <tr><td><code>update_status</code></td><td>Change an ADR's status</td></tr>
 <tr><td><code>link_adrs</code></td><td>Create bidirectional links between ADRs</td></tr>
 <tr><td><code>update_content</code></td><td>Update ADR sections (context, decision, consequences)</td></tr>
@@ -285,7 +285,9 @@
 </ul>
 <p><strong>Returns:</strong> List of matching ADRs with match snippets showing which section matched and context around the match.</p>
 <h3 id="create_adr"><a class="header" href="#create_adr">create_adr</a></h3>
-<p>Create a new ADR. Always creates with 'proposed' status for human review.</p>
+<p>Create a new ADR. Uses the repository's configured default status (proposed
+if not configured); the created ADR still requires human review before
+acceptance.</p>
 <p><strong>Parameters:</strong></p>
 <ul>
 <li><code>title</code> (required): ADR title</li>
@@ -294,7 +296,7 @@
 <li><code>consequences</code> (optional): Consequences section content</li>
 <li><code>supersedes</code> (optional): ADR number this supersedes</li>
 <li><code>format</code> (optional): Template format -- <code>nygard</code> (default) or <code>madr</code> for MADR 4.0.0 format</li>
-<li><code>variant</code> (optional): Template variant -- <code>full</code> (default), <code>minimal</code>, or <code>bare</code></li>
+<li><code>variant</code> (optional): Template variant -- <code>full</code> (default), <code>minimal</code>, <code>bare</code>, or <code>bare-minimal</code></li>
 <li><code>decision_makers</code> (optional): List of people who made the decision (most useful with MADR format)</li>
 <li><code>consulted</code> (optional): List of people consulted for input (most useful with MADR format)</li>
 <li><code>informed</code> (optional): List of people kept informed (most useful with MADR format)</li>
@@ -379,7 +381,8 @@
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
 <ol>
 <li>
-<p><strong>Human Review</strong>: All ADRs created by AI are set to 'proposed' status. Review before accepting.</p>
+<p><strong>Human Review</strong>: ADRs created by AI use the repository's configured
+default status (proposed if not configured). Review before accepting.</p>
 </li>
 <li>
 <p><strong>Provide Context</strong>: Give Claude context about your architecture when asking it to create ADRs.</p>

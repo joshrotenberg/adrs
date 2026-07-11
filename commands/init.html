@@ -201,7 +201,9 @@
 <h2 id="description"><a class="header" href="#description">Description</a></h2>
 <p>The <code>init</code> command creates:</p>
 <ol>
-<li>A <code>.adr-dir</code> file in the current directory containing the ADR directory path</li>
+<li>A configuration file in the current directory: <code>.adr-dir</code> (containing the
+ADR directory path) in compatible mode, or <code>adrs.toml</code> in NextGen mode
+(<code>--ng</code>)</li>
 <li>The ADR directory (creates parent directories if needed)</li>
 <li>An initial ADR: <code>0001-record-architecture-decisions.md</code></li>
 </ol>
@@ -230,13 +232,16 @@ decisions/
 <h3 id="nextgen-mode"><a class="header" href="#nextgen-mode">NextGen Mode</a></h3>
 <pre><code class="language-sh">adrs init --ng
 </code></pre>
-<p>Creates the initial ADR with YAML frontmatter:</p>
+<p>Writes <code>adrs.toml</code> instead of <code>.adr-dir</code>, and creates the initial ADR with
+YAML frontmatter:</p>
 <pre><code class="language-markdown">---
-status: accepted
+number: 1
+title: Record architecture decisions
 date: 2024-01-15
+status: accepted
 ---
 
-# Record Architecture Decisions
+# 1. Record architecture decisions
 
 ...
 </code></pre>
