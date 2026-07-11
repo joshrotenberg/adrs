@@ -466,10 +466,14 @@ impl Repository {
 
     /// Update an existing ADR.
     ///
-    /// Updates metadata (status, links, tags, and MADR 4.0.0 frontmatter fields) and,
-    /// for each field set in `body`, the matching body section in place.
+    /// When `body` is non-empty, only the listed body sections are patched in place;
+    /// metadata bytes on disk are left unchanged. When `body` is empty, metadata
+    /// (status, links, tags, and MADR 4.0.0 frontmatter fields) is updated via the
+    /// same path as [`Self::update_metadata`].
     ///
-    /// Unlisted sections are left byte-for-byte unchanged on disk, including MADR
+    /// `adr.title` and `adr.date` are not written by this method.
+    ///
+    /// Unlisted body sections are left byte-for-byte unchanged on disk, including MADR
     /// `### Consequences` / `### Confirmation` subsections under `## Decision Outcome`.
     pub fn update(&self, adr: &Adr, body: BodySectionPatch) -> Result<PathBuf> {
         let path = adr
@@ -479,10 +483,14 @@ impl Repository {
 
         let content = fs::read_to_string(&path)?;
 
-        let content = if content.starts_with("---\n") {
-            self.update_frontmatter_metadata(adr, &content)?
+        let content = if body.is_empty() {
+            if content.starts_with("---\n") {
+                self.update_frontmatter_metadata(adr, &content)?
+            } else {
+                self.update_legacy_metadata(adr, &content)?
+            }
         } else {
-            self.update_legacy_metadata(adr, &content)?
+            content
         };
 
         let updated = if body.is_empty() {
@@ -608,22 +616,30 @@ impl Repository {
             yaml_block
         };
 
-        // 4. Replace or remove MADR 4.0.0 metadata blocks
-        let yaml_block = Self::replace_optional_yaml_block(
-            &yaml_block,
-            &FM_DECISION_MAKERS_RE,
-            Self::format_string_list_yaml("decision-makers", &adr.decision_makers),
-        );
-        let yaml_block = Self::replace_optional_yaml_block(
-            &yaml_block,
-            &FM_CONSULTED_RE,
-            Self::format_string_list_yaml("consulted", &adr.consulted),
-        );
-        let yaml_block = Self::replace_optional_yaml_block(
-            &yaml_block,
-            &FM_INFORMED_RE,
-            Self::format_string_list_yaml("informed", &adr.informed),
-        );
+        // 4. Replace or remove MADR 4.0.0 metadata blocks when values changed
+        let on_disk_people = Self::parse_people_fields_yaml(&yaml_block);
+        let mut yaml_block = yaml_block;
+        if on_disk_people.decision_makers != adr.decision_makers {
+            yaml_block = Self::replace_optional_yaml_block(
+                &yaml_block,
+                &FM_DECISION_MAKERS_RE,
+                Self::format_string_list_yaml("decision-makers", &adr.decision_makers),
+            );
+        }
+        if on_disk_people.consulted != adr.consulted {
+            yaml_block = Self::replace_optional_yaml_block(
+                &yaml_block,
+                &FM_CONSULTED_RE,
+                Self::format_string_list_yaml("consulted", &adr.consulted),
+            );
+        }
+        if on_disk_people.informed != adr.informed {
+            yaml_block = Self::replace_optional_yaml_block(
+                &yaml_block,
+                &FM_INFORMED_RE,
+                Self::format_string_list_yaml("informed", &adr.informed),
+            );
+        }
 
         let yaml_block = yaml_block.trim_end_matches('\n');
         Ok(format!("---\n{}{}", yaml_block, after_yaml))
@@ -704,10 +720,14 @@ impl Repository {
         let lines: Vec<&str> = content.lines().collect();
         let mut result = String::with_capacity(content.len());
         let mut i = 0;
+        let mut found_context = patch.context.is_none();
+        let mut found_decision = patch.decision.is_none();
+        let mut found_consequences = patch.consequences.is_none();
 
         while i < lines.len() {
             let line = lines[i];
-            if let Some(heading_text) = line.strip_prefix("## ")
+            if Self::is_h2_outside_fence(&lines, i)
+                && let Some(heading_text) = line.strip_prefix("## ")
                 && let Some(field) = crate::parse::canonical_section_field(heading_text.trim())
             {
                 result.push_str(line);
@@ -717,6 +737,9 @@ impl Repository {
 
                 match field {
                     "context" => {
+                        if patch.context.is_some() {
+                            found_context = true;
+                        }
                         if let Some(ref text) = patch.context {
                             Self::write_section_body(&mut result, text);
                         } else {
@@ -724,7 +747,7 @@ impl Repository {
                         }
                     }
                     "decision" => {
-                        Self::patch_decision_section(
+                        let (decision_found, consequences_applied) = Self::patch_decision_section(
                             &mut result,
                             &lines,
                             content,
@@ -732,8 +755,17 @@ impl Repository {
                             body_end,
                             patch,
                         );
+                        if decision_found {
+                            found_decision = true;
+                        }
+                        if consequences_applied {
+                            found_consequences = true;
+                        }
                     }
                     "consequences" => {
+                        if patch.consequences.is_some() {
+                            found_consequences = true;
+                        }
                         if let Some(ref text) = patch.consequences {
                             Self::write_section_body(&mut result, text);
                         } else {
@@ -756,6 +788,25 @@ impl Repository {
             i += 1;
         }
 
+        if !found_context {
+            return Err(Error::InvalidFormat {
+                path: PathBuf::new(),
+                reason: "context patch requested but no matching section heading found".into(),
+            });
+        }
+        if !found_decision {
+            return Err(Error::InvalidFormat {
+                path: PathBuf::new(),
+                reason: "decision patch requested but no matching section heading found".into(),
+            });
+        }
+        if !found_consequences {
+            return Err(Error::InvalidFormat {
+                path: PathBuf::new(),
+                reason: "consequences patch requested but no matching section heading found".into(),
+            });
+        }
+
         if content.ends_with('\n') && !result.ends_with('\n') {
             result.push('\n');
         }
@@ -763,18 +814,42 @@ impl Repository {
         Ok(result)
     }
 
+    fn is_fence_delimiter(line: &str) -> bool {
+        let trimmed = line.trim();
+        trimmed.starts_with("```") || trimmed.starts_with("~~~")
+    }
+
+    fn in_fence_at_line(lines: &[&str], index: usize) -> bool {
+        let mut in_fence = false;
+        for line in &lines[..index] {
+            if Self::is_fence_delimiter(line) {
+                in_fence = !in_fence;
+            }
+        }
+        in_fence
+    }
+
+    fn is_h2_outside_fence(lines: &[&str], index: usize) -> bool {
+        lines[index].starts_with("## ") && !Self::in_fence_at_line(lines, index)
+    }
+
+    fn is_h3_outside_fence(lines: &[&str], index: usize) -> bool {
+        lines[index].starts_with("### ") && !Self::in_fence_at_line(lines, index)
+    }
+
     fn next_h2_index(lines: &[&str], start: usize) -> usize {
         lines[start..]
             .iter()
-            .position(|l| l.starts_with("## "))
-            .map(|p| start + p)
+            .enumerate()
+            .find(|(offset, _)| Self::is_h2_outside_fence(lines, start + offset))
+            .map(|(offset, _)| start + offset)
             .unwrap_or(lines.len())
     }
 
     fn append_lines(result: &mut String, lines: &[&str], start: usize, end: usize, content: &str) {
         for (offset, line) in lines[start..end].iter().enumerate() {
             result.push_str(line);
-            if start + offset < end - 1 || content.ends_with('\n') {
+            if start + offset < end - 1 || end < lines.len() || content.ends_with('\n') {
                 result.push('\n');
             }
         }
@@ -800,6 +875,8 @@ impl Repository {
 
     /// Patch `## Decision` / `## Decision Outcome`, preserving MADR H3 subsections
     /// unless `patch.decision` or `patch.consequences` targets them.
+    ///
+    /// Returns `(found_decision, consequences_applied)`.
     fn patch_decision_section(
         result: &mut String,
         lines: &[&str],
@@ -807,28 +884,32 @@ impl Repository {
         body_start: usize,
         body_end: usize,
         patch: &BodySectionPatch,
-    ) {
+    ) -> (bool, bool) {
         if patch.decision.is_none() && patch.consequences.is_none() {
             Self::append_lines(result, lines, body_start, body_end, content);
-            return;
+            return (false, false);
         }
+
+        let mut consequences_applied = false;
 
         // Nygard-style ADRs use a top-level `## Consequences` H2; that section is
         // patched separately. Leave Decision bytes untouched when only consequences
         // is set and a Consequences H2 exists later in the file.
         if patch.decision.is_none()
             && patch.consequences.is_some()
-            && lines[body_end..]
-                .iter()
-                .any(|l| Self::is_consequences_h2(l))
+            && Self::has_consequences_h2_after(lines, body_end)
         {
             Self::append_lines(result, lines, body_start, body_end, content);
-            return;
+            return (true, false);
         }
 
         let body = &lines[body_start..body_end];
-        let first_h3 = body.iter().position(|l| l.starts_with("### "));
-        let intro_end = first_h3.map(|idx| body_start + idx).unwrap_or(body_end);
+        let first_h3 = body
+            .iter()
+            .enumerate()
+            .find(|(offset, _)| Self::is_h3_outside_fence(lines, body_start + offset))
+            .map(|(offset, _)| body_start + offset);
+        let intro_end = first_h3.unwrap_or(body_end);
 
         if let Some(ref text) = patch.decision {
             Self::write_section_body(result, text);
@@ -838,20 +919,18 @@ impl Repository {
 
         if intro_end >= body_end {
             if let Some(ref text) = patch.consequences
-                && !lines[body_end..]
-                    .iter()
-                    .any(|l| Self::is_consequences_h2(l))
+                && !Self::has_consequences_h2_after(lines, body_end)
             {
                 Self::write_madr_consequences_subsection(result, text);
+                consequences_applied = true;
             }
-            return;
+            return (true, consequences_applied);
         }
 
         let mut j = intro_end;
-        let mut consequences_written = false;
 
         while j < body_end {
-            if !lines[j].starts_with("### ") {
+            if !Self::is_h3_outside_fence(lines, j) {
                 j += 1;
                 continue;
             }
@@ -859,19 +938,23 @@ impl Repository {
             let sub_start = j;
             let sub_end = lines[sub_start + 1..body_end]
                 .iter()
-                .position(|l| l.starts_with("## ") || l.starts_with("### "))
-                .map(|p| sub_start + 1 + p)
+                .enumerate()
+                .find(|(offset, _)| {
+                    let idx = sub_start + 1 + offset;
+                    Self::is_h2_outside_fence(lines, idx) || Self::is_h3_outside_fence(lines, idx)
+                })
+                .map(|(offset, _)| sub_start + 1 + offset)
                 .unwrap_or(body_end);
 
-            if Self::is_consequences_h3(lines[sub_start]) {
-                consequences_written = true;
-                if let Some(ref text) = patch.consequences {
-                    result.push_str(lines[sub_start]);
-                    result.push('\n');
-                    Self::write_section_body(result, text);
-                    j = sub_end;
-                    continue;
-                }
+            if Self::is_consequences_h3(lines[sub_start])
+                && let Some(ref text) = patch.consequences
+            {
+                consequences_applied = true;
+                result.push_str(lines[sub_start]);
+                result.push('\n');
+                Self::write_section_body(result, text);
+                j = sub_end;
+                continue;
             }
 
             Self::append_lines(result, lines, sub_start, sub_end, content);
@@ -879,13 +962,20 @@ impl Repository {
         }
 
         if let Some(ref text) = patch.consequences
-            && !consequences_written
-            && !lines[body_end..]
-                .iter()
-                .any(|l| Self::is_consequences_h2(l))
+            && !consequences_applied
+            && !Self::has_consequences_h2_after(lines, body_end)
         {
             Self::write_madr_consequences_subsection(result, text);
+            consequences_applied = true;
         }
+
+        (true, consequences_applied)
+    }
+
+    fn has_consequences_h2_after(lines: &[&str], start: usize) -> bool {
+        lines[start..].iter().enumerate().any(|(offset, line)| {
+            Self::is_h2_outside_fence(lines, start + offset) && Self::is_consequences_h2(line)
+        })
     }
 
     fn write_madr_consequences_subsection(result: &mut String, text: &str) {
@@ -951,6 +1041,33 @@ impl Repository {
             yaml_block.to_string()
         }
     }
+
+    fn parse_people_fields_yaml(yaml_block: &str) -> PeopleFieldsYaml {
+        serde_yaml_neo::from_str::<PeopleFieldsYamlPartial>(yaml_block)
+            .map(|partial| PeopleFieldsYaml {
+                decision_makers: partial.decision_makers,
+                consulted: partial.consulted,
+                informed: partial.informed,
+            })
+            .unwrap_or_default()
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct PeopleFieldsYaml {
+    decision_makers: Vec<String>,
+    consulted: Vec<String>,
+    informed: Vec<String>,
+}
+
+#[derive(serde::Deserialize, Default)]
+struct PeopleFieldsYamlPartial {
+    #[serde(rename = "decision-makers", default)]
+    decision_makers: Vec<String>,
+    #[serde(default)]
+    consulted: Vec<String>,
+    #[serde(default)]
+    informed: Vec<String>,
 }
 
 /// Count existing ADR files in a directory.
@@ -2605,6 +2722,8 @@ Context.
             Repository::link_href(&target),
             "0003-use-rust-for-backend-services.md"
         );
+    }
+
     // ========== BodySectionPatch preservation tests (issue #310) ==========
 
     /// Extract from `## {heading}` through the line before the next H2 (inclusive).
@@ -3317,5 +3436,203 @@ See [Redis docs](https://redis.io) and use `redis-cli`.
         assert!(after.contains("[Redis docs](https://redis.io)"));
         assert!(after.contains("`redis-cli`"));
         assert!(after.contains("**fast**"));
+    }
+
+    // ========== BodySectionPatch write-path regressions ==========
+
+    #[test]
+    fn test_fence_in_decision_outcome_preserved_on_consequences_patch() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Fenced example in decision
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+```markdown
+## Consequences
+
+Example consequences inside a fence.
+```
+
+Trailing text after the fence.
+
+### Consequences
+
+* Good, because it provides pub/sub
+
+### Confirmation
+
+We will confirm via load tests.
+"#;
+        let adr_path = repo.adr_path().join("0002-fenced-decision-outcome.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = content.to_string();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.consequences = "* Updated consequence".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                consequences: Some("* Updated consequence".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("```markdown"));
+        assert!(after.contains("Example consequences inside a fence."));
+        assert!(after.contains("Trailing text after the fence."));
+        assert!(after.contains("### Confirmation"));
+        assert!(after.contains("We will confirm via load tests."));
+        assert!(after.contains("* Updated consequence"));
+        assert_h2_block_unchanged(&before, &after, "Context and Problem Statement");
+    }
+
+    #[test]
+    fn test_body_patch_preserves_sections_without_trailing_newline() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = "# 2. Compact file\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nOld decision.\n\n## Consequences\n\nOld consequences.";
+        let adr_path = repo.adr_path().join("0002-no-trailing-newline.md");
+        fs::write(&adr_path, content).unwrap();
+        assert_ne!(fs::read(&adr_path).unwrap().last(), Some(&b'\n'));
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New decision.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                decision: Some("New decision.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(!after.contains("Old context.## Decision"));
+        let reparsed = repo.get(2).unwrap();
+        assert!(reparsed.decision.contains("New decision."));
+    }
+
+    #[test]
+    fn test_people_field_yaml_unchanged_skip_rewrite() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = r#"---
+number: 2
+title: Zero indent consulted
+date: 2026-01-15
+status: proposed
+consulted:
+- alice
+- bob
+---
+
+## Context
+
+Context.
+"#;
+        let adr_path = repo.adr_path().join("0002-zero-indent-consulted.md");
+        fs::write(&adr_path, content).unwrap();
+        let before = fs::read_to_string(&adr_path).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        repo.update_metadata(&adr).unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn test_body_only_update_preserves_non_canonical_status() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = r#"# 2. Non-canonical status
+
+Date: 2026-01-15
+
+## Status
+
+Approved by the architecture board on 2026-01-15.
+
+## Context
+
+Original context.
+
+## Decision
+
+Decision.
+
+## Consequences
+
+Consequences.
+"#;
+        let adr_path = repo.adr_path().join("0002-non-canonical-status.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "Updated context.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                context: Some("Updated context.".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        assert!(after.contains("Approved by the architecture board"));
+        assert!(after.contains("Updated context."));
+    }
+
+    #[test]
+    fn test_missing_section_patch_returns_error() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = r#"# 2. No decision or consequences sections
+
+Date: 2026-01-15
+
+## Status
+
+Accepted
+
+## Context
+
+Context only.
+"#;
+        let adr_path = repo.adr_path().join("0002-no-consequences.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.consequences = "New consequences.".into();
+        let err = repo
+            .update(
+                &adr,
+                BodySectionPatch {
+                    consequences: Some("New consequences.".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("consequences patch requested"));
     }
 }
