@@ -11,7 +11,7 @@
 //! corresponding assertion here is expected to fail and should be tightened
 //! deliberately, not worked around.
 
-use adrs_core::{AdrStatus, LinkKind, Parser, Repository};
+use adrs_core::{AdrStatus, BodySectionPatch, LinkKind, Parser, Repository};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -70,8 +70,8 @@ fn corpus_is_complete() {
     let files = corpus_files();
     assert_eq!(
         files.len(),
-        10,
-        "expected 10 corpus fixtures, add new ones to the README table"
+        16,
+        "expected 16 corpus fixtures, add new ones to the README table"
     );
     for (i, f) in files.iter().enumerate() {
         let name = f.file_name().unwrap().to_str().unwrap();
@@ -229,10 +229,10 @@ fn crlf_frontmatter_parses_like_lf() {
 fn repository_lists_full_corpus() {
     let (_tmp, repo) = corpus_repo();
     let (adrs, errors) = repo.list_with_errors().unwrap();
-    assert_eq!(adrs.len(), 10);
+    assert_eq!(adrs.len(), 16);
     assert!(errors.is_empty(), "corpus files must all load: {errors:?}");
     let numbers: Vec<u32> = adrs.iter().map(|a| a.number).collect();
-    assert_eq!(numbers, (1..=10).collect::<Vec<u32>>());
+    assert_eq!(numbers, (1..=16).collect::<Vec<u32>>());
 }
 
 #[test]
@@ -240,11 +240,14 @@ fn noop_metadata_update_is_byte_identical_for_well_formed_files() {
     // A get() followed by update_metadata() with nothing changed must leave
     // these files untouched, byte for byte. This is the core write-path
     // guarantee the corpus protects: canonical Nygard files, frontmatter
-    // files with people fields (0004), a legacy Amends link to a hand-named
-    // file (0005), fence content (0008), a file without a trailing newline
-    // (0009), and frontmatter links with descriptions (0007).
+    // files with people fields (0004, 0011-0014), a legacy Amends link to a
+    // hand-named file (0005), fence content (0008, 0015-0016), a file without
+    // a trailing newline (0009), and frontmatter links with descriptions (0007).
+    //
+    // EXPECT-FAIL (0011-0014): until people-field Mapping rewrite
+    // (PR #311 review 4707905821 #1). Canonical 0004 should stay green.
     let (tmp, repo) = corpus_repo();
-    for number in [1u32, 2, 3, 4, 5, 7, 8, 9] {
+    for number in [1u32, 2, 3, 4, 5, 7, 8, 9, 11, 12, 13, 14, 15, 16] {
         let file = tmp
             .path()
             .join("doc/adr")
@@ -297,13 +300,124 @@ fn noop_metadata_update_pins_known_rewrites() {
 }
 
 #[test]
+fn status_change_preserves_people_yaml_forms() {
+    // EXPECT-FAIL until people-field Mapping rewrite
+    // (PR #311 review 4707905821 #1). Josh's adrs status regression:
+    // success exit must not orphan people-field YAML or drop the ADR from list.
+    let (tmp, repo) = corpus_repo();
+    let adr_dir = tmp.path().join("doc/adr");
+
+    for number in [11u32, 12, 13, 14] {
+        let file = adr_dir.join(fixture_path(number).file_name().unwrap());
+
+        repo.set_status(number, AdrStatus::Accepted, None)
+            .unwrap_or_else(|e| panic!("set_status({number}) failed: {e}"));
+
+        let after = fs::read_to_string(&file).unwrap();
+        assert!(
+            after.contains("status: accepted"),
+            "{number:04}: status should update"
+        );
+
+        // File must still parse and remain listable.
+        let listed = repo.get(number).unwrap_or_else(|e| {
+            panic!("{number:04}: ADR disappeared from list after set_status: {e}\n{after}")
+        });
+        assert_eq!(listed.number, number);
+        assert_eq!(listed.status, AdrStatus::Accepted);
+
+        if number == 11 {
+            assert!(
+                after.contains("the platform team"),
+                "0011: consulted value must survive"
+            );
+            assert!(
+                !after.contains("consulted:\n  - the platform team\n  the platform team")
+                    && !after.contains("consulted:\n  - the platform team\n\n  the platform team"),
+                "0011: block-scalar consulted must not be orphaned into a list+continuation\n{after}"
+            );
+        }
+        if number == 12 {
+            assert!(
+                !after.contains("  - alice\n- alice") && !after.contains("  - bob\n- bob"),
+                "0012: zero-indent items must not be orphaned beside canonical list\n{after}"
+            );
+        }
+        if number == 13 {
+            let alice_count = after.matches("- alice").count();
+            assert!(
+                alice_count <= 1,
+                "0013: consulted values must not duplicate on update (saw {alice_count})\n{after}"
+            );
+        }
+    }
+}
+
+#[test]
+fn body_patch_preserves_nested_and_tilde_fences() {
+    // EXPECT-FAIL until CommonMark fence tracker (char + run length)
+    // (PR #311 review 4707905821 #2). Nested/mixed fences must not truncate
+    // Decision Outcome or eat the real ### Consequences section.
+    let (tmp, repo) = corpus_repo();
+    let adr_dir = tmp.path().join("doc/adr");
+
+    for (number, fence_marker) in [(15u32, "````md"), (16u32, "~~~md")] {
+        let file = adr_dir.join(fixture_path(number).file_name().unwrap());
+        let before = fs::read_to_string(&file).unwrap();
+        assert!(
+            before.contains(fence_marker),
+            "{number:04}: fixture missing {fence_marker}"
+        );
+
+        let mut adr = repo.get(number).unwrap();
+        adr.consequences = "* Updated consequence from patch".into();
+        repo.update(
+            &adr,
+            BodySectionPatch {
+                consequences: Some("* Updated consequence from patch".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("update({number}) failed: {e}"));
+
+        let after = fs::read_to_string(&file).unwrap();
+        assert!(
+            after.contains("Example consequences inside"),
+            "{number:04}: in-fence sample body must survive\n{after}"
+        );
+        assert!(
+            after.contains("Trailing text after"),
+            "{number:04}: text after fence must survive\n{after}"
+        );
+        assert!(
+            after.contains("### Confirmation"),
+            "{number:04}: trailing H3 must survive\n{after}"
+        );
+        assert!(
+            after.contains("* Updated consequence from patch"),
+            "{number:04}: real ### Consequences should be patched\n{after}"
+        );
+        if number == 15 {
+            assert!(
+                after.matches("````").count() >= 2,
+                "0015: outer four-backtick fence must still close\n{after}"
+            );
+        } else {
+            assert!(
+                after.matches("~~~").count() >= 2,
+                "0016: outer tilde fence must still close\n{after}"
+            );
+        }
+    }
+}
+
+#[test]
 fn doctor_runs_over_the_corpus() {
     // The corpus is deliberately mixed-format, and the MADR ruleset flags the
-    // frontmatter files (0004, 0007, 0008) for using plain `## Context` /
-    // `## Decision` headings instead of MADR section names. Pin that doctor
-    // completes and reports those as errors rather than crashing or going
-    // silent; the exact counts are left unpinned so mdbook-lint rule
-    // evolution does not break this test.
+    // frontmatter files for using plain `## Context` / `## Decision` headings
+    // instead of MADR section names. Pin that doctor completes and reports
+    // those as errors rather than crashing or going silent; the exact counts
+    // are left unpinned so mdbook-lint rule evolution does not break this test.
     let (_tmp, repo) = corpus_repo();
     let report = adrs_core::lint::check_all(&repo).unwrap();
     assert!(

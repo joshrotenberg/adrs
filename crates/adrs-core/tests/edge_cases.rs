@@ -376,3 +376,49 @@ Use JWT with refresh tokens.
     assert!(result.contains("**JWT tokens**"));
     assert!(result.contains("Must handle token rotation"));
 }
+
+#[test]
+fn set_status_preserves_block_scalar_consulted() {
+    // EXPECT-FAIL until people-field Mapping rewrite
+    // (PR #311 review 4707905821 #1). Josh's adrs status regression.
+    let fixture = r#"---
+number: 2
+title: Block scalar consulted
+date: 2024-06-01
+status: proposed
+consulted: >-
+  the platform team
+---
+
+## Context
+
+C.
+
+## Decision
+
+D.
+
+## Consequences
+
+X.
+"#;
+
+    let temp = TempDir::new().unwrap();
+    let repo = Repository::init(temp.path(), None, true).unwrap();
+    let adr_path = repo.adr_path().join("0002-test.md");
+    fs::write(&adr_path, fixture).unwrap();
+
+    repo.set_status(2, AdrStatus::Accepted, None).unwrap();
+
+    let after = fs::read_to_string(&adr_path).unwrap();
+    let listed = repo
+        .get(2)
+        .unwrap_or_else(|e| panic!("ADR disappeared from list after set_status: {e}\n{after}"));
+    assert_eq!(listed.status, AdrStatus::Accepted);
+    assert!(after.contains("the platform team"));
+    assert!(
+        !after.contains("consulted:\n  - the platform team\n  the platform team")
+            && !after.contains("consulted:\n  - the platform team\n\n  the platform team"),
+        "block-scalar consulted must not be orphaned\n{after}"
+    );
+}
