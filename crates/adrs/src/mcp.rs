@@ -198,15 +198,21 @@ pub struct UpdateContentParams {
     pub number: u32,
 
     /// Context/background for the decision
-    #[schemars(description = "New context section content (optional, omit to keep existing)")]
+    #[schemars(
+        description = "New context section content (optional if decision or consequences is set; omit to keep existing)"
+    )]
     pub context: Option<String>,
 
     /// The decision that was made
-    #[schemars(description = "New decision section content (optional, omit to keep existing)")]
+    #[schemars(
+        description = "New decision section content (optional if context or consequences is set; omit to keep existing)"
+    )]
     pub decision: Option<String>,
 
     /// Consequences of the decision
-    #[schemars(description = "New consequences section content (optional, omit to keep existing)")]
+    #[schemars(
+        description = "New consequences section content (optional if context or decision is set; omit to keep existing)"
+    )]
     pub consequences: Option<String>,
 }
 
@@ -653,7 +659,7 @@ fn build_router(root: PathBuf) -> McpRouter {
         rw,
         state,
         "update_content",
-        "Update the content sections (context, decision, consequences) of an existing ADR. Only provided fields are updated; omitted fields are preserved. Changes should be reviewed by humans.",
+        "Update the content sections (context, decision, consequences) of an existing ADR. At least one of context, decision, or consequences must be provided; omitted fields among those three are preserved. Changes should be reviewed by humans.",
         UpdateContentParams,
         update_content_impl
     );
@@ -2148,6 +2154,21 @@ mod tests {
             text.contains("At least one of context, decision, or consequences")
                 || text.contains("must be provided"),
             "error should mention required body fields: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_content_tool_description_requires_body_field() {
+        let (client, _tmp) = setup_client(false).await;
+        let tools = client.list_all_tools().await.unwrap();
+        let update_content = tools
+            .iter()
+            .find(|t| t.name == "update_content")
+            .expect("update_content tool");
+        let desc = update_content.description.as_deref().unwrap_or("");
+        assert!(
+            desc.contains("At least one of context, decision, or consequences"),
+            "tools/list description must state the body-field requirement: {desc}"
         );
     }
 
