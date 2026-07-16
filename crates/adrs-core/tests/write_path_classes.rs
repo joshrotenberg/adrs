@@ -379,8 +379,6 @@ Keep me.
 
 #[test]
 fn fence_forms_consequences_patch_preserves_samples() {
-    // EXPECT-FAIL for nested/mixed until CommonMark fence tracker
-    // (PR #311 review 4707905821 #2).
     for (name, fixture) in fence_patch_cases() {
         let temp = TempDir::new().unwrap();
         let repo = Repository::init(temp.path(), None, true).unwrap();
