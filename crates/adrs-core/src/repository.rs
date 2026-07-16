@@ -6,36 +6,11 @@ use crate::{
 };
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
-use regex::Regex;
+use serde_yaml_neo::{Mapping, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 use walkdir::WalkDir;
-
-/// Regex for matching the status line in YAML frontmatter.
-static FM_STATUS_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^status:\s*.*$").unwrap());
-
-/// Regex for matching the links block in YAML frontmatter (multi-line).
-static FM_LINKS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^links:\n(?:(?:  .+\n)*)").unwrap());
-
-/// Regex for matching the tags block in YAML frontmatter (multi-line).
-static FM_TAGS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^tags:\n(?:(?:  .+\n)*)").unwrap());
-
-/// Regex for matching MADR 4.0.0 `decision-makers` in YAML frontmatter (scalar or list).
-static FM_DECISION_MAKERS_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?m)^decision-makers:(?: [^\n]+|\n(?:(?:  - [^\n]+\n)*))").unwrap()
-});
-
-/// Regex for matching MADR 4.0.0 `consulted` in YAML frontmatter (scalar or list).
-static FM_CONSULTED_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^consulted:(?: [^\n]+|\n(?:(?:  - [^\n]+\n)*))").unwrap());
-
-/// Regex for matching MADR 4.0.0 `informed` in YAML frontmatter (scalar or list).
-static FM_INFORMED_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^informed:(?: [^\n]+|\n(?:(?:  - [^\n]+\n)*))").unwrap());
 
 /// Selects which ADR body sections to patch on [`Repository::update`].
 ///
@@ -546,11 +521,15 @@ impl Repository {
         Ok(path)
     }
 
-    /// Surgically update metadata fields in a YAML frontmatter file.
+    /// Update managed metadata fields in a YAML frontmatter file.
     ///
-    /// Replaces only `status:`, `links:`, and `tags:` blocks in the frontmatter.
-    /// YAML comments (e.g., SPDX headers), unknown fields, and the entire
-    /// markdown body are preserved untouched.
+    /// Parses the frontmatter into a YAML [`Mapping`], mutates managed keys
+    /// (`status`, `links`, `tags`, and MADR people fields), and re-emits the
+    /// mapping. Unknown keys are preserved; the markdown body is untouched.
+    /// When no managed field changes, the original file bytes are returned.
+    ///
+    /// Re-emitting via a standard YAML parser may drop YAML comments (e.g. SPDX
+    /// headers) when any managed field changes — see ADR 0006.
     fn update_frontmatter_metadata(&self, adr: &Adr, content: &str) -> Result<String> {
         // Split into frontmatter and body at the closing `---`
         let Some(rest) = content.strip_prefix("---\n") else {
@@ -577,72 +556,58 @@ impl Repository {
         let yaml_block = &rest[..end_idx + 1]; // include trailing \n
         let after_yaml = &rest[end_idx..]; // starts with \n---\n...
 
-        // 1. Replace status line
-        let new_status = format!("status: {}", adr.status.to_string().to_lowercase());
-        let yaml_block = FM_STATUS_RE.replace(yaml_block, new_status.as_str());
-
-        // 2. Replace or remove links block
-        let links_yaml = Self::format_links_yaml(&adr.links);
-        let yaml_block = if FM_LINKS_RE.is_match(&yaml_block) {
-            FM_LINKS_RE
-                .replace(&yaml_block, links_yaml.as_str())
-                .into_owned()
-        } else if !links_yaml.is_empty() {
-            // Append links before end of frontmatter
-            let mut s = yaml_block.into_owned();
-            if !s.ends_with('\n') {
-                s.push('\n');
-            }
-            s.push_str(&links_yaml);
-            s
-        } else {
-            yaml_block.into_owned()
+        let parsed: Value = serde_yaml_neo::from_str(yaml_block)?;
+        let Value::Mapping(mut map) = parsed else {
+            return Err(Error::InvalidFormat {
+                path: Default::default(),
+                reason: "Frontmatter YAML must be a mapping".into(),
+            });
         };
 
-        // 3. Replace or remove tags block
-        let tags_yaml = Self::format_tags_yaml(&adr.tags);
-        let yaml_block = if FM_TAGS_RE.is_match(&yaml_block) {
-            FM_TAGS_RE
-                .replace(&yaml_block, tags_yaml.as_str())
-                .into_owned()
-        } else if !tags_yaml.is_empty() {
-            let mut s = yaml_block;
-            if !s.ends_with('\n') {
-                s.push('\n');
-            }
-            s.push_str(&tags_yaml);
-            s
-        } else {
-            yaml_block
-        };
+        let mut dirty = false;
 
-        // 4. Replace or remove MADR 4.0.0 metadata blocks when values changed
-        let on_disk_people = Self::parse_people_fields_yaml(&yaml_block);
-        let mut yaml_block = yaml_block;
-        if on_disk_people.decision_makers != adr.decision_makers {
-            yaml_block = Self::replace_optional_yaml_block(
-                &yaml_block,
-                &FM_DECISION_MAKERS_RE,
-                Self::format_string_list_yaml("decision-makers", &adr.decision_makers),
-            );
-        }
-        if on_disk_people.consulted != adr.consulted {
-            yaml_block = Self::replace_optional_yaml_block(
-                &yaml_block,
-                &FM_CONSULTED_RE,
-                Self::format_string_list_yaml("consulted", &adr.consulted),
-            );
-        }
-        if on_disk_people.informed != adr.informed {
-            yaml_block = Self::replace_optional_yaml_block(
-                &yaml_block,
-                &FM_INFORMED_RE,
-                Self::format_string_list_yaml("informed", &adr.informed),
-            );
+        // 1. status
+        let status_val = Value::String(adr.status.to_string().to_lowercase());
+        if map.get(Self::yaml_str_key("status")) != Some(&status_val) {
+            map.insert(Self::yaml_str_key("status"), status_val);
+            dirty = true;
         }
 
-        let yaml_block = yaml_block.trim_end_matches('\n');
-        Ok(format!("---\n{}{}", yaml_block, after_yaml))
+        // 2. links
+        if Self::set_yaml_sequence_field(&mut map, "links", &adr.links)? {
+            dirty = true;
+        }
+
+        // 3. tags
+        if Self::set_yaml_string_list_field(&mut map, "tags", &adr.tags)? {
+            dirty = true;
+        }
+
+        // 4. MADR people fields — skip-if-unchanged guard (removed in a follow-up).
+        let on_disk_people = Self::parse_people_fields_yaml(yaml_block);
+        if on_disk_people.decision_makers != adr.decision_makers
+            && Self::set_yaml_string_list_field(&mut map, "decision-makers", &adr.decision_makers)?
+        {
+            dirty = true;
+        }
+        if on_disk_people.consulted != adr.consulted
+            && Self::set_yaml_string_list_field(&mut map, "consulted", &adr.consulted)?
+        {
+            dirty = true;
+        }
+        if on_disk_people.informed != adr.informed
+            && Self::set_yaml_string_list_field(&mut map, "informed", &adr.informed)?
+        {
+            dirty = true;
+        }
+
+        if !dirty {
+            return Ok(content.to_string());
+        }
+
+        let new_yaml = serde_yaml_neo::to_string(&Value::Mapping(map))?;
+        let new_yaml = new_yaml.trim_end_matches('\n');
+        Ok(format!("---\n{new_yaml}{after_yaml}"))
     }
 
     /// Surgically update metadata in a legacy (no-frontmatter) ADR file.
@@ -989,63 +954,31 @@ impl Repository {
         Self::write_section_body(result, text);
     }
 
-    /// Format links as YAML block for frontmatter insertion.
-    fn format_links_yaml(links: &[AdrLink]) -> String {
-        if links.is_empty() {
-            return String::new();
-        }
-        let mut s = String::from("links:\n");
-        for link in links {
-            let kind_str = match &link.kind {
-                LinkKind::Supersedes => "supersedes",
-                LinkKind::SupersededBy => "supersededby",
-                LinkKind::Amends => "amends",
-                LinkKind::AmendedBy => "amendedby",
-                LinkKind::RelatesTo => "relatesto",
-                LinkKind::Custom(c) => c.as_str(),
-            };
-            s.push_str(&format!(
-                "  - target: {}\n    kind: {}\n",
-                link.target, kind_str
-            ));
-            if let Some(description) = &link.description {
-                s.push_str(&format!("    description: {}\n", description));
-            }
-        }
-        s
+    fn yaml_str_key(key: &str) -> Value {
+        Value::String(key.to_string())
     }
 
-    /// Format tags as YAML block for frontmatter insertion.
-    fn format_tags_yaml(tags: &[String]) -> String {
-        Self::format_string_list_yaml("tags", tags)
-    }
-
-    /// Format a YAML list field (or remove it when empty).
-    fn format_string_list_yaml(field: &str, values: &[String]) -> String {
+    /// Set or remove a sequence-valued frontmatter field. Returns true if `map` changed.
+    fn set_yaml_sequence_field<T: serde::Serialize>(
+        map: &mut Mapping,
+        key: &str,
+        values: &[T],
+    ) -> Result<bool> {
+        let key = Self::yaml_str_key(key);
         if values.is_empty() {
-            return String::new();
+            return Ok(map.remove(&key).is_some());
         }
-        let mut s = format!("{field}:\n");
-        for value in values {
-            s.push_str(&format!("  - {value}\n"));
+        let desired = serde_yaml_neo::to_value(values)?;
+        if map.get(&key) == Some(&desired) {
+            return Ok(false);
         }
-        s
+        map.insert(key, desired);
+        Ok(true)
     }
 
-    /// Replace, remove, or append an optional YAML block in frontmatter.
-    fn replace_optional_yaml_block(yaml_block: &str, regex: &Regex, new_yaml: String) -> String {
-        if regex.is_match(yaml_block) {
-            regex.replace(yaml_block, new_yaml.as_str()).into_owned()
-        } else if !new_yaml.is_empty() {
-            let mut s = yaml_block.to_string();
-            if !s.ends_with('\n') {
-                s.push('\n');
-            }
-            s.push_str(&new_yaml);
-            s
-        } else {
-            yaml_block.to_string()
-        }
+    /// Set or remove a string-list frontmatter field. Returns true if `map` changed.
+    fn set_yaml_string_list_field(map: &mut Mapping, key: &str, values: &[String]) -> Result<bool> {
+        Self::set_yaml_sequence_field(map, key, values)
     }
 
     fn parse_people_fields_yaml(yaml_block: &str) -> PeopleFieldsYaml {
@@ -1962,17 +1895,19 @@ Chosen option: "Redis", because it supports data structures beyond simple key-va
     }
 
     #[test]
-    fn test_set_status_preserves_yaml_comments() {
+    fn test_set_status_via_mapping_preserves_unknown_keys_and_body() {
+        // Mapping rewrite (ADR 0006 / PR #311) re-emits frontmatter YAML and does
+        // not round-trip comments. Unknown keys and the markdown body must survive.
         let temp = TempDir::new().unwrap();
         let repo = Repository::init(temp.path(), None, true).unwrap();
 
         let content_with_comments = r#"---
 # SPDX-License-Identifier: MIT
-# SPDX-FileCopyrightText: 2026 Example Corp
 number: 2
 title: Use MADR format
 date: 2026-01-15
 status: proposed
+custom-meta: keep-me
 ---
 
 ## Context and Problem Statement
@@ -1990,16 +1925,15 @@ Use MADR 4.0.0.
 
         let result = fs::read_to_string(&adr_path).unwrap();
 
-        // YAML comments must be preserved
-        assert!(
-            result.contains("# SPDX-License-Identifier: MIT"),
-            "SPDX comment was destroyed"
-        );
-        assert!(
-            result.contains("# SPDX-FileCopyrightText: 2026 Example Corp"),
-            "Copyright comment was destroyed"
-        );
         assert!(result.contains("status: accepted"));
+        assert!(
+            result.contains("custom-meta: keep-me"),
+            "unknown frontmatter key was dropped\n{result}"
+        );
+        assert!(
+            result.contains("## Decision Outcome") && result.contains("Use MADR 4.0.0."),
+            "markdown body must survive\n{result}"
+        );
     }
 
     #[test]
@@ -2536,8 +2470,11 @@ Context.
 
         let result = fs::read_to_string(&adr_path).unwrap();
         assert!(result.contains("tags:"));
-        assert!(result.contains("  - security"));
-        assert!(result.contains("  - api"));
+        // serde_yaml emits block sequences at column 0; both indent styles are valid.
+        assert!(
+            result.contains("- security") && result.contains("- api"),
+            "tags missing from frontmatter\n{result}"
+        );
         // Body preserved
         assert!(result.contains("## Context\n\nContext."));
     }

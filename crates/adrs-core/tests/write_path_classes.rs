@@ -175,7 +175,6 @@ fn people_yaml_noop_metadata_byte_identical() {
 
 #[test]
 fn people_yaml_set_status_keeps_adr_listable() {
-    // EXPECT-FAIL until Mapping rewrite (PR #311 review 4707905821 #1).
     // Primary surface: adrs status / Repository::set_status.
     for (name, fixture) in people_yaml_cases() {
         let temp = TempDir::new().unwrap();
@@ -222,7 +221,6 @@ fn people_yaml_set_status_keeps_adr_listable() {
 
 #[test]
 fn people_yaml_intentional_consulted_change_stays_parseable() {
-    // EXPECT-FAIL until Mapping rewrite (PR #311 review 4707905821 #1).
     // When the caller actually changes consulted, the file must still parse.
     for (name, fixture) in people_yaml_cases() {
         let temp = TempDir::new().unwrap();
@@ -561,10 +559,7 @@ X.
 
 #[test]
 fn set_status_scalar_makers_does_not_corrupt_block_scalar_consulted() {
-    // EXPECT-FAIL until guard removal / Mapping rewrite
-    // (PR #311 review 4707905821 #1b cross-field).
-    // Scalar decision-makers + block-scalar consulted → guard zeros all →
-    // corrupts consulted on status-only write.
+    // Cross-field: scalar decision-makers + block-scalar consulted on status write.
     let fixture = r#"---
 number: 2
 title: Cross-field people
@@ -613,8 +608,7 @@ X.
 
 #[test]
 fn add_link_preserves_block_scalar_consulted() {
-    // EXPECT-FAIL until Mapping rewrite (PR #311 review 4707905821 #1).
-    // Josh: adrs link on block-scalar people YAML corrupts then misleading error.
+    // Josh: adrs link on block-scalar people YAML must not drop the ADR.
     let source = r#"---
 number: 2
 title: Link source
@@ -685,8 +679,7 @@ X.
 
 #[test]
 fn noop_metadata_preserves_zero_indent_tags_or_links() {
-    // EXPECT-FAIL until Mapping rewrite if regex only matches `  - ` forms
-    // (PR #311 review 4707905821 #1). Pins tags/links same class as people fields.
+    // Pins tags/links zero-indent lists (same YAML class as people fields).
     let fixture = r#"---
 number: 2
 title: Zero indent tags links
@@ -696,7 +689,8 @@ tags:
 - alpha
 - beta
 links:
-- "Amends: [ADR 0003](0003-link-target.md)"
+- target: 3
+  kind: amends
 ---
 
 ## Context
@@ -731,6 +725,10 @@ X.
     assert!(
         after.contains("alpha") && after.contains("beta"),
         "tag values lost\n{after}"
+    );
+    assert!(
+        after.contains("target: 3") && after.contains("kind: amends"),
+        "link lost after noop metadata\n{after}"
     );
 }
 
