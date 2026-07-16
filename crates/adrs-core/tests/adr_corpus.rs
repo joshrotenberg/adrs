@@ -352,9 +352,8 @@ fn status_change_preserves_people_yaml_forms() {
 
 #[test]
 fn body_patch_preserves_nested_and_tilde_fences() {
-    // EXPECT-FAIL until CommonMark fence tracker (char + run length)
-    // (PR #311 review 4707905821 #2). Nested/mixed fences must not truncate
-    // Decision Outcome or eat the real ### Consequences section.
+    // Nested/mixed fences must not truncate Decision Outcome or eat the real
+    // ### Consequences section (PR #311 review 4707905821 #2).
     let (tmp, repo) = corpus_repo();
     let adr_dir = tmp.path().join("doc/adr");
 

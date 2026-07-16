@@ -784,19 +784,56 @@ impl Repository {
         Ok(result)
     }
 
-    fn is_fence_delimiter(line: &str) -> bool {
-        let trimmed = line.trim();
-        trimmed.starts_with("```") || trimmed.starts_with("~~~")
+    /// CommonMark fence opener/closer: 0–3 leading spaces, then a run of ≥3
+    /// `` ` `` or `~`. Lines indented ≥4 spaces are indented code, not fences.
+    fn fence_run(line: &str) -> Option<(char, usize)> {
+        let indent = line.chars().take_while(|c| *c == ' ').count();
+        if indent >= 4 {
+            return None;
+        }
+        let rest = &line[indent..];
+        let ch = rest.chars().next()?;
+        if ch != '`' && ch != '~' {
+            return None;
+        }
+        let run = rest.chars().take_while(|c| *c == ch).count();
+        if run < 3 {
+            return None;
+        }
+        Some((ch, run))
+    }
+
+    /// Whether `line` can close an open fence of `(ch, open_len)` (same character,
+    /// run length ≥ opener, only whitespace after the run).
+    fn is_fence_close(line: &str, ch: char, open_len: usize) -> bool {
+        let Some((close_ch, run)) = Self::fence_run(line) else {
+            return false;
+        };
+        if close_ch != ch || run < open_len {
+            return false;
+        }
+        let indent = line.chars().take_while(|c| *c == ' ').count();
+        let after_run = &line[indent + run..];
+        after_run.chars().all(|c| c == ' ' || c == '\t')
     }
 
     fn in_fence_at_line(lines: &[&str], index: usize) -> bool {
-        let mut in_fence = false;
+        let mut open: Option<(char, usize)> = None;
         for line in &lines[..index] {
-            if Self::is_fence_delimiter(line) {
-                in_fence = !in_fence;
+            match open {
+                None => {
+                    if let Some((ch, run)) = Self::fence_run(line) {
+                        open = Some((ch, run));
+                    }
+                }
+                Some((ch, open_len)) => {
+                    if Self::is_fence_close(line, ch, open_len) {
+                        open = None;
+                    }
+                }
             }
         }
-        in_fence
+        open.is_some()
     }
 
     fn is_h2_outside_fence(lines: &[&str], index: usize) -> bool {
