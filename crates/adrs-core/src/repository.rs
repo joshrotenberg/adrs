@@ -17,7 +17,16 @@ use walkdir::WalkDir;
 /// `None` for a field means leave that section's on-disk bytes untouched.
 /// `Some(text)` replaces the targeted portion (for MADR 4.0.0 `## Decision Outcome`,
 /// only the intro before `###` subsections unless `consequences` is also set).
+///
+/// # Migration from pre-`BodySectionPatch` `update(&adr)`
+///
+/// The previous `Repository::update(&adr)` re-rendered body sections from
+/// `adr.context` / `adr.decision` / `adr.consequences`. An empty
+/// [`BodySectionPatch::default()`] does **not** do that: it only updates
+/// metadata. To change body text, put the new content in the corresponding
+/// patch field; values on `adr` alone are ignored for body content.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct BodySectionPatch {
     /// Patch the context section (`## Context` / `## Context and Problem Statement`).
     pub context: Option<String>,
@@ -28,9 +37,36 @@ pub struct BodySectionPatch {
 }
 
 impl BodySectionPatch {
+    /// Create an empty patch (metadata-only when passed to [`Repository::update`]).
+    pub fn new() -> Self {
+        Self {
+            context: None,
+            decision: None,
+            consequences: None,
+        }
+    }
+
     /// Returns true when no body sections should be modified.
     pub fn is_empty(&self) -> bool {
         self.context.is_none() && self.decision.is_none() && self.consequences.is_none()
+    }
+
+    /// Set the context section patch.
+    pub fn with_context(mut self, text: impl Into<String>) -> Self {
+        self.context = Some(text.into());
+        self
+    }
+
+    /// Set the decision section patch.
+    pub fn with_decision(mut self, text: impl Into<String>) -> Self {
+        self.decision = Some(text.into());
+        self
+    }
+
+    /// Set the consequences section patch.
+    pub fn with_consequences(mut self, text: impl Into<String>) -> Self {
+        self.consequences = Some(text.into());
+        self
     }
 }
 
@@ -445,6 +481,11 @@ impl Repository {
     /// metadata bytes on disk are left unchanged. When `body` is empty, metadata
     /// (status, links, tags, and MADR 4.0.0 frontmatter fields) is updated via the
     /// same path as [`Self::update_metadata`].
+    ///
+    /// Empty `body` does **not** re-render context/decision/consequences from `adr`
+    /// (unlike the pre-`BodySectionPatch` API). Mutating those fields on `adr` and
+    /// calling `update(&adr, BodySectionPatch::default())` writes metadata only;
+    /// body text on disk is unchanged. Pass the new text in `body` to patch sections.
     ///
     /// `adr.title` and `adr.date` are not written by this method.
     ///

@@ -36,10 +36,11 @@ Patch only the body sections the caller explicitly requests to change. Leave all
 5. **MADR `## Decision Outcome`** — When `decision` is patched, replace only the intro text before the first `###` heading outside fences. Preserve all other H3 subsections verbatim.
 
 6. **Consequences routing**:
-   - **MADR**: Patch the `### Consequences` subsection under `## Decision Outcome`. If a consequences patch is requested but that subsection does not exist, append `### Consequences` under Decision Outcome.
-   - **Nygard / adr-tools**: When a top-level `## Consequences` H2 exists, patch that section and leave `## Decision` untouched. Do not inject a MADR-style `### Consequences` under Decision. If a consequences patch is requested but no `## Consequences` H2 exists, return an error (do not append under `## Decision`).
+   - When a top-level `## Consequences` H2 exists anywhere outside fences (before or after Decision), patch that H2 and do not inject `### Consequences` under Decision Outcome / Decision.
+   - **MADR** (no Consequences H2): Patch the `### Consequences` subsection under `## Decision Outcome`. If that subsection does not exist, append `### Consequences` under Decision Outcome.
+   - **Nygard / adr-tools** (no Consequences H2): return an error (do not append under `## Decision`).
 
-7. **People-field YAML** — Frontmatter `decision-makers`, `consulted`, and `informed` blocks are rewritten only when the in-memory value differs from the parsed on-disk value.
+7. **People-field YAML** — Frontmatter metadata writes parse the YAML block into a `Mapping`, mutate managed keys (`status`, `links`, `tags`, people fields), and re-emit. String-or-list people/tag values that already match semantically are left untouched so block scalars and unusual list indent survive no-op and status/link updates.
 
 8. **Missing section headings** — `update()` returns an error when a patch field is set but no matching section heading exists on disk (including Nygard consequences without a `## Consequences` H2).
 
@@ -54,6 +55,6 @@ This logic lives in `adrs-core` (see ADR 4). It applies in both compatible and N
 - Untouched sections remain byte-identical on disk, including rich markdown, fenced examples, and MADR-specific structure
 - Body-only MCP `update_content` no longer rewrites legacy `## Status` prose or frontmatter people fields
 - The parser may remain lossy for reads, search, and display; correctness depends on disciplined write paths
-- **`validate_adr` false positives on MADR 4.0.0** remain a read/validation gap (out of scope; see option (b) in PR #311 review)
-- Intentional changes to people fields in non-canonical YAML shapes may still corrupt frontmatter; defer full-node YAML rewrite
-- Deferred follow-ups: MADR consequences read round-trip, CRLF preservation through `lines()`, Nygard `## Consequences` before `## Decision` duplicate injection
+- **`validate_adr` false positives on MADR 4.0.0** remain a read/validation gap (out of scope)
+- YAML comments in frontmatter are not preserved when any managed metadata field changes (Mapping re-emit)
+- Deferred follow-ups: MADR `### Consequences` read round-trip (`get_adr_sections` still folds H3 into decision), CRLF preservation through `lines()`, blank-line cosmetics after replaced section bodies

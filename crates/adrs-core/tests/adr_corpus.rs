@@ -368,10 +368,7 @@ fn body_patch_preserves_nested_and_tilde_fences() {
         adr.consequences = "* Updated consequence from patch".into();
         repo.update(
             &adr,
-            BodySectionPatch {
-                consequences: Some("* Updated consequence from patch".into()),
-                ..Default::default()
-            },
+            BodySectionPatch::new().with_consequences("* Updated consequence from patch"),
         )
         .unwrap_or_else(|e| panic!("update({number}) failed: {e}"));
 
