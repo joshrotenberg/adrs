@@ -499,7 +499,7 @@ impl Repository {
         let content = fs::read_to_string(&path)?;
 
         let content = if body.is_empty() {
-            if content.starts_with("---\n") {
+            if Self::has_frontmatter(&content) {
                 self.update_frontmatter_metadata(adr, &content)?
             } else {
                 self.update_legacy_metadata(adr, &content)?
@@ -551,7 +551,7 @@ impl Repository {
 
         let content = fs::read_to_string(&path)?;
 
-        let updated = if content.starts_with("---\n") {
+        let updated = if Self::has_frontmatter(&content) {
             self.update_frontmatter_metadata(adr, &content)?
         } else {
             self.update_legacy_metadata(adr, &content)?
@@ -561,18 +561,44 @@ impl Repository {
         Ok(path)
     }
 
+    /// Whether `content` opens with a YAML frontmatter delimiter, tolerating
+    /// either LF or CRLF line endings so CRLF NextGen files are routed to
+    /// [`Self::update_frontmatter_metadata`] instead of falling through to
+    /// the legacy `## Status` splice (which would silently no-op on them).
+    fn has_frontmatter(content: &str) -> bool {
+        content.starts_with("---\n") || content.starts_with("---\r\n")
+    }
+
     /// Update managed metadata fields in a YAML frontmatter file.
     ///
     /// Parses the frontmatter into a YAML [`Mapping`], mutates managed keys
     /// (`status`, `links`, `tags`, and MADR people fields), and re-emits the
     /// mapping. Unknown keys are preserved; the markdown body is untouched.
-    /// When no managed field changes, the original file bytes are returned.
+    /// When no managed field changes, the original file bytes are returned
+    /// completely untouched, regardless of line ending.
     ///
     /// Re-emitting via a standard YAML parser may drop YAML comments (e.g. SPDX
     /// headers) when any managed field changes — see ADR 0006.
+    ///
+    /// Line endings: when a change *is* written, the file's dominant ending
+    /// (CRLF if `content` contains any `\r\n`, else LF; see
+    /// [`Self::update_body_sections`] for the same rule on body patches) is
+    /// detected up front. Parsing and re-emission both work against an
+    /// LF-normalized copy, and the final result is converted back to the
+    /// detected ending as a single pass, so a rewritten CRLF file stays CRLF
+    /// throughout, including the frontmatter delimiters and the untouched
+    /// markdown body. Mixed-ending input is normalized to the dominant ending.
     fn update_frontmatter_metadata(&self, adr: &Adr, content: &str) -> Result<String> {
+        let crlf = content.contains("\r\n");
+        let normalized = if crlf {
+            std::borrow::Cow::Owned(content.replace("\r\n", "\n"))
+        } else {
+            std::borrow::Cow::Borrowed(content)
+        };
+        let normalized: &str = &normalized;
+
         // Split into frontmatter and body at the closing `---`
-        let Some(rest) = content.strip_prefix("---\n") else {
+        let Some(rest) = normalized.strip_prefix("---\n") else {
             return Err(Error::InvalidFormat {
                 path: Default::default(),
                 reason: "Missing opening frontmatter delimiter".into(),
@@ -649,7 +675,12 @@ impl Repository {
 
         let new_yaml = serde_yaml_neo::to_string(&Value::Mapping(map))?;
         let new_yaml = new_yaml.trim_end_matches('\n');
-        Ok(format!("---\n{new_yaml}{after_yaml}"))
+        let result = format!("---\n{new_yaml}{after_yaml}");
+        if crlf {
+            Ok(result.replace('\n', "\r\n"))
+        } else {
+            Ok(result)
+        }
     }
 
     /// Surgically update metadata in a legacy (no-frontmatter) ADR file.
@@ -723,7 +754,20 @@ impl Repository {
     }
 
     /// Patch only the body sections listed in `patch`, preserving everything else.
+    ///
+    /// Line endings: the file's dominant ending is detected once up front (CRLF
+    /// if `content` contains any `\r\n`, else LF) and every line this method
+    /// emits — copied-through lines and patched section bodies alike — is
+    /// re-emitted with that ending, so a CRLF file stays CRLF end to end
+    /// (frontmatter, untouched sections, and patched text). `patch` text
+    /// itself always arrives with `\n` line endings and is converted on
+    /// emit. Mixed-ending input is normalized to the dominant ending.
     fn update_body_sections(&self, content: &str, patch: &BodySectionPatch) -> Result<String> {
+        let ending = if content.contains("\r\n") {
+            "\r\n"
+        } else {
+            "\n"
+        };
         let lines: Vec<&str> = content.lines().collect();
         let mut result = String::with_capacity(content.len());
         let mut i = 0;
@@ -738,9 +782,13 @@ impl Repository {
                 && let Some(field) = crate::parse::canonical_section_field(heading_text.trim())
             {
                 result.push_str(line);
-                result.push('\n');
+                result.push_str(ending);
                 i += 1;
                 let body_end = Self::next_h2_index(&lines, i);
+                // A heading immediately follows the patched/copied body unless
+                // this section runs to EOF; used to add exactly one blank line
+                // separator after replacement text (see `write_section_body`).
+                let next_is_heading = body_end < lines.len();
 
                 match field {
                     "context" => {
@@ -748,9 +796,9 @@ impl Repository {
                             found_context = true;
                         }
                         if let Some(ref text) = patch.context {
-                            Self::write_section_body(&mut result, text);
+                            Self::write_section_body(&mut result, text, ending, next_is_heading);
                         } else {
-                            Self::append_lines(&mut result, &lines, i, body_end, content);
+                            Self::append_lines(&mut result, &lines, i, body_end, content, ending);
                         }
                     }
                     "decision" => {
@@ -764,6 +812,7 @@ impl Repository {
                             body_end,
                             patch,
                             madr_decision_outcome,
+                            ending,
                         );
                         if decision_found {
                             found_decision = true;
@@ -777,13 +826,13 @@ impl Repository {
                             found_consequences = true;
                         }
                         if let Some(ref text) = patch.consequences {
-                            Self::write_section_body(&mut result, text);
+                            Self::write_section_body(&mut result, text, ending, next_is_heading);
                         } else {
-                            Self::append_lines(&mut result, &lines, i, body_end, content);
+                            Self::append_lines(&mut result, &lines, i, body_end, content, ending);
                         }
                     }
                     _ => {
-                        Self::append_lines(&mut result, &lines, i, body_end, content);
+                        Self::append_lines(&mut result, &lines, i, body_end, content, ending);
                     }
                 }
 
@@ -793,7 +842,7 @@ impl Repository {
 
             result.push_str(line);
             if i < lines.len() - 1 || content.ends_with('\n') {
-                result.push('\n');
+                result.push_str(ending);
             }
             i += 1;
         }
@@ -818,7 +867,7 @@ impl Repository {
         }
 
         if content.ends_with('\n') && !result.ends_with('\n') {
-            result.push('\n');
+            result.push_str(ending);
         }
 
         Ok(result)
@@ -893,20 +942,47 @@ impl Repository {
             .unwrap_or(lines.len())
     }
 
-    fn append_lines(result: &mut String, lines: &[&str], start: usize, end: usize, content: &str) {
+    fn append_lines(
+        result: &mut String,
+        lines: &[&str],
+        start: usize,
+        end: usize,
+        content: &str,
+        ending: &str,
+    ) {
         for (offset, line) in lines[start..end].iter().enumerate() {
             result.push_str(line);
             if start + offset < end - 1 || end < lines.len() || content.ends_with('\n') {
-                result.push('\n');
+                result.push_str(ending);
             }
         }
     }
 
-    fn write_section_body(result: &mut String, text: &str) {
-        result.push('\n');
-        result.push_str(text);
+    /// Write a patched section body right after its just-emitted heading line.
+    ///
+    /// `text` always arrives with `\n` line endings regardless of the on-disk
+    /// convention; it is normalized and re-emitted with `ending` (see
+    /// [`Self::update_body_sections`]). Exactly one blank line separates the
+    /// heading from the body, matching conventional ADR formatting. When
+    /// `blank_line_after` is true — the patched section is immediately
+    /// followed by another heading, either a copied-through one or one this
+    /// function's caller is about to emit — a second blank line follows the
+    /// body so the heading isn't butted up against the replacement text
+    /// ("text\n## Next" becoming "text\n\n## Next"). No such line is added
+    /// when the section runs to EOF, so patching the last section — or
+    /// re-patching the same text twice — never accumulates a trailing blank.
+    fn write_section_body(result: &mut String, text: &str, ending: &str, blank_line_after: bool) {
+        result.push_str(ending);
+        if ending == "\n" {
+            result.push_str(text);
+        } else {
+            result.push_str(&text.replace("\r\n", "\n").replace('\n', ending));
+        }
         if !text.ends_with('\n') {
-            result.push('\n');
+            result.push_str(ending);
+        }
+        if blank_line_after {
+            result.push_str(ending);
         }
     }
 
@@ -924,6 +1000,7 @@ impl Repository {
     /// unless `patch.decision` or `patch.consequences` targets them.
     ///
     /// Returns `(found_decision, consequences_applied)`.
+    #[allow(clippy::too_many_arguments)]
     fn patch_decision_section(
         result: &mut String,
         lines: &[&str],
@@ -932,9 +1009,10 @@ impl Repository {
         body_end: usize,
         patch: &BodySectionPatch,
         madr_decision_outcome: bool,
+        ending: &str,
     ) -> (bool, bool) {
         if patch.decision.is_none() && patch.consequences.is_none() {
-            Self::append_lines(result, lines, body_start, body_end, content);
+            Self::append_lines(result, lines, body_start, body_end, content, ending);
             return (false, false);
         }
 
@@ -947,7 +1025,7 @@ impl Repository {
             && patch.consequences.is_some()
             && Self::has_consequences_h2(lines)
         {
-            Self::append_lines(result, lines, body_start, body_end, content);
+            Self::append_lines(result, lines, body_start, body_end, content, ending);
             return (true, false);
         }
 
@@ -959,10 +1037,24 @@ impl Repository {
             .map(|(offset, _)| body_start + offset);
         let intro_end = first_h3.unwrap_or(body_end);
 
+        // Whether the (about to be replaced) intro is immediately followed by
+        // a synthesized `### Consequences` heading — only possible when there
+        // are no H3 subsections at all.
+        let will_append_madr_consequences = intro_end >= body_end
+            && patch.consequences.is_some()
+            && !Self::has_consequences_h2(lines)
+            && madr_decision_outcome;
+
         if let Some(ref text) = patch.decision {
-            Self::write_section_body(result, text);
+            let blank_line_after = if intro_end < body_end {
+                // An H3 subsection heading follows immediately.
+                true
+            } else {
+                will_append_madr_consequences || body_end < lines.len()
+            };
+            Self::write_section_body(result, text, ending, blank_line_after);
         } else {
-            Self::append_lines(result, lines, body_start, intro_end, content);
+            Self::append_lines(result, lines, body_start, intro_end, content, ending);
         }
 
         if intro_end >= body_end {
@@ -970,7 +1062,12 @@ impl Repository {
                 && !Self::has_consequences_h2(lines)
                 && madr_decision_outcome
             {
-                Self::write_madr_consequences_subsection(result, text);
+                Self::write_madr_consequences_subsection(
+                    result,
+                    text,
+                    ending,
+                    body_end < lines.len(),
+                );
                 consequences_applied = true;
             }
             return (true, consequences_applied);
@@ -1000,13 +1097,16 @@ impl Repository {
             {
                 consequences_applied = true;
                 result.push_str(lines[sub_start]);
-                result.push('\n');
-                Self::write_section_body(result, text);
+                result.push_str(ending);
+                // Another H3 follows immediately, or the wider Decision
+                // Outcome section is itself followed by another heading.
+                let blank_line_after = sub_end < body_end || body_end < lines.len();
+                Self::write_section_body(result, text, ending, blank_line_after);
                 j = sub_end;
                 continue;
             }
 
-            Self::append_lines(result, lines, sub_start, sub_end, content);
+            Self::append_lines(result, lines, sub_start, sub_end, content, ending);
             j = sub_end;
         }
 
@@ -1015,7 +1115,7 @@ impl Repository {
             && !Self::has_consequences_h2(lines)
             && madr_decision_outcome
         {
-            Self::write_madr_consequences_subsection(result, text);
+            Self::write_madr_consequences_subsection(result, text, ending, body_end < lines.len());
             consequences_applied = true;
         }
 
@@ -1029,14 +1129,20 @@ impl Repository {
         })
     }
 
-    fn write_madr_consequences_subsection(result: &mut String, text: &str) {
+    fn write_madr_consequences_subsection(
+        result: &mut String,
+        text: &str,
+        ending: &str,
+        blank_line_after: bool,
+    ) {
         // append_lines may omit a final newline when the source file has none
         // and the append ends at EOF; re-establish a separator before the H3.
         if !result.is_empty() && !result.ends_with('\n') {
-            result.push('\n');
+            result.push_str(ending);
         }
-        result.push_str("### Consequences\n");
-        Self::write_section_body(result, text);
+        result.push_str("### Consequences");
+        result.push_str(ending);
+        Self::write_section_body(result, text, ending, blank_line_after);
     }
 
     fn yaml_str_key(key: &str) -> Value {
@@ -3768,5 +3874,274 @@ We decided.
         assert!(after.contains("## Decision\nnot a real heading"));
         assert!(after.contains("Updated decision."));
         assert!(!after.contains("We decided."));
+    }
+
+    // ========== CRLF line endings on the write path (#339) ==========
+
+    /// True when every newline in `content` is part of a `\r\n` pair, i.e.
+    /// stripping all `\r\n` occurrences leaves no bare `\n` behind.
+    fn is_uniformly_crlf(content: &str) -> bool {
+        content.contains("\r\n") && !content.replace("\r\n", "").contains('\n')
+    }
+
+    #[test]
+    fn test_crlf_madr_body_patch_preserves_line_endings() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let lf_content = "---\nnumber: 2\ntitle: CRLF MADR\ndate: 2026-01-15\nstatus: proposed\n---\n\n## Context and Problem Statement\n\nOld context.\n\n## Decision Outcome\n\nChosen option: \"Redis\", because it is fast.\n\n### Consequences\n\n* Old consequence\n";
+        let crlf_content = lf_content.replace('\n', "\r\n");
+        let adr_path = repo.adr_path().join("0002-crlf-madr.md");
+        fs::write(&adr_path, crlf_content.as_bytes()).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.context = "New context.".into();
+        adr.consequences = "* New good\n* New bad".into();
+        repo.update(
+            &adr,
+            BodySectionPatch::new()
+                .with_context("New context.")
+                .with_consequences("* New good\n* New bad"),
+        )
+        .unwrap();
+
+        let after = String::from_utf8(fs::read(&adr_path).unwrap()).unwrap();
+
+        // The whole file -- untouched frontmatter/headings and the two
+        // patched section bodies alike -- uses \r\n exclusively.
+        assert!(
+            is_uniformly_crlf(&after),
+            "expected uniform CRLF, found a bare \\n\n{after:?}"
+        );
+        assert!(after.contains("New context.\r\n"));
+        // The patch text arrived with `\n`; it must be re-emitted as `\r\n`.
+        assert!(after.contains("* New good\r\n* New bad\r\n"));
+        assert!(after.contains("Chosen option: \"Redis\", because it is fast."));
+
+        let reparsed = repo.get(2).unwrap();
+        assert_eq!(reparsed.context, "New context.");
+        // KNOWN-QUIRK (#338, unrelated to #339/#340): `### Consequences` under
+        // `## Decision Outcome` folds into the `decision` field on read, not
+        // `consequences` -- `parse_sections` only splits on H2. Assert on
+        // whichever field the parser currently routes it to; the point here
+        // is the absence of a stray \r, not the routing.
+        assert!(reparsed.decision.contains("New good"));
+        assert!(!reparsed.context.contains('\r'), "stray \\r in context");
+        assert!(!reparsed.decision.contains('\r'), "stray \\r in decision");
+        assert!(
+            !reparsed.consequences.contains('\r'),
+            "stray \\r in consequences"
+        );
+    }
+
+    #[test]
+    fn test_crlf_nygard_body_patch_preserves_line_endings() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let lf_content = "# 2. CRLF Nygard\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nOld decision.\n\n## Consequences\n\nOld consequences.\n";
+        let crlf_content = lf_content.replace('\n', "\r\n");
+        let adr_path = repo.adr_path().join("0002-crlf-nygard.md");
+        fs::write(&adr_path, crlf_content.as_bytes()).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New decision.".into();
+        repo.update(&adr, BodySectionPatch::new().with_decision("New decision."))
+            .unwrap();
+
+        let after = String::from_utf8(fs::read(&adr_path).unwrap()).unwrap();
+
+        assert!(
+            is_uniformly_crlf(&after),
+            "expected uniform CRLF, found a bare \\n\n{after:?}"
+        );
+        assert!(after.contains("New decision.\r\n"));
+        assert!(after.contains("Old context."));
+        assert!(after.contains("Old consequences."));
+
+        let reparsed = repo.get(2).unwrap();
+        assert_eq!(reparsed.decision, "New decision.");
+        assert!(!reparsed.context.contains('\r'), "stray \\r in context");
+        assert!(!reparsed.decision.contains('\r'), "stray \\r in decision");
+        assert!(
+            !reparsed.consequences.contains('\r'),
+            "stray \\r in consequences"
+        );
+    }
+
+    #[test]
+    fn test_update_metadata_on_crlf_frontmatter_file_updates_and_preserves_crlf() {
+        // Before the #339 fix, `content.starts_with("---\n")` never matched a
+        // CRLF file's `---\r\n` delimiter, so the update silently fell through
+        // to the legacy `## Status` splice, found no such heading, and
+        // returned the file completely untouched. Pin the fixed behavior:
+        // the status actually changes, and the file stays uniformly CRLF.
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let lf_content = "---\nnumber: 2\ntitle: CRLF metadata\ndate: 2026-01-15\nstatus: proposed\n---\n\n## Context\n\nContext.\n";
+        let crlf_content = lf_content.replace('\n', "\r\n");
+        let adr_path = repo.adr_path().join("0002-crlf-metadata.md");
+        fs::write(&adr_path, crlf_content.as_bytes()).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.status = AdrStatus::Accepted;
+        repo.update_metadata(&adr).unwrap();
+
+        let after = String::from_utf8(fs::read(&adr_path).unwrap()).unwrap();
+        assert!(
+            after.contains("status: accepted"),
+            "status must actually update on a CRLF file\n{after}"
+        );
+        assert!(
+            is_uniformly_crlf(&after),
+            "expected uniform CRLF, found a bare \\n\n{after:?}"
+        );
+
+        let listed = repo.get(2).unwrap();
+        assert_eq!(listed.status, AdrStatus::Accepted);
+    }
+
+    #[test]
+    fn test_noop_metadata_update_on_crlf_file_is_byte_identical() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let lf_content = "---\nnumber: 2\ntitle: CRLF noop\ndate: 2026-01-15\nstatus: proposed\n---\n\n## Context\n\nContext.\n";
+        let crlf_content = lf_content.replace('\n', "\r\n");
+        let adr_path = repo.adr_path().join("0002-crlf-noop.md");
+        fs::write(&adr_path, crlf_content.as_bytes()).unwrap();
+
+        let before = fs::read(&adr_path).unwrap();
+        let adr = repo.get(2).unwrap();
+        repo.update_metadata(&adr).unwrap();
+        let after = fs::read(&adr_path).unwrap();
+
+        assert_eq!(
+            before, after,
+            "no-op metadata update on a CRLF file must be byte-identical"
+        );
+    }
+
+    // ========== Blank line after a patched section (#340) ==========
+
+    #[test]
+    fn test_decision_patch_middle_section_exact_blank_line_boundary() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = "# 2. Blank line boundary\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nOld decision.\n\n## Consequences\n\nOld consequences.\n";
+        let adr_path = repo.adr_path().join("0002-blank-line-boundary.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New text.".into();
+        repo.update(&adr, BodySectionPatch::new().with_decision("New text."))
+            .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        let expected = "# 2. Blank line boundary\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nNew text.\n\n## Consequences\n\nOld consequences.\n";
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn test_decision_patch_middle_section_exact_blank_line_boundary_crlf() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let lf_content = "# 2. Blank line boundary\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nOld decision.\n\n## Consequences\n\nOld consequences.\n";
+        let content = lf_content.replace('\n', "\r\n");
+        let adr_path = repo.adr_path().join("0002-blank-line-boundary-crlf.md");
+        fs::write(&adr_path, content.as_bytes()).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.decision = "New text.".into();
+        repo.update(&adr, BodySectionPatch::new().with_decision("New text."))
+            .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        let expected_lf = "# 2. Blank line boundary\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nNew text.\n\n## Consequences\n\nOld consequences.\n";
+        let expected = expected_lf.replace('\n', "\r\n");
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn test_consequences_patch_last_section_no_trailing_blank_accumulation() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = "# 2. Last section\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nOld decision.\n\n## Consequences\n\nOld consequences.\n";
+        let adr_path = repo.adr_path().join("0002-last-section.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.consequences = "New consequences.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch::new().with_consequences("New consequences."),
+        )
+        .unwrap();
+
+        let after = fs::read_to_string(&adr_path).unwrap();
+        let expected = "# 2. Last section\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nOld decision.\n\n## Consequences\n\nNew consequences.\n";
+        assert_eq!(after, expected);
+        assert!(
+            !after.ends_with("\n\n"),
+            "trailing blank line accumulated at EOF"
+        );
+    }
+
+    #[test]
+    fn test_repeated_identical_context_patch_is_idempotent() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let content = "# 2. Idempotent context\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nOld context.\n\n## Decision\n\nOld decision.\n\n## Consequences\n\nOld consequences.\n";
+        let adr_path = repo.adr_path().join("0002-idempotent-context.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        let patch = BodySectionPatch::new().with_context("New context.");
+
+        repo.update(&adr, patch.clone()).unwrap();
+        let after_first = fs::read(&adr_path).unwrap();
+
+        repo.update(&adr, patch).unwrap();
+        let after_second = fs::read(&adr_path).unwrap();
+
+        assert_eq!(
+            after_first, after_second,
+            "repeating an identical patch must produce identical bytes"
+        );
+    }
+
+    #[test]
+    fn test_repeated_identical_madr_consequences_append_is_idempotent() {
+        // Exercises the trickiest append path: no `### Consequences` subsection
+        // exists yet, so the first patch synthesizes one; the second patch
+        // must reproduce exactly the same bytes rather than accumulating an
+        // extra blank line or duplicate heading.
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = "---\nnumber: 2\ntitle: Idempotence\ndate: 2026-01-15\nstatus: proposed\n---\n\n## Context and Problem Statement\n\nContext.\n\n## Decision Outcome\n\nOld intro.\n\n## Links\n\nSee also.\n";
+        let adr_path = repo.adr_path().join("0002-idempotence.md");
+        fs::write(&adr_path, content).unwrap();
+
+        let adr = repo.get(2).unwrap();
+        let patch = BodySectionPatch::new()
+            .with_decision("New intro.")
+            .with_consequences("* New consequence");
+
+        repo.update(&adr, patch.clone()).unwrap();
+        let after_first = fs::read(&adr_path).unwrap();
+
+        repo.update(&adr, patch).unwrap();
+        let after_second = fs::read(&adr_path).unwrap();
+
+        assert_eq!(
+            after_first, after_second,
+            "repeating an identical patch must produce identical bytes"
+        );
     }
 }
