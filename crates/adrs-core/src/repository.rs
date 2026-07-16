@@ -2657,6 +2657,60 @@ We will use PostgreSQL 16.
         assert_eq!(reloaded.decision, "We will use PostgreSQL 16.");
     }
 
+    /// Issue #338: the read path mapped MADR `### Consequences` (under
+    /// `## Decision Outcome`) to `decision` instead of `consequences`, so a
+    /// consequences-only patch followed by `get()` showed the new text
+    /// folded into `decision` with `consequences` still empty. This is the
+    /// read-side counterpart to `test_update_madr_consequences_patches_h3_subsection`,
+    /// which only checks the raw file bytes.
+    #[test]
+    fn test_update_madr_consequences_only_round_trip_via_get() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let madr_content = r#"---
+number: 2
+title: Use Redis
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+Old consequence text.
+"#;
+        let adr_path = repo.adr_path().join("0002-use-redis.md");
+        fs::write(&adr_path, madr_content).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.consequences = "New consequence text.".into();
+        repo.update(
+            &adr,
+            BodySectionPatch::new().with_consequences("New consequence text."),
+        )
+        .unwrap();
+
+        let reloaded = repo.get(2).unwrap();
+        assert_eq!(reloaded.consequences, "New consequence text.");
+        assert_eq!(
+            reloaded.decision,
+            "Chosen option: \"Redis\", because it is fast."
+        );
+        assert!(
+            !reloaded.decision.contains("New consequence text."),
+            "consequences text leaked into decision on read:\n{}",
+            reloaded.decision
+        );
+    }
+
     #[test]
     fn test_update_metadata_adds_tags_to_frontmatter() {
         let temp = TempDir::new().unwrap();
@@ -3920,12 +3974,11 @@ We decided.
 
         let reparsed = repo.get(2).unwrap();
         assert_eq!(reparsed.context, "New context.");
-        // KNOWN-QUIRK (#338, unrelated to #339/#340): `### Consequences` under
-        // `## Decision Outcome` folds into the `decision` field on read, not
-        // `consequences` -- `parse_sections` only splits on H2. Assert on
-        // whichever field the parser currently routes it to; the point here
-        // is the absence of a stray \r, not the routing.
-        assert!(reparsed.decision.contains("New good"));
+        // With #338 fixed, `### Consequences` under `## Decision Outcome`
+        // routes to the `consequences` field on read; the decision field
+        // keeps only the Decision Outcome intro.
+        assert!(reparsed.consequences.contains("New good"));
+        assert!(!reparsed.decision.contains("New good"));
         assert!(!reparsed.context.contains('\r'), "stray \\r in context");
         assert!(!reparsed.decision.contains('\r'), "stray \\r in decision");
         assert!(

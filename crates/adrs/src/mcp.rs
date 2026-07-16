@@ -2397,6 +2397,75 @@ Chosen option: "Redis", because it is fast.
     }
 
     #[tokio::test]
+    async fn test_get_adr_sections_madr_consequences_populated() {
+        // Issue #338: get_adr_sections must map MADR `### Consequences`
+        // (under `## Decision Outcome`) to the `consequences` field on read,
+        // not leave it empty with the text folded into `decision`.
+        let (client, tmp) = setup_client(true).await;
+
+        client
+            .call_tool_text(
+                "create_adr",
+                json!({
+                    "title": "Use Redis for caching",
+                    "format": "madr",
+                    "context": "Context.",
+                    "decision": "Chosen option: \"Redis\", because it is fast."
+                }),
+            )
+            .await
+            .unwrap();
+
+        let adr_path = tmp.path().join("doc/adr/0002-use-redis-for-caching.md");
+        let rich_content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2026-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+Good, because it provides pub/sub.
+"#;
+        std::fs::write(&adr_path, rich_content).unwrap();
+
+        let result = client
+            .call_tool_text("get_adr_sections", json!({"number": 2}))
+            .await
+            .unwrap();
+        let sections: AdrSections = serde_json::from_str(&result).unwrap();
+
+        assert!(
+            sections
+                .consequences
+                .contains("Good, because it provides pub/sub"),
+            "consequences section should be populated, got: {:?}",
+            sections.consequences
+        );
+        assert!(
+            sections.decision.contains("Chosen option: \"Redis\""),
+            "decision intro should be preserved, got: {:?}",
+            sections.decision
+        );
+        assert!(
+            !sections
+                .decision
+                .contains("Good, because it provides pub/sub"),
+            "consequences text must not leak into decision, got: {:?}",
+            sections.decision
+        );
+    }
+
+    #[tokio::test]
     async fn test_update_content_nygard_consequences_only() {
         // Nygard ADRs use top-level ## Consequences; consequences-only updates must
         // patch that H2 and leave ## Decision untouched (no MADR ### injection).
