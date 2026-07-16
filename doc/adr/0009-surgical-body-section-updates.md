@@ -54,6 +54,7 @@ This logic lives in `adrs-core` (see ADR 4). It applies in both compatible and N
 
 - Untouched sections remain byte-identical on disk, including rich markdown, fenced examples, and MADR-specific structure
 - Body-only MCP `update_content` no longer rewrites legacy `## Status` prose or frontmatter people fields
+- Callers must pass `BodySectionPatch`; an empty patch updates metadata only and does not re-render body text from in-memory `Adr` fields. `BodySectionPatch` is `#[non_exhaustive]`, so out-of-crate construction uses `new()` / `with_*` (or field assignment after `Default`).
 - The parser may remain lossy for reads, search, and display; correctness depends on disciplined write paths
 - **`validate_adr` false positives on MADR 4.0.0** remain a read/validation gap (out of scope)
 - YAML comments in frontmatter are not preserved when any managed metadata field changes (Mapping re-emit)
