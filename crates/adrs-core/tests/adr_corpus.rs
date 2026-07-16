@@ -244,8 +244,8 @@ fn noop_metadata_update_is_byte_identical_for_well_formed_files() {
     // hand-named file (0005), fence content (0008, 0015-0016), a file without
     // a trailing newline (0009), and frontmatter links with descriptions (0007).
     //
-    // EXPECT-FAIL (0011-0014): until people-field Mapping rewrite
-    // (PR #311 review 4707905821 #1). Canonical 0004 should stay green.
+    // EXPECT-FAIL (0011-0014): until people-field equality guard removal
+    // (PR #311 review 4707905821 #1b). Canonical 0004 should stay green.
     let (tmp, repo) = corpus_repo();
     for number in [1u32, 2, 3, 4, 5, 7, 8, 9, 11, 12, 13, 14, 15, 16] {
         let file = tmp
@@ -301,8 +301,7 @@ fn noop_metadata_update_pins_known_rewrites() {
 
 #[test]
 fn status_change_preserves_people_yaml_forms() {
-    // EXPECT-FAIL until people-field Mapping rewrite
-    // (PR #311 review 4707905821 #1). Josh's adrs status regression:
+    // Josh's adrs status regression (review 4707905821 #1):
     // success exit must not orphan people-field YAML or drop the ADR from list.
     let (tmp, repo) = corpus_repo();
     let adr_dir = tmp.path().join("doc/adr");

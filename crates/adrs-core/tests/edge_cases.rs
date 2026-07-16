@@ -44,6 +44,8 @@ fn frontmatter_body(content: &str) -> &str {
 
 #[test]
 fn test_madr_with_spdx_headers() {
+    // Mapping rewrite re-emits frontmatter and drops YAML comments when status
+    // changes (ADR 0006). Body and unknown keys must still survive.
     let fixture = r#"---
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Example Corp
@@ -51,6 +53,7 @@ number: 2
 title: Use MADR format
 date: 2026-01-15
 status: proposed
+custom-meta: keep-me
 ---
 
 # Use MADR format
@@ -82,9 +85,11 @@ See [MADR repository](https://adr.github.io/madr/) for the specification.
 
     let result = roundtrip_ng(fixture);
 
-    assert!(result.contains("# SPDX-License-Identifier: MIT"));
-    assert!(result.contains("# SPDX-FileCopyrightText: 2026 Example Corp"));
     assert!(result.contains("status: accepted"));
+    assert!(
+        result.contains("custom-meta: keep-me"),
+        "unknown frontmatter key was dropped\n{result}"
+    );
 
     // Compare bodies
     let original_body = frontmatter_body(fixture);
@@ -379,8 +384,7 @@ Use JWT with refresh tokens.
 
 #[test]
 fn set_status_preserves_block_scalar_consulted() {
-    // EXPECT-FAIL until people-field Mapping rewrite
-    // (PR #311 review 4707905821 #1). Josh's adrs status regression.
+    // Josh's adrs status regression (review 4707905821 #1).
     let fixture = r#"---
 number: 2
 title: Block scalar consulted
