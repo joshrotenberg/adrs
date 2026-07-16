@@ -155,8 +155,6 @@ X.
 
 #[test]
 fn people_yaml_noop_metadata_byte_identical() {
-    // EXPECT-FAIL for non-canonical forms until Mapping rewrite
-    // (PR #311 review 4707905821 #1).
     for (name, fixture) in people_yaml_cases() {
         let temp = TempDir::new().unwrap();
         let repo = Repository::init(temp.path(), None, true).unwrap();

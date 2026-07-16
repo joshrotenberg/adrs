@@ -578,24 +578,26 @@ impl Repository {
             dirty = true;
         }
 
-        // 3. tags
-        if Self::set_yaml_string_list_field(&mut map, "tags", &adr.tags)? {
+        // 3. tags (string-or-list on disk)
+        if !Self::yaml_string_list_matches(&map, "tags", &adr.tags)
+            && Self::set_yaml_string_list_field(&mut map, "tags", &adr.tags)?
+        {
             dirty = true;
         }
 
-        // 4. MADR people fields — skip-if-unchanged guard (removed in a follow-up).
-        let on_disk_people = Self::parse_people_fields_yaml(yaml_block);
-        if on_disk_people.decision_makers != adr.decision_makers
+        // 4. MADR people fields (string-or-list on disk; leave Value untouched when
+        // semantically equal so block scalars survive no-op metadata writes).
+        if !Self::yaml_string_list_matches(&map, "decision-makers", &adr.decision_makers)
             && Self::set_yaml_string_list_field(&mut map, "decision-makers", &adr.decision_makers)?
         {
             dirty = true;
         }
-        if on_disk_people.consulted != adr.consulted
+        if !Self::yaml_string_list_matches(&map, "consulted", &adr.consulted)
             && Self::set_yaml_string_list_field(&mut map, "consulted", &adr.consulted)?
         {
             dirty = true;
         }
-        if on_disk_people.informed != adr.informed
+        if !Self::yaml_string_list_matches(&map, "informed", &adr.informed)
             && Self::set_yaml_string_list_field(&mut map, "informed", &adr.informed)?
         {
             dirty = true;
@@ -981,32 +983,22 @@ impl Repository {
         Self::set_yaml_sequence_field(map, key, values)
     }
 
-    fn parse_people_fields_yaml(yaml_block: &str) -> PeopleFieldsYaml {
-        serde_yaml_neo::from_str::<PeopleFieldsYamlPartial>(yaml_block)
-            .map(|partial| PeopleFieldsYaml {
-                decision_makers: partial.decision_makers,
-                consulted: partial.consulted,
-                informed: partial.informed,
-            })
-            .unwrap_or_default()
+    /// Whether a frontmatter string-or-list field already matches `desired`
+    /// (same rules as `Adr`'s `string_or_vec` deserializer).
+    fn yaml_string_list_matches(map: &Mapping, key: &str, desired: &[String]) -> bool {
+        match map.get(Self::yaml_str_key(key)) {
+            None | Some(Value::Null) => desired.is_empty(),
+            Some(Value::String(s)) => desired.len() == 1 && desired[0] == *s,
+            Some(Value::Sequence(seq)) => {
+                let got: Option<Vec<&str>> = seq.iter().map(|v| v.as_str()).collect();
+                match got {
+                    Some(got) => got == desired.iter().map(String::as_str).collect::<Vec<_>>(),
+                    None => false,
+                }
+            }
+            Some(_) => false,
+        }
     }
-}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-struct PeopleFieldsYaml {
-    decision_makers: Vec<String>,
-    consulted: Vec<String>,
-    informed: Vec<String>,
-}
-
-#[derive(serde::Deserialize, Default)]
-struct PeopleFieldsYamlPartial {
-    #[serde(rename = "decision-makers", default)]
-    decision_makers: Vec<String>,
-    #[serde(default)]
-    consulted: Vec<String>,
-    #[serde(default)]
-    informed: Vec<String>,
 }
 
 /// Count existing ADR files in a directory.
