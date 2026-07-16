@@ -2125,6 +2125,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_update_content_rejects_empty_body_patch() {
+        // Progressive baseline / contract pin (PR #311 review 4707905821):
+        // update_content with only number must error, not silently no-op.
+        let (client, _tmp) = setup_client(false).await;
+        client
+            .call_tool_text("create_adr", json!({"title": "Empty patch target"}))
+            .await
+            .unwrap();
+
+        let result = client
+            .call_tool("update_content", json!({"number": 2}))
+            .await
+            .unwrap();
+        assert!(
+            result.is_error,
+            "empty update_content must reject: {:?}",
+            result
+        );
+        let text = format!("{:?}", result);
+        assert!(
+            text.contains("At least one of context, decision, or consequences")
+                || text.contains("must be provided"),
+            "error should mention required body fields: {text}"
+        );
+    }
+
+    #[tokio::test]
     async fn test_update_content_madr_preserves_decision() {
         // MADR 4.0.0 ADRs must not be re-rendered as Nygard/adr-tools on update_content.
         let (client, _tmp) = setup_client(true).await;
