@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-07-16
+
+### Bug Fixes
+
+- Preserve MADR 4.0.0 content when updating ADR body sections
+- Patch only changed body sections on MADR 4.0.0 update
+- Route Nygard consequences patches to ## Consequences H2
+- Preserve markdown on body-only Repository::update
+- Tighten consequences routing and reject empty update_content
+- Document update_content requiring a body field
+
+### Features
+
+- Update init ADR #0001 seed with markdown links and trailing newline
+
+### Miscellaneous
+
+- Migrate homebrew distribution to homebrew-core
+
+### Testing
+
+- Expand BodySectionPatch preservation coverage for issue #310
+- Pin write-path classes for people YAML, fences, and newlines
+- Use descriptive comments for write-path pins
+
+
 ## [0.9.0] - 2026-07-10
 
 ### Bug Fixes
