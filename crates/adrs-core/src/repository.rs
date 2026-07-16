@@ -1833,7 +1833,7 @@ default_status = "draft"
         let (_, path) = repo.new_adr("Custom Test").unwrap();
         let content = fs::read_to_string(path).unwrap();
 
-        assert_eq!(content, "# ADR 2: Custom Test");
+        assert_eq!(content, "# ADR 2: Custom Test\n");
     }
 
     // ========== Accessor Tests ==========
