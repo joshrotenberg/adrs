@@ -388,10 +388,7 @@ fn fence_forms_consequences_patch_preserves_samples() {
         adr.consequences = "* New good.".into();
         repo.update(
             &adr,
-            BodySectionPatch {
-                consequences: Some("* New good.".into()),
-                ..Default::default()
-            },
+            BodySectionPatch::new().with_consequences("* New good."),
         )
         .unwrap_or_else(|e| panic!("{name}: update failed: {e}"));
 
@@ -445,10 +442,7 @@ fn append_consequences_after_no_trailing_newline_is_not_glued() {
     adr.consequences = "* Appended.".into();
     repo.update(
         &adr,
-        BodySectionPatch {
-            consequences: Some("* Appended.".into()),
-            ..Default::default()
-        },
+        BodySectionPatch::new().with_consequences("* Appended."),
     )
     .unwrap();
 
@@ -484,10 +478,7 @@ fn create_then_append_consequences_not_glued() {
     adr.consequences = "* From create path.".into();
     repo.update(
         &adr,
-        BodySectionPatch {
-            consequences: Some("* From create path.".into()),
-            ..Default::default()
-        },
+        BodySectionPatch::new().with_consequences("* From create path."),
     )
     .unwrap();
 
@@ -536,10 +527,7 @@ Keep me.
 
     repo.update(
         &repo.get(2).unwrap(),
-        BodySectionPatch {
-            consequences: Some("* New consequence".into()),
-            ..Default::default()
-        },
+        BodySectionPatch::new().with_consequences("* New consequence"),
     )
     .unwrap();
 
@@ -818,10 +806,7 @@ C.
     fs::write(&path, content).unwrap();
     repo.update(
         &repo.get(2).unwrap(),
-        BodySectionPatch {
-            context: Some("Updated context.".into()),
-            ..Default::default()
-        },
+        BodySectionPatch::new().with_context("Updated context."),
     )
     .unwrap();
     let after = fs::read_to_string(&path).unwrap();
@@ -865,14 +850,8 @@ Keep.
     fs::write(&path, content).unwrap();
     let mut adr = repo.get(2).unwrap();
     adr.consequences = "* New".into();
-    repo.update(
-        &adr,
-        BodySectionPatch {
-            consequences: Some("* New".into()),
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    repo.update(&adr, BodySectionPatch::new().with_consequences("* New"))
+        .unwrap();
     let after = fs::read_to_string(&path).unwrap();
     assert!(after.contains("Inside."));
     assert!(after.contains("### Confirmation"));
@@ -889,10 +868,7 @@ fn baseline_decision_patch_no_trailing_newline() {
     fs::write(&path, content).unwrap();
     repo.update(
         &repo.get(2).unwrap(),
-        BodySectionPatch {
-            decision: Some("New decision.".into()),
-            ..Default::default()
-        },
+        BodySectionPatch::new().with_decision("New decision."),
     )
     .unwrap();
     let after = fs::read_to_string(&path).unwrap();
