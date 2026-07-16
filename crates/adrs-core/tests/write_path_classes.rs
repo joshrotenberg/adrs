@@ -503,6 +503,73 @@ fn create_then_append_consequences_not_glued() {
 }
 
 #[test]
+fn madr_consequences_h2_before_decision_outcome_is_not_duplicated() {
+    // EXPECT-FAIL until Consequences H2 detection scans the whole file
+    // (not only after Decision Outcome).
+    // When ## Consequences appears before ## Decision Outcome, a consequences
+    // patch must update that H2 once and must not also inject ### Consequences.
+    let fixture = r#"---
+number: 2
+title: Consequences before Decision Outcome
+date: 2024-06-01
+status: accepted
+---
+
+## Context and Problem Statement
+
+Context.
+
+## Consequences
+
+* Old consequence
+
+## Decision Outcome
+
+Chosen option: X.
+
+### Confirmation
+
+Keep me.
+"#;
+    let temp = TempDir::new().unwrap();
+    let repo = Repository::init(temp.path(), None, true).unwrap();
+    write_ng_fixture(&repo, 2, fixture);
+    let path = repo.adr_path().join("0002-class-fixture.md");
+
+    repo.update(
+        &repo.get(2).unwrap(),
+        BodySectionPatch {
+            consequences: Some("* New consequence".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let after = fs::read_to_string(&path).unwrap();
+    assert!(
+        after.contains("* New consequence"),
+        "existing ## Consequences H2 must be patched\n{after}"
+    );
+    assert!(
+        !after.contains("### Consequences"),
+        "must not inject ### Consequences when ## Consequences already exists\n{after}"
+    );
+    assert_eq!(
+        after.matches("* New consequence").count(),
+        1,
+        "consequence text must appear once\n{after}"
+    );
+    assert!(
+        after.contains("Chosen option: X.") && after.contains("### Confirmation"),
+        "Decision Outcome intro and Confirmation must survive\n{after}"
+    );
+    assert!(
+        !after.contains("* Old consequence"),
+        "old H2 body should be replaced\n{after}"
+    );
+}
+
+#[test]
 fn set_status_preserves_unknown_frontmatter_keys() {
     // Progressive baseline: unmanaged frontmatter keys must survive set_status
     // when the YAML Mapping is re-emitted.
