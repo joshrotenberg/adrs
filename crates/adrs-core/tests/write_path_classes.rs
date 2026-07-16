@@ -1,9 +1,8 @@
 //! Class-level write-path matrices for PR #311 (review 4707905821).
 //!
-//! These pin *classes* of inputs × write APIs, not single string repros.
-//! Several cases are EXPECT-FAIL until the Mapping / CommonMark / newline
-//! fixes land; they must fail for the right reason (corruption or truncation),
-//! not because fixtures fail to parse.
+//! These pin *classes* of inputs × write APIs, not single string repros:
+//! people-YAML shapes under metadata writes, nested/mixed fences under body
+//! patches, and Consequences append after a suppressed trailing newline.
 
 use adrs_core::{AdrStatus, BodySectionPatch, LinkKind, Repository};
 use std::fs;
