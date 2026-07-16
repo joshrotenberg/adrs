@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-07-16
+
+### Bug Fixes
+
+- Preserve MADR 4.0.0 content when updating ADR body sections
+- Patch only changed body sections on MADR 4.0.0 update
+- Route Nygard consequences patches to ## Consequences H2
+- Preserve markdown on body-only Repository::update
+- Tighten consequences routing and reject empty update_content
+- Rewrite frontmatter metadata via YAML Mapping
+- Remove brittle people-field YAML equality guard
+- Track fenced code with CommonMark char and run length
+- Separate appended MADR Consequences after suppressed newline
+- Detect Consequences H2 anywhere outside fences
+- Describe adr-tools as shell implementation in init ADR #0001
+- Normalize rendered templates to end with exactly one newline (closes #320)
+
+### Documentation
+
+- Clarify BodySectionPatch migration and refresh ADR 0009
+
+### Features
+
+- Update init ADR #0001 seed with markdown links and trailing newline
+
+### Miscellaneous
+
+- Migrate homebrew distribution to homebrew-core
+
+### Testing
+
+- Expand BodySectionPatch preservation coverage for issue #310
+- Pin write-path classes for people YAML, fences, and newlines
+- Absorb corpus people-YAML fixtures for status and link write paths
+- Use descriptive comments for write-path pins
+- Pin MADR Consequences H2 before Decision Outcome
+
+
 ## [0.9.0] - 2026-07-10
 
 ### Bug Fixes
