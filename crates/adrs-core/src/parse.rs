@@ -23,6 +23,12 @@ static NUMBER_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\d{4})-.*
 ///   layout, as implemented by [adr-tools](https://github.com/npryce/adr-tools))
 /// - **MADR 4.0.0** — `Context and Problem Statement`, `Decision Outcome`, and
 ///   `Consequences` when present as a top-level H2
+///
+/// This function only classifies H2 headings. `### Consequences`, the MADR 4.0.0
+/// H3 that appears under `## Decision Outcome` / `## Decision`, is handled as a
+/// narrow exception in [`Parser::parse_sections`] and
+/// [`Parser::extract_sections_raw`], using this same mapping to recognize the H3's
+/// title so both paths stay in sync (see issue #338).
 pub(crate) fn canonical_section_field(section: &str) -> Option<&'static str> {
     match section.trim().to_lowercase().as_str() {
         "context" | "context and problem statement" => Some("context"),
@@ -149,10 +155,26 @@ impl Parser {
     }
 
     /// Extract sections from raw markdown text.
+    ///
+    /// `## ` headings are the section boundaries. As a narrow exception for MADR
+    /// 4.0.0 documents that have no YAML frontmatter (e.g. the bare-minimal
+    /// template), a `### ` heading whose title canonically maps to `consequences`
+    /// and appears while the enclosing `## ` section maps to `decision` starts its
+    /// own `consequences` entry instead of continuing to accumulate into
+    /// `decision`. Any other H3 (e.g. `### Confirmation`) is not specially
+    /// recognized; its raw line and body stay part of the enclosing section's
+    /// text, matching the pre-existing behavior for every heading below H2. See
+    /// [`Self::parse_sections`] for the YAML-frontmatter-body equivalent.
     fn extract_sections_raw(&self, content: &str) -> Vec<(String, String)> {
         let mut sections = Vec::new();
         let mut current_section: Option<String> = None;
+        let mut current_field: Option<&'static str> = None;
         let mut section_content = String::new();
+
+        // MADR `### Consequences` nested under the decision `## ` section.
+        let mut consequences_content = String::new();
+        let mut has_consequences_subsection = false;
+        let mut in_consequences = false;
 
         for line in content.lines() {
             if line.starts_with("## ") {
@@ -160,8 +182,33 @@ impl Parser {
                 if let Some(ref name) = current_section {
                     sections.push((name.clone(), section_content.trim().to_string()));
                 }
+                if has_consequences_subsection {
+                    sections.push((
+                        "consequences".to_string(),
+                        consequences_content.trim().to_string(),
+                    ));
+                }
                 current_section = Some(line.trim_start_matches("## ").trim().to_lowercase());
+                current_field = canonical_section_field(current_section.as_deref().unwrap_or(""));
                 section_content.clear();
+                consequences_content.clear();
+                has_consequences_subsection = false;
+                in_consequences = false;
+            } else if line.starts_with("### ") {
+                let heading = line.trim_start_matches("### ").trim();
+                // A new H3 always ends a prior Consequences subsection; only
+                // divert into `consequences` when this H3 itself starts one.
+                in_consequences = current_field == Some("decision")
+                    && canonical_section_field(heading) == Some("consequences");
+                if in_consequences {
+                    has_consequences_subsection = true;
+                } else if current_section.is_some() {
+                    section_content.push_str(line);
+                    section_content.push('\n');
+                }
+            } else if in_consequences {
+                consequences_content.push_str(line);
+                consequences_content.push('\n');
             } else if current_section.is_some() {
                 section_content.push_str(line);
                 section_content.push('\n');
@@ -171,6 +218,12 @@ impl Parser {
         // Save final section
         if let Some(ref name) = current_section {
             sections.push((name.clone(), section_content.trim().to_string()));
+        }
+        if has_consequences_subsection {
+            sections.push((
+                "consequences".to_string(),
+                consequences_content.trim().to_string(),
+            ));
         }
 
         sections
@@ -240,43 +293,114 @@ impl Parser {
     }
 
     /// Parse markdown sections into a map.
+    ///
+    /// H2 headings are the top-level section boundaries. As a narrow exception
+    /// for MADR 4.0.0 documents, an H3 heading whose title canonically maps to
+    /// `consequences` and appears directly under the H2 that maps to `decision`
+    /// (`## Decision` / `## Decision Outcome`) starts its own `consequences`
+    /// entry instead of continuing to accumulate into `decision`. Any other H3
+    /// (e.g. `### Confirmation`) is not specially recognized: its heading text
+    /// and body continue to fold into the enclosing H2's text, matching the
+    /// pre-existing behavior for every heading level other than H2. Because this
+    /// walks pulldown-cmark's event stream rather than scanning lines, fenced
+    /// code blocks containing heading-lookalike text are never mistaken for real
+    /// boundaries (see [`Self::extract_sections_raw`] for the no-frontmatter
+    /// equivalent of the H3 exception, and issue #338 for the bug this closes).
     fn parse_sections(&self, content: &str) -> std::collections::HashMap<String, String> {
         let mut sections = std::collections::HashMap::new();
         let mut current_section: Option<String> = None;
+        let mut current_field: Option<&'static str> = None;
         let mut section_content = String::new();
 
+        // MADR `### Consequences` nested under the decision H2. `Some` once such
+        // a subsection has been opened; further text is only routed here while
+        // `in_consequences` is true.
+        let mut consequences_content: Option<String> = None;
+        let mut in_consequences = false;
+
+        // Heading title currently being captured (any level), and the level it
+        // belongs to. Buffered rather than applied event-by-event so a `### `
+        // heading's title can be inspected in full before deciding whether it
+        // starts a Consequences subsection or folds into the enclosing text.
+        let mut heading_level: Option<HeadingLevel> = None;
+        let mut heading_text = String::new();
+
         let parser = MdParser::new(content);
-        let mut in_heading = false;
 
         for event in parser {
             match event {
-                Event::Start(Tag::Heading {
-                    level: HeadingLevel::H2,
-                    ..
-                }) => {
-                    if let Some(ref section) = current_section {
-                        sections.insert(section.clone(), section_content.trim().to_string());
+                Event::Start(Tag::Heading { level, .. }) => match level {
+                    HeadingLevel::H2 => {
+                        if let Some(text) = consequences_content.take() {
+                            sections.insert("consequences".to_string(), text.trim().to_string());
+                        }
+                        if let Some(ref section) = current_section {
+                            sections.insert(section.clone(), section_content.trim().to_string());
+                        }
+                        section_content.clear();
+                        current_field = None;
+                        in_consequences = false;
+                        heading_level = Some(HeadingLevel::H2);
+                        heading_text.clear();
                     }
-                    in_heading = true;
-                    section_content.clear();
-                }
-                Event::End(TagEnd::Heading(_)) => {
-                    in_heading = false;
-                }
+                    HeadingLevel::H3 => {
+                        // A new H3 always ends a prior Consequences subsection;
+                        // only this H3 itself (checked at its End event) can
+                        // open a new one.
+                        in_consequences = false;
+                        heading_level = Some(HeadingLevel::H3);
+                        heading_text.clear();
+                    }
+                    _ => {}
+                },
+                Event::End(TagEnd::Heading(level)) => match level {
+                    HeadingLevel::H2 => {
+                        current_section = Some(heading_text.trim().to_lowercase());
+                        current_field = canonical_section_field(&heading_text);
+                        heading_level = None;
+                    }
+                    HeadingLevel::H3 => {
+                        if current_field == Some("decision")
+                            && canonical_section_field(&heading_text) == Some("consequences")
+                        {
+                            in_consequences = true;
+                            consequences_content.get_or_insert_with(String::new);
+                        } else {
+                            section_content.push_str(&heading_text);
+                        }
+                        heading_level = None;
+                    }
+                    _ => {
+                        heading_level = None;
+                    }
+                },
                 Event::Text(text) => {
-                    if in_heading {
-                        current_section = Some(text.to_string().to_lowercase());
+                    if heading_level.is_some() {
+                        heading_text.push_str(&text);
+                    } else if in_consequences {
+                        consequences_content
+                            .get_or_insert_with(String::new)
+                            .push_str(&text);
                     } else {
                         section_content.push_str(&text);
                     }
                 }
-                Event::SoftBreak | Event::HardBreak if !in_heading => {
-                    section_content.push('\n');
+                Event::SoftBreak | Event::HardBreak if heading_level.is_none() => {
+                    if in_consequences {
+                        consequences_content
+                            .get_or_insert_with(String::new)
+                            .push('\n');
+                    } else {
+                        section_content.push('\n');
+                    }
                 }
                 _ => {}
             }
         }
 
+        if let Some(text) = consequences_content.take() {
+            sections.insert("consequences".to_string(), text.trim().to_string());
+        }
         if let Some(ref section) = current_section {
             sections.insert(section.clone(), section_content.trim().to_string());
         }
@@ -961,6 +1085,184 @@ Chosen option: "MADR 4.0.0", because it provides rich metadata.
 
         assert!(adr.context.contains("standard format"));
         assert!(adr.decision.contains("MADR 4.0.0"));
+    }
+
+    // ========== MADR H3 Consequences Read Round-Trip (#338) ==========
+
+    #[test]
+    fn test_parse_madr_h3_consequences_excluded_from_decision() {
+        // `### Consequences` under `## Decision Outcome` must populate
+        // `adr.consequences`, not get folded into `adr.decision`.
+        let content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2024-01-15
+status: proposed
+---
+
+## Context and Problem Statement
+
+We need a caching solution.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Good, because it reduces database load
+* Bad, because it adds operational complexity
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(
+            adr.decision,
+            "Chosen option: \"Redis\", because it is fast."
+        );
+        assert!(
+            !adr.decision.contains("Good, because it reduces"),
+            "consequences text leaked into decision:\n{}",
+            adr.decision
+        );
+        assert!(
+            !adr.decision.to_lowercase().contains("consequences"),
+            "Consequences heading text leaked into decision:\n{}",
+            adr.decision
+        );
+        assert!(
+            adr.consequences
+                .contains("Good, because it reduces database load")
+        );
+        assert!(
+            adr.consequences
+                .contains("Bad, because it adds operational complexity")
+        );
+    }
+
+    #[test]
+    fn test_parse_madr_h3_confirmation_stays_in_decision() {
+        // A non-Consequences H3 (e.g. `### Confirmation`) is not diverted: it
+        // keeps folding into `decision`, both before and after a real `###
+        // Consequences` subsection.
+        let content = r#"---
+number: 2
+title: Use Redis for caching
+date: 2024-01-15
+status: proposed
+---
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Good, because it reduces database load
+
+### Confirmation
+
+We will confirm via load tests.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(adr.decision.contains("Chosen option: \"Redis\""));
+        assert!(
+            adr.decision.contains("We will confirm via load tests."),
+            "Confirmation subsection should stay part of decision:\n{}",
+            adr.decision
+        );
+        assert!(
+            !adr.decision.contains("Good, because it reduces"),
+            "consequences text must not appear in decision:\n{}",
+            adr.decision
+        );
+        assert_eq!(adr.consequences, "Good, because it reduces database load");
+    }
+
+    #[test]
+    fn test_parse_nygard_consequences_h2_and_no_h3_still_works() {
+        // Control case: a Nygard-style top-level `## Consequences` H2 with no
+        // H3 anywhere must parse exactly as before the #338 fix.
+        let content = r#"---
+number: 2
+title: Use PostgreSQL
+date: 2024-01-15
+status: accepted
+---
+
+## Context
+
+We need a database.
+
+## Decision
+
+We will use PostgreSQL.
+
+## Consequences
+
+We get ACID compliance.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.decision, "We will use PostgreSQL.");
+        assert_eq!(adr.consequences, "We get ACID compliance.");
+    }
+
+    #[test]
+    fn test_parse_legacy_madr_h3_consequences_excluded_from_decision() {
+        // Same exception, no-frontmatter path: MADR's bare/minimal templates
+        // have no YAML frontmatter, so this goes through `parse_legacy` /
+        // `extract_sections_raw` rather than `parse_sections`.
+        let content = r#"# Use Redis for caching
+
+## Context and Problem Statement
+
+We need a caching solution.
+
+## Decision Outcome
+
+Chosen option: "Redis", because it is fast.
+
+### Consequences
+
+* Good, because it reduces database load
+
+### Confirmation
+
+We will confirm via load tests.
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(
+            adr.decision
+                .contains("Chosen option: \"Redis\", because it is fast.")
+        );
+        // The legacy path folds non-Consequences H3 lines verbatim (including
+        // the `### ` marker), matching its pre-existing behavior for headings
+        // below H2.
+        assert!(
+            adr.decision.contains("### Confirmation"),
+            "Confirmation subsection should stay part of decision:\n{}",
+            adr.decision
+        );
+        assert!(adr.decision.contains("We will confirm via load tests."));
+        assert!(
+            !adr.decision.contains("Good, because it reduces"),
+            "consequences text must not leak into legacy-path decision:\n{}",
+            adr.decision
+        );
+        assert!(
+            adr.consequences
+                .contains("Good, because it reduces database load")
+        );
     }
 
     #[test]
