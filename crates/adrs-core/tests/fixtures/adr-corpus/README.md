@@ -24,7 +24,7 @@ row here.
 | 0008-fenced-heading-examples.md | MADR 4.0 frontmatter | Accepted | Fenced code block containing heading-lookalike lines |
 | 0009-no-trailing-newline.md | Nygard | Accepted | File ends without a trailing newline |
 | 0010-non-canonical-status.md | Nygard | Free-form prose (parses as Proposed, #310) | Non-canonical status text |
-| 0011-people-yaml-block-scalar.md | MADR 4.0 frontmatter | Proposed | `consulted: >-` block scalar (PR #311 review 4707905821) |
+| 0011-people-yaml-block-scalar.md | MADR 4.0 frontmatter | Proposed | `consulted: >-` folded block scalar |
 | 0012-people-yaml-zero-indent.md | MADR 4.0 frontmatter | Proposed | Zero-indent `consulted` list items |
 | 0013-people-yaml-comment-between.md | MADR 4.0 frontmatter | Proposed | Comment between `consulted` key and items |
 | 0014-people-yaml-four-space.md | MADR 4.0 frontmatter | Proposed | Four-space-indented `consulted` list |

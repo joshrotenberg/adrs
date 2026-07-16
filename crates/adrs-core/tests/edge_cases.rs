@@ -44,8 +44,8 @@ fn frontmatter_body(content: &str) -> &str {
 
 #[test]
 fn test_madr_with_spdx_headers() {
-    // Mapping rewrite re-emits frontmatter and drops YAML comments when status
-    // changes (ADR 0006). Body and unknown keys must still survive.
+    // Frontmatter re-emit via YAML Mapping drops comments when status changes
+    // (ADR 0006). Body and unknown keys must still survive.
     let fixture = r#"---
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Example Corp
@@ -384,7 +384,8 @@ Use JWT with refresh tokens.
 
 #[test]
 fn set_status_preserves_block_scalar_consulted() {
-    // Josh's adrs status regression (review 4707905821 #1).
+    // Folded block-scalar `consulted: >-` must stay listable after set_status
+    // (no orphaned list item + continuation).
     let fixture = r#"---
 number: 2
 title: Block scalar consulted

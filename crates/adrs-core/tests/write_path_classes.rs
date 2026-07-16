@@ -1,4 +1,4 @@
-//! Class-level write-path matrices for PR #311 (review 4707905821).
+//! Class-level write-path matrices for metadata and body updates.
 //!
 //! These pin *classes* of inputs × write APIs, not single string repros:
 //! people-YAML shapes under metadata writes, nested/mixed fences under body
@@ -504,8 +504,8 @@ fn create_then_append_consequences_not_glued() {
 
 #[test]
 fn set_status_preserves_unknown_frontmatter_keys() {
-    // Progressive baseline — must stay green through Mapping rewrite (1a).
-    // Naive Mapping serialize often drops unmanaged keys.
+    // Progressive baseline: unmanaged frontmatter keys must survive set_status
+    // when the YAML Mapping is re-emitted.
     let fixture = r#"---
 number: 2
 title: Unknown keys
@@ -600,7 +600,7 @@ X.
 
 #[test]
 fn add_link_preserves_block_scalar_consulted() {
-    // Josh: adrs link on block-scalar people YAML must not drop the ADR.
+    // link() on block-scalar people YAML must not drop the ADR from list.
     let source = r#"---
 number: 2
 title: Link source
