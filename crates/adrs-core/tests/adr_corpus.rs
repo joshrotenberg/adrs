@@ -243,7 +243,6 @@ fn noop_metadata_update_is_byte_identical_for_well_formed_files() {
     // files with people fields (0004, 0011-0014), a legacy Amends link to a
     // hand-named file (0005), fence content (0008, 0015-0016), a file without
     // a trailing newline (0009), and frontmatter links with descriptions (0007).
-    //
     let (tmp, repo) = corpus_repo();
     for number in [1u32, 2, 3, 4, 5, 7, 8, 9, 11, 12, 13, 14, 15, 16] {
         let file = tmp
