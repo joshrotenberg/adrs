@@ -237,6 +237,15 @@ impl Template {
             })
             .map_err(|e| Error::TemplateError(e.to_string()))?;
 
+        // Normalize the ending to exactly one newline (#320). minijinja strips
+        // the template source's final newline, so without this the rendered
+        // ending depends on the template and on whether its last expression is
+        // empty: MADR full/minimal rendered with no trailing newline, Nygard
+        // minimal with two when the last section was empty. Normalizing here
+        // covers custom templates as well.
+        let mut output = output.trim_end().to_string();
+        output.push('\n');
+
         Ok(output)
     }
 }
@@ -1287,6 +1296,43 @@ mod tests {
         assert_eq!(full.content, explicit_full.content);
     }
 
+    #[test]
+    fn test_every_builtin_render_ends_with_exactly_one_newline() {
+        // Regression for #320: rendered output must end with exactly one
+        // newline for every builtin, with both empty and populated body
+        // fields (minijinja's trailing-newline strip made the ending depend
+        // on the template and on whether the final expression was empty).
+        let formats = [TemplateFormat::Nygard, TemplateFormat::Madr];
+        let variants = [
+            TemplateVariant::Full,
+            TemplateVariant::Minimal,
+            TemplateVariant::Bare,
+            TemplateVariant::BareMinimal,
+        ];
+        let empty = Adr::new(1, "Empty fields");
+        let mut populated = Adr::new(2, "Populated fields");
+        populated.context = "Some context.".into();
+        populated.decision = "Some decision.".into();
+        populated.consequences = "Some consequences.".into();
+
+        for format in formats {
+            for variant in variants {
+                let template = Template::builtin_with_variant(format, variant);
+                for adr in [&empty, &populated] {
+                    let output = template
+                        .render(adr, &Config::default(), &no_link_titles())
+                        .unwrap();
+                    assert!(
+                        output.ends_with('\n') && !output.ends_with("\n\n"),
+                        "{format}-{variant} (adr {}) must end with exactly one newline, got tail {:?}",
+                        adr.number,
+                        &output[output.len().saturating_sub(12)..]
+                    );
+                }
+            }
+        }
+    }
+
     // ========== Template Engine Tests ==========
 
     #[test]
@@ -1368,7 +1414,7 @@ mod tests {
         let config = Config::default();
 
         let output = engine.render(&adr, &config, &no_link_titles()).unwrap();
-        assert_eq!(output, "ADR 42: Custom ADR");
+        assert_eq!(output, "ADR 42: Custom ADR\n");
     }
 
     // ========== Custom Template Tests ==========
@@ -1417,14 +1463,14 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         let output = custom
             .render(&adr, &compat_config, &no_link_titles())
             .unwrap();
-        assert_eq!(output, "Compatible Mode");
+        assert_eq!(output, "Compatible Mode\n");
 
         let ng_config = Config {
             mode: ConfigMode::NextGen,
             ..Default::default()
         };
         let output = custom.render(&adr, &ng_config, &no_link_titles()).unwrap();
-        assert_eq!(output, "NextGen Mode");
+        assert_eq!(output, "NextGen Mode\n");
     }
 
     #[test]
@@ -1561,7 +1607,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         let config = Config::default();
         let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
-        assert_eq!(output, "0001");
+        assert_eq!(output, "0001\n");
     }
 
     #[test]
@@ -1571,7 +1617,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
         let config = Config::default();
         let output = template.render(&adr, &config, &no_link_titles()).unwrap();
 
-        assert_eq!(output, "000001");
+        assert_eq!(output, "000001\n");
     }
     // ========== Template accessor tests (issue #235) ==========
 
