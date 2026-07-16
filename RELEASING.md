@@ -40,7 +40,6 @@ release.yml jobs:
                    uploads to the existing release instead of failing (#283).
   verify-release -- confirms the published release has its full asset set + a valid
                    checksum; re-drafts and fails if incomplete (#285)
-  publish-homebrew-formula -- pushes the .rb formula to joshrotenberg/homebrew-brew
   announce      -- no-op placeholder; runs only after verify-release succeeds
   cleanup-on-failure -- drafts the release if any build OR host job fails (#242, #281)
 ```
@@ -70,10 +69,14 @@ A complete release produces the following artifacts attached to the GitHub Relea
 - A combined checksum file: `sha256.sum`
 - Shell installer: `adrs-installer.sh`
 - PowerShell installer: `adrs-installer.ps1`
-- Homebrew formula: committed to `joshrotenberg/homebrew-brew` as `Formula/adrs.rb`
-  (also attached to the release as `adrs.rb`)
 - Source archive and checksum: `source.tar.gz`, `source.tar.gz.sha256`
 - `dist-manifest.json`: the dist manifest for the release
+
+Homebrew is handled outside this pipeline: adrs lives in homebrew-core
+(Homebrew/homebrew-core#290715). BrewTestBot picks up new GitHub releases
+automatically (v0.9.0 was bumped within about five hours); if a bump does not
+appear, run `brew bump-formula-pr adrs`. The old personal tap redirects to
+homebrew-core via `tap_migrations.json` in `joshrotenberg/homebrew-brew`.
 
 To verify:
 
@@ -84,14 +87,15 @@ gh release view v<VERSION> --repo joshrotenberg/adrs
 # List all attached assets
 gh release view v<VERSION> --repo joshrotenberg/adrs --json assets --jq '[.assets[].name] | sort'
 
-# Verify Homebrew formula was updated
-gh api repos/joshrotenberg/homebrew-brew/commits --jq '.[0].commit.message'
+# Verify the homebrew-core formula was autobumped (may take a few hours)
+gh api 'repos/Homebrew/homebrew-core/commits?path=Formula/a/adrs.rb&per_page=1' --jq '.[0].commit.message'
 ```
 
 `verify-release` (`.github/workflows/release.yml`) fails the release if there
 are fewer than 14 assets (5 archives + 5 checksums + 2 installers +
-`sha256.sum` + `dist-manifest.json`). A typical release has 17 assets, once
-the Homebrew formula and source archive are included.
+`sha256.sum` + `dist-manifest.json`). A typical release has 16 assets, once
+the source archive and its checksum are included. (Releases up to v0.9.0 also
+attached `adrs.rb`, for 17; the formula moved to homebrew-core.)
 
 ## Required secrets
 
@@ -99,7 +103,7 @@ The release workflow requires two secrets configured in the repository settings:
 
 | Secret | Purpose |
 |--------|---------|
-| `COMMITTER_TOKEN` | A GitHub PAT with `repo` scope. Used by release-plz to push the version tag (GITHUB_TOKEN actions don't trigger other workflows) and by publish-homebrew-formula to push to `joshrotenberg/homebrew-brew`. |
+| `COMMITTER_TOKEN` | A GitHub PAT with `repo` scope. Used by release-plz to push the version tag (GITHUB_TOKEN actions don't trigger other workflows). |
 | `CARGO_REGISTRY_TOKEN` | An API token from crates.io. Used by release-plz to publish updated crates (`adrs-core` and `adrs`) to crates.io. |
 
 Both secrets must be set at `https://github.com/joshrotenberg/adrs/settings/secrets/actions`.

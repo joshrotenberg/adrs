@@ -19,7 +19,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/joshrotenberg/adrs
 ### Homebrew (macOS/Linux)
 
 ```sh
-brew install joshrotenberg/brew/adrs
+brew install adrs
 ```
 
 ### Manual Download
