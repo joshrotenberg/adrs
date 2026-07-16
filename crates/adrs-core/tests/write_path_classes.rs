@@ -433,8 +433,6 @@ fn fence_forms_consequences_patch_preserves_samples() {
 
 #[test]
 fn append_consequences_after_no_trailing_newline_is_not_glued() {
-    // EXPECT-FAIL until write_madr_consequences_subsection separator fix
-    // (PR #311 review 4707905821 #3).
     let temp = TempDir::new().unwrap();
     let repo = Repository::init(temp.path(), None, true).unwrap();
 
@@ -469,7 +467,6 @@ fn append_consequences_after_no_trailing_newline_is_not_glued() {
 
 #[test]
 fn create_then_append_consequences_not_glued() {
-    // EXPECT-FAIL until newline separator fix (PR #311 review 4707905821 #3).
     // repo.create() often produces no trailing newline.
     let temp = TempDir::new().unwrap();
     let repo = Repository::init(temp.path(), None, true).unwrap();

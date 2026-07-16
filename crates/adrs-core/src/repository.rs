@@ -989,6 +989,11 @@ impl Repository {
     }
 
     fn write_madr_consequences_subsection(result: &mut String, text: &str) {
+        // append_lines may omit a final newline when the source file has none
+        // and the append ends at EOF; re-establish a separator before the H3.
+        if !result.is_empty() && !result.ends_with('\n') {
+            result.push('\n');
+        }
         result.push_str("### Consequences\n");
         Self::write_section_body(result, text);
     }
