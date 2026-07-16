@@ -504,8 +504,6 @@ fn create_then_append_consequences_not_glued() {
 
 #[test]
 fn madr_consequences_h2_before_decision_outcome_is_not_duplicated() {
-    // EXPECT-FAIL until Consequences H2 detection scans the whole file
-    // (not only after Decision Outcome).
     // When ## Consequences appears before ## Decision Outcome, a consequences
     // patch must update that H2 once and must not also inject ### Consequences.
     let fixture = r#"---

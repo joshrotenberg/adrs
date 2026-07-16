@@ -900,12 +900,12 @@ impl Repository {
 
         let mut consequences_applied = false;
 
-        // Nygard-style ADRs use a top-level `## Consequences` H2; that section is
-        // patched separately. Leave Decision bytes untouched when only consequences
-        // is set and a Consequences H2 exists later in the file.
+        // Top-level `## Consequences` H2 (anywhere outside fences) is patched
+        // separately. Leave Decision bytes untouched when only consequences is
+        // set and such an H2 exists — including before Decision Outcome.
         if patch.decision.is_none()
             && patch.consequences.is_some()
-            && Self::has_consequences_h2_after(lines, body_end)
+            && Self::has_consequences_h2(lines)
         {
             Self::append_lines(result, lines, body_start, body_end, content);
             return (true, false);
@@ -927,7 +927,7 @@ impl Repository {
 
         if intro_end >= body_end {
             if let Some(ref text) = patch.consequences
-                && !Self::has_consequences_h2_after(lines, body_end)
+                && !Self::has_consequences_h2(lines)
                 && madr_decision_outcome
             {
                 Self::write_madr_consequences_subsection(result, text);
@@ -972,7 +972,7 @@ impl Repository {
 
         if let Some(ref text) = patch.consequences
             && !consequences_applied
-            && !Self::has_consequences_h2_after(lines, body_end)
+            && !Self::has_consequences_h2(lines)
             && madr_decision_outcome
         {
             Self::write_madr_consequences_subsection(result, text);
@@ -982,9 +982,10 @@ impl Repository {
         (true, consequences_applied)
     }
 
-    fn has_consequences_h2_after(lines: &[&str], start: usize) -> bool {
-        lines[start..].iter().enumerate().any(|(offset, line)| {
-            Self::is_h2_outside_fence(lines, start + offset) && Self::is_consequences_h2(line)
+    /// True when a fence-aware `## Consequences` H2 exists anywhere in the file.
+    fn has_consequences_h2(lines: &[&str]) -> bool {
+        lines.iter().enumerate().any(|(idx, line)| {
+            Self::is_h2_outside_fence(lines, idx) && Self::is_consequences_h2(line)
         })
     }
 
