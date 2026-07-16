@@ -206,8 +206,8 @@ fn file_without_trailing_newline_parses() {
 #[test]
 fn non_canonical_status_prose_pins_current_behavior() {
     // KNOWN-LOSSY (#310): unrecognized status prose is dropped on read and
-    // the status defaults to Proposed. PR #311's rework should improve this;
-    // tighten when it does.
+    // the status defaults to Proposed. Tighten when body-only updates stop
+    // depending on that parse default for free-form Status sections.
     let adr = parse_fixture(10);
     assert_eq!(adr.status, AdrStatus::Proposed);
 }
@@ -298,8 +298,8 @@ fn noop_metadata_update_pins_known_rewrites() {
 
 #[test]
 fn status_change_preserves_people_yaml_forms() {
-    // Josh's adrs status regression (review 4707905821 #1):
-    // success exit must not orphan people-field YAML or drop the ADR from list.
+    // set_status must not orphan non-canonical people-field YAML (block scalar,
+    // zero-indent lists, comments) or drop the ADR from list afterward.
     let (tmp, repo) = corpus_repo();
     let adr_dir = tmp.path().join("doc/adr");
 
@@ -351,8 +351,8 @@ fn status_change_preserves_people_yaml_forms() {
 
 #[test]
 fn body_patch_preserves_nested_and_tilde_fences() {
-    // Nested/mixed fences must not truncate Decision Outcome or eat the real
-    // ### Consequences section (PR #311 review 4707905821 #2).
+    // Nested/mixed fences (longer backtick runs, tilde wrapping backticks) must
+    // not truncate Decision Outcome or eat the real ### Consequences section.
     let (tmp, repo) = corpus_repo();
     let adr_dir = tmp.path().join("doc/adr");
 

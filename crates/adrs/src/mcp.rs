@@ -2126,8 +2126,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_content_rejects_empty_body_patch() {
-        // Progressive baseline / contract pin (PR #311 review 4707905821):
-        // update_content with only number must error, not silently no-op.
+        // update_content with only `number` (no context/decision/consequences)
+        // must error, not silently no-op.
         let (client, _tmp) = setup_client(false).await;
         client
             .call_tool_text("create_adr", json!({"title": "Empty patch target"}))

@@ -1930,8 +1930,8 @@ Chosen option: "Redis", because it supports data structures beyond simple key-va
 
     #[test]
     fn test_set_status_via_mapping_preserves_unknown_keys_and_body() {
-        // Mapping rewrite (ADR 0006 / PR #311) re-emits frontmatter YAML and does
-        // not round-trip comments. Unknown keys and the markdown body must survive.
+        // Frontmatter is re-emitted via a YAML Mapping (ADR 0006) and does not
+        // round-trip comments. Unknown keys and the markdown body must survive.
         let temp = TempDir::new().unwrap();
         let repo = Repository::init(temp.path(), None, true).unwrap();
 
