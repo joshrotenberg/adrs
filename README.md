@@ -26,7 +26,7 @@ A command-line tool for creating and managing [Architecture Decision Records](ht
 ### Homebrew (macOS/Linux)
 
 ```sh
-brew install joshrotenberg/brew/adrs
+brew install adrs
 ```
 
 ### Cargo
