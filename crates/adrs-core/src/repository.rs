@@ -688,6 +688,17 @@ impl Repository {
     /// Replaces the content between `## Status` and the next `## ` heading
     /// with the new status and link lines. All other sections pass through untouched.
     fn update_legacy_metadata(&self, adr: &Adr, content: &str) -> Result<String> {
+        // Preserve the file's dominant line ending. `content.lines()` strips both
+        // `\n` and `\r\n`, so re-emitting with a fixed `\n` would silently convert
+        // a CRLF legacy file to LF on every metadata write (`adrs status`,
+        // `adrs link`). Detect the ending once (CRLF if any `\r\n` is present, else
+        // LF) and re-emit every line with it; a CRLF file whose metadata is
+        // unchanged round-trips byte-for-byte. Matches `update_body_sections`.
+        let ending = if content.contains("\r\n") {
+            "\r\n"
+        } else {
+            "\n"
+        };
         let lines: Vec<&str> = content.lines().collect();
         let mut result = String::with_capacity(content.len());
 
@@ -710,18 +721,18 @@ impl Repository {
         // Write everything before the status section (including the ## Status line)
         for line in &lines[..=status_idx] {
             result.push_str(line);
-            result.push('\n');
+            result.push_str(ending);
         }
 
         // Write new status content
-        result.push('\n');
+        result.push_str(ending);
         result.push_str(&adr.status.to_string());
-        result.push('\n');
+        result.push_str(ending);
 
         // Write link lines with resolved titles
         let link_titles = self.resolve_link_titles(adr);
         for link in &adr.links {
-            result.push('\n');
+            result.push_str(ending);
             if let Some((title, filename)) = link_titles.get(&link.target) {
                 result.push_str(&format!(
                     "{} [{}. {}]({})",
@@ -733,17 +744,17 @@ impl Repository {
                     link.kind, link.target, link.target
                 ));
             }
-            result.push('\n');
+            result.push_str(ending);
         }
 
         // Write everything from the next heading onward
         if let Some(next_idx) = next_heading_idx {
-            result.push('\n');
+            result.push_str(ending);
             for (i, line) in lines[next_idx..].iter().enumerate() {
                 result.push_str(line);
                 // Preserve trailing newline behavior
                 if next_idx + i < lines.len() - 1 || content.ends_with('\n') {
-                    result.push('\n');
+                    result.push_str(ending);
                 }
             }
         } else if content.ends_with('\n') {
@@ -4073,6 +4084,59 @@ We decided.
         assert_eq!(
             before, after,
             "no-op metadata update on a CRLF file must be byte-identical"
+        );
+    }
+
+    #[test]
+    fn test_update_legacy_metadata_on_crlf_file_preserves_crlf() {
+        // #344: `update_legacy_metadata` (no-frontmatter adr-tools files) rebuilt
+        // the file via `lines()` + `\n` joins, so a metadata write on a CRLF
+        // legacy file converted every ending to LF. Pin the fix: the status
+        // updates and the file stays uniformly CRLF.
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let lf_content = "# 2. CRLF legacy\n\nDate: 2026-01-15\n\n## Status\n\nProposed\n\n## Context\n\nContext.\n\n## Decision\n\nDecision.\n\n## Consequences\n\nConsequences.\n";
+        let crlf_content = lf_content.replace('\n', "\r\n");
+        let adr_path = repo.adr_path().join("0002-crlf-legacy.md");
+        fs::write(&adr_path, crlf_content.as_bytes()).unwrap();
+
+        let mut adr = repo.get(2).unwrap();
+        adr.status = AdrStatus::Accepted;
+        repo.update_metadata(&adr).unwrap();
+
+        let after = String::from_utf8(fs::read(&adr_path).unwrap()).unwrap();
+        assert!(
+            after.contains("## Status\r\n\r\nAccepted\r\n"),
+            "status must update on a CRLF legacy file\n{after:?}"
+        );
+        assert!(
+            is_uniformly_crlf(&after),
+            "expected uniform CRLF, found a bare \\n\n{after:?}"
+        );
+
+        let listed = repo.get(2).unwrap();
+        assert_eq!(listed.status, AdrStatus::Accepted);
+    }
+
+    #[test]
+    fn test_noop_legacy_metadata_update_on_crlf_file_is_byte_identical() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        let lf_content = "# 2. CRLF legacy noop\n\nDate: 2026-01-15\n\n## Status\n\nAccepted\n\n## Context\n\nContext.\n\n## Decision\n\nDecision.\n\n## Consequences\n\nConsequences.\n";
+        let crlf_content = lf_content.replace('\n', "\r\n");
+        let adr_path = repo.adr_path().join("0002-crlf-legacy-noop.md");
+        fs::write(&adr_path, crlf_content.as_bytes()).unwrap();
+
+        let before = fs::read(&adr_path).unwrap();
+        let adr = repo.get(2).unwrap();
+        repo.update_metadata(&adr).unwrap();
+        let after = fs::read(&adr_path).unwrap();
+
+        assert_eq!(
+            before, after,
+            "no-op legacy metadata update on a CRLF file must be byte-identical"
         );
     }
 
