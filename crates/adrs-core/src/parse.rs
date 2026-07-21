@@ -325,6 +325,13 @@ impl Parser {
         let mut heading_level: Option<HeadingLevel> = None;
         let mut heading_text = String::new();
 
+        // Active list markers, one entry per nesting level. `None` is a bullet
+        // list; `Some(n)` is an ordered list whose next item number is `n`.
+        // pulldown-cmark emits no SoftBreak between sibling items, so each
+        // `Start(Item)` re-emits a separator and marker to keep list items from
+        // concatenating into one run of text.
+        let mut list_stack: Vec<Option<u64>> = Vec::new();
+
         let parser = MdParser::new(content);
 
         for event in parser {
@@ -393,6 +400,29 @@ impl Parser {
                     } else {
                         section_content.push('\n');
                     }
+                }
+                Event::Start(Tag::List(first)) => list_stack.push(first),
+                Event::End(TagEnd::List(_)) => {
+                    list_stack.pop();
+                }
+                Event::Start(Tag::Item) if heading_level.is_none() => {
+                    let marker = match list_stack.last_mut() {
+                        Some(Some(n)) => {
+                            let m = format!("{n}. ");
+                            *n += 1;
+                            m
+                        }
+                        _ => "- ".to_string(),
+                    };
+                    let buf = if in_consequences {
+                        consequences_content.get_or_insert_with(String::new)
+                    } else {
+                        &mut section_content
+                    };
+                    if !buf.is_empty() && !buf.ends_with('\n') {
+                        buf.push('\n');
+                    }
+                    buf.push_str(&marker);
                 }
                 _ => {}
             }
@@ -1087,6 +1117,100 @@ Chosen option: "MADR 4.0.0", because it provides rich metadata.
         assert!(adr.decision.contains("MADR 4.0.0"));
     }
 
+    // ========== List-item separators in parsed sections (#346) ==========
+
+    #[test]
+    fn test_parse_sections_bullet_items_keep_separator() {
+        // Consecutive bullet items in a top-level `## Consequences` section must
+        // not concatenate (pulldown-cmark emits no SoftBreak between siblings).
+        // Mirrors corpus fixtures 0004 and 0007.
+        let content = r#"---
+number: 4
+title: Use MADR format for ADRs
+status: accepted
+date: 2024-02-15
+---
+
+## Consequences
+
+- Better tooling support with structured metadata
+- Clear tracking of decision-makers and stakeholders
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(
+            !adr.consequences.contains("metadataClear"),
+            "list items concatenated without a separator:\n{}",
+            adr.consequences
+        );
+        assert_eq!(
+            adr.consequences,
+            "- Better tooling support with structured metadata\n\
+             - Clear tracking of decision-makers and stakeholders"
+        );
+    }
+
+    #[test]
+    fn test_parse_sections_h3_consequences_bullet_items_keep_separator() {
+        // The `### Consequences` under `## Decision Outcome` buffer needs the
+        // same separator handling as top-level sections.
+        let content = r#"---
+number: 2
+title: Use Redis for caching
+status: proposed
+date: 2024-01-15
+---
+
+## Decision Outcome
+
+Chosen option: "Redis".
+
+### Consequences
+
+- Stateless authentication reduces database load
+- Refresh token rotation improves security
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert!(
+            !adr.consequences.contains("loadRefresh"),
+            "H3 list items concatenated without a separator:\n{}",
+            adr.consequences
+        );
+        assert_eq!(
+            adr.consequences,
+            "- Stateless authentication reduces database load\n\
+             - Refresh token rotation improves security"
+        );
+    }
+
+    #[test]
+    fn test_parse_sections_ordered_list_reemits_numbers() {
+        // Ordered lists re-emit their numeric markers rather than a bullet.
+        let content = r#"---
+number: 5
+title: Ordered steps
+status: accepted
+date: 2024-02-15
+---
+
+## Context
+
+1. First step
+2. Second step
+3. Third step
+"#;
+
+        let parser = Parser::new();
+        let adr = parser.parse(content).unwrap();
+
+        assert_eq!(adr.context, "1. First step\n2. Second step\n3. Third step");
+    }
+
     // ========== MADR H3 Consequences Read Round-Trip (#338) ==========
 
     #[test]
@@ -1180,7 +1304,9 @@ We will confirm via load tests.
             "consequences text must not appear in decision:\n{}",
             adr.decision
         );
-        assert_eq!(adr.consequences, "Good, because it reduces database load");
+        // The single list item round-trips with its re-emitted bullet marker
+        // (#346).
+        assert_eq!(adr.consequences, "- Good, because it reduces database load");
     }
 
     #[test]
