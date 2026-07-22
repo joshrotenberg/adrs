@@ -9,7 +9,7 @@ use mdbook_lint_core::Document;
 use mdbook_lint_core::rule::{CollectionRule, Rule};
 use mdbook_lint_rulesets::adr::{
     Adr001, Adr002, Adr003, Adr004, Adr005, Adr006, Adr007, Adr008, Adr009, Adr010, Adr011, Adr012,
-    Adr013, Adr014, Adr015, Adr016, Adr017,
+    Adr013, Adr014, Adr015, Adr016, Adr017, AdrFormat,
 };
 use std::path::PathBuf;
 
@@ -144,6 +144,48 @@ impl LintReport {
     }
 }
 
+/// Detect an ADR document's format from its section headings.
+///
+/// The mdbook-lint ADR rules auto-detect format from YAML frontmatter alone,
+/// treating every frontmatter document as MADR. That misclassifies a
+/// frontmatter-backed Nygard ADR (as produced by `adrs --ng init`), which then
+/// fails the MADR section rules (#348). This detects the format the way a reader
+/// would: from the headings actually present.
+///
+/// - A MADR-specific H2 (`## Context and Problem Statement`, `## Decision
+///   Outcome`, or `## Considered Options`) means [`AdrFormat::Madr4`].
+/// - Otherwise a Nygard H2 (`## Context` or `## Decision`) means
+///   [`AdrFormat::Nygard`].
+/// - With neither present, fall back to [`AdrFormat::Auto`] so the rules apply
+///   their own frontmatter-based heuristic unchanged.
+fn detect_adr_format(content: &str) -> AdrFormat {
+    let mut has_nygard = false;
+
+    for line in content.lines() {
+        let Some(heading) = line.strip_prefix("## ") else {
+            continue;
+        };
+        let heading = heading.trim();
+
+        if heading.eq_ignore_ascii_case("Context and Problem Statement")
+            || heading.eq_ignore_ascii_case("Decision Outcome")
+            || heading.eq_ignore_ascii_case("Considered Options")
+        {
+            return AdrFormat::Madr4;
+        }
+
+        if heading.eq_ignore_ascii_case("Context") || heading.eq_ignore_ascii_case("Decision") {
+            has_nygard = true;
+        }
+    }
+
+    if has_nygard {
+        AdrFormat::Nygard
+    } else {
+        AdrFormat::Auto
+    }
+}
+
 /// Lint a single ADR file.
 ///
 /// Runs all per-file lint rules against the ADR content.
@@ -176,21 +218,31 @@ pub fn lint_adr(adr: &Adr) -> Result<LintReport> {
         }
     };
 
+    // Detect the document's actual format from its section headings, not from
+    // the mere presence of YAML frontmatter. The mdbook-lint ADR rules default
+    // to `AdrFormat::Auto`, which classifies any frontmatter document as MADR
+    // (see #348: `adrs --ng init` writes frontmatter + Nygard headings, which
+    // Auto then flags as missing the MADR `## Context and Problem Statement` /
+    // `## Decision Outcome` sections). Pinning the format-sensitive rules to the
+    // format we detect from the headings keeps a frontmatter-backed Nygard ADR
+    // valid while still validating genuine MADR documents.
+    let format = detect_adr_format(&doc.content);
+
     // Run all single-document rules
     let rules: Vec<Box<dyn Rule>> = vec![
         Box::new(Adr001::default()),
         Box::new(Adr002::default()),
         Box::new(Adr003::default()),
-        Box::new(Adr004::default()),
-        Box::new(Adr005::default()),
-        Box::new(Adr006::default()),
+        Box::new(Adr004::with_format(format)),
+        Box::new(Adr005::with_format(format)),
+        Box::new(Adr006::with_format(format)),
         Box::new(Adr007::default()),
         Box::new(Adr008::default()),
         Box::new(Adr009::default()),
         Box::new(Adr014::default()),
         Box::new(Adr015::default()),
         Box::new(Adr016::default()),
-        Box::new(Adr017::default()),
+        Box::new(Adr017::with_format(format)),
     ];
 
     for rule in rules {
@@ -557,6 +609,104 @@ Some consequences.
         assert!(
             file_errors.is_empty(),
             "nygard bare-minimal output should have no doctor errors, got: {file_errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_detect_adr_format_from_headings() {
+        // Frontmatter + Nygard headings is Nygard, not MADR (#348).
+        assert_eq!(
+            detect_adr_format("---\nstatus: accepted\n---\n\n## Context\n\n## Decision\n"),
+            AdrFormat::Nygard
+        );
+        // MADR-specific headings win regardless of frontmatter.
+        assert_eq!(
+            detect_adr_format(
+                "---\nstatus: accepted\n---\n\n## Context and Problem Statement\n\n## Decision Outcome\n"
+            ),
+            AdrFormat::Madr4
+        );
+        // Plain Nygard (no frontmatter) is Nygard.
+        assert_eq!(
+            detect_adr_format("# 1. Title\n\nDate: 2024-03-04\n\n## Context\n"),
+            AdrFormat::Nygard
+        );
+        // Neither heading set present: defer to the rules' own heuristic.
+        assert_eq!(
+            detect_adr_format("---\nstatus: accepted\n---\n\n# Title only\n"),
+            AdrFormat::Auto
+        );
+    }
+
+    #[test]
+    fn test_ng_init_repo_passes_doctor() {
+        // Regression for #348: `adrs --ng init` writes ADR #0001 with YAML
+        // frontmatter and Nygard headings. The mdbook-lint ADR rules auto-detect
+        // format from frontmatter alone and flagged it as MADR, demanding
+        // `## Context and Problem Statement` / `## Decision Outcome` (ADR004/005).
+        // A freshly initialized next-gen repository must pass doctor unchanged.
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let report = check_all(&repo).unwrap();
+        let errors: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.severity == IssueSeverity::Error)
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "freshly `--ng init`ed repo should pass doctor, got: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_frontmatter_nygard_adr_not_flagged_for_madr_sections() {
+        // #348: frontmatter presence alone must not trigger the MADR section
+        // rules on a document that uses Nygard headings.
+        let content = "---\nnumber: 1\ntitle: Record architecture decisions\ndate: 2024-03-04\nstatus: accepted\n---\n\n## Context\n\nSome context.\n\n## Decision\n\nSome decision.\n\n## Consequences\n\nSome consequences.\n";
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir
+            .path()
+            .join("adr")
+            .join("0001-record-architecture-decisions.md");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, content).unwrap();
+
+        let mut adr = Adr::new(1, "Record architecture decisions");
+        adr.path = Some(path);
+
+        let report = lint_adr(&adr).unwrap();
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|i| i.rule_id == "ADR004" || i.rule_id == "ADR005"),
+            "frontmatter+Nygard ADR must not trip MADR section rules, got: {:?}",
+            report.issues
+        );
+    }
+
+    #[test]
+    fn test_genuine_madr_missing_decision_outcome_still_flagged() {
+        // Detection must not weaken validation of real MADR documents: a MADR
+        // ADR (MADR headings) that omits `## Decision Outcome` still gets ADR005.
+        let content = "---\nnumber: 1\ntitle: Use Postgres\ndate: 2024-03-04\nstatus: accepted\n---\n\n## Context and Problem Statement\n\nWhich database?\n\n## Considered Options\n\n* Postgres\n* MySQL\n";
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("adr").join("0001-use-postgres.md");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, content).unwrap();
+
+        let mut adr = Adr::new(1, "Use Postgres");
+        adr.path = Some(path);
+
+        let report = lint_adr(&adr).unwrap();
+        assert!(
+            report.issues.iter().any(|i| i.rule_id == "ADR005"),
+            "MADR ADR missing '## Decision Outcome' must still trip ADR005, got: {:?}",
+            report.issues
         );
     }
 

@@ -405,15 +405,22 @@ fn body_patch_preserves_nested_and_tilde_fences() {
 
 #[test]
 fn doctor_runs_over_the_corpus() {
-    // The corpus is deliberately mixed-format, and the MADR ruleset flags the
-    // frontmatter files for using plain `## Context` / `## Decision` headings
-    // instead of MADR section names. Pin that doctor completes and reports
-    // those as errors rather than crashing or going silent; the exact counts
-    // are left unpinned so mdbook-lint rule evolution does not break this test.
+    // The corpus is deliberately mixed-format. Doctor detects each ADR's format
+    // from its headings, so the frontmatter files that use plain `## Context` /
+    // `## Decision` headings are treated as Nygard rather than MADR (#348) and
+    // are not flagged for missing `## Context and Problem Statement` /
+    // `## Decision Outcome`. Pin that doctor completes and produces no such
+    // false MADR-section errors on the corpus.
     let (_tmp, repo) = corpus_repo();
     let report = adrs_core::lint::check_all(&repo).unwrap();
+    let madr_section_errors: Vec<_> = report
+        .issues
+        .iter()
+        .filter(|i| i.severity == adrs_core::lint::IssueSeverity::Error)
+        .filter(|i| i.rule_id == "ADR004" || i.rule_id == "ADR005")
+        .collect();
     assert!(
-        report.has_errors(),
-        "expected MADR section-name findings on the mixed corpus"
+        madr_section_errors.is_empty(),
+        "frontmatter+Nygard corpus files must not be flagged for MADR section names, got: {madr_section_errors:?}"
     );
 }
