@@ -50,9 +50,27 @@ Then configure Claude with:
 }
 ```
 
+## Empty-state bootstrap
+
+Agents typically register the MCP server with a static command and working
+directory, then start it on demand. That directory may not be an ADR repository
+yet.
+
+The server starts even when its bound directory is not initialized. Before
+initialization:
+
+- repository-dependent tools return a structured "repository not initialized"
+  error and the server stays alive; and
+- the `init_repository` tool is available to create the repository in place.
+
+Call `init_repository` (optionally with `nextgen: true` and/or a custom
+`adr_dir`) to bootstrap the repository, then use the other tools in the same
+session without restarting the server. Initialization operates only on the
+bound root and refuses to overwrite an existing repository.
+
 ## Available Tools
 
-The MCP server provides 17 tools organized by function:
+The MCP server provides 18 tools organized by function:
 
 ### Read Operations
 
@@ -71,6 +89,7 @@ The MCP server provides 17 tools organized by function:
 
 | Tool | Description |
 |------|-------------|
+| `init_repository` | Initialize an ADR repository at the server's bound directory (compatible or NextGen mode) |
 | `create_adr` | Create a new ADR (uses the repository's configured default status; proposed if not configured) |
 | `update_status` | Change an ADR's status |
 | `link_adrs` | Create bidirectional links between ADRs |
@@ -132,6 +151,27 @@ Search ADRs for matching text.
 - `case_sensitive` (optional): Perform case-sensitive search (default: false)
 
 **Returns:** List of matching ADRs with match snippets showing which section matched and context around the match.
+
+### init_repository
+
+Initialize an ADR repository at the directory the server is bound to (its
+current working directory, or the path given with `-C`). This lets a client
+bootstrap a first-run repository without an interactive `adrs init` step. See
+[Empty-state bootstrap](#empty-state-bootstrap) below.
+
+The tool operates only on the bound root. It does not create parent
+directories, does not accept a per-call path, and refuses to overwrite an
+existing configuration or ADR collection.
+
+**Parameters:**
+- `nextgen` (optional): Initialize in NextGen mode (`adrs.toml`, YAML
+  frontmatter). Defaults to `false` (compatible mode, `.adr-dir`). Equivalent
+  to `adrs --ng init`.
+- `adr_dir` (optional): ADR directory relative to the root (default `doc/adr`).
+  Must be relative and stay within the root.
+
+**Returns:** The `mode`, `root`, `config_path`, `adr_directory`,
+`adr_directory_path`, and `initial_adr_path`.
 
 ### create_adr
 

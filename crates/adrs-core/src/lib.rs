@@ -92,7 +92,9 @@ mod repository;
 mod template;
 mod types;
 
-pub use config::{Config, ConfigMode, ConfigSource, DiscoveredConfig, discover};
+pub use config::{
+    CONFIG_FILE, Config, ConfigMode, ConfigSource, DiscoveredConfig, LEGACY_CONFIG_FILE, discover,
+};
 pub use error::{Error, Result};
 pub use export::{
     ConsideredOption, ImportOptions, ImportResult, JSON_ADR_SCHEMA, JSON_ADR_VERSION, JsonAdr,

@@ -291,6 +291,23 @@ pub struct SuggestTagsParams {
     pub max_tags: Option<usize>,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct InitRepositoryParams {
+    /// Initialize in NextGen mode (adrs.toml config, YAML frontmatter) instead
+    /// of compatible mode (.adr-dir config). Equivalent to `adrs --ng init`.
+    #[serde(default)]
+    #[schemars(
+        description = "Initialize in NextGen mode (adrs.toml, YAML frontmatter) instead of compatible mode (.adr-dir). Defaults to false."
+    )]
+    pub nextgen: bool,
+
+    /// ADR directory relative to the repository root. Defaults to "doc/adr".
+    #[schemars(
+        description = "ADR directory relative to the repository root (default: doc/adr). Must be a relative path that stays within the root."
+    )]
+    pub adr_dir: Option<String>,
+}
+
 // Response types
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -628,6 +645,15 @@ fn build_router(root: PathBuf) -> McpRouter {
     );
 
     // Write tools
+    let init_repository = adr_tool!(
+        rw,
+        state,
+        "init_repository",
+        "Initialize an ADR repository at the directory the server is bound to (its current working directory or -C path). Use this when repository tools report the repository is not initialized. Set nextgen=true for NextGen mode (adrs.toml, YAML frontmatter); omit or false for compatible mode (.adr-dir). Optionally set adr_dir (relative to the root, default doc/adr). Operates only on the bound root, refuses to overwrite an existing repository, and does not create parent directories. Returns the mode, config path, ADR directory, and initial ADR path.",
+        InitRepositoryParams,
+        init_repository_impl
+    );
+
     let create_adr = adr_tool!(
         rw,
         state,
@@ -698,6 +724,7 @@ fn build_router(root: PathBuf) -> McpRouter {
         .tool(run_doctor)
         .tool(export_adrs)
         // Write tools
+        .tool(init_repository)
         .tool(create_adr)
         .tool(update_status)
         .tool(link_adrs)
@@ -958,6 +985,101 @@ impl AdrState {
         }
 
         serde_json::to_string_pretty(&results).map_err(|e| e.to_string())
+    }
+
+    fn init_repository_impl(&self, params: InitRepositoryParams) -> Result<String, String> {
+        let root = self.root.as_path();
+
+        // Never create arbitrary parent directories: the bound root must already
+        // exist as a directory.
+        if !root.exists() {
+            return Err(format!(
+                "Repository root does not exist: {}. Create the directory before initializing.",
+                root.display()
+            ));
+        }
+        if !root.is_dir() {
+            return Err(format!(
+                "Repository root is not a directory: {}",
+                root.display()
+            ));
+        }
+
+        // Refuse to overwrite an existing configuration or ADR collection.
+        // Repeated initialization is rejected without changing existing files.
+        if Repository::open(root).is_ok() {
+            return Err(format!(
+                "An ADR repository already exists at {}. Initialization was not performed.",
+                root.display()
+            ));
+        }
+
+        // Validate the ADR directory: it must stay within the bound root.
+        let adr_dir = match params.adr_dir.as_deref() {
+            Some(dir) if dir.trim().is_empty() => {
+                return Err("adr_dir must not be empty.".to_string());
+            }
+            Some(dir) => {
+                let path = PathBuf::from(dir);
+                if path.is_absolute() {
+                    return Err(format!(
+                        "adr_dir must be a relative path within the repository root, got absolute path: {dir}"
+                    ));
+                }
+                if path
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+                {
+                    return Err(format!(
+                        "adr_dir must not escape the repository root: {dir}"
+                    ));
+                }
+                Some(path)
+            }
+            None => None,
+        };
+
+        let repo = Repository::init(root, adr_dir, params.nextgen).map_err(|e| e.to_string())?;
+        let config = repo.config();
+
+        let config_path = if config.is_next_gen() {
+            root.join(adrs_core::CONFIG_FILE)
+        } else {
+            root.join(adrs_core::LEGACY_CONFIG_FILE)
+        };
+
+        // The initial ADR (lowest number) present after initialization, if any.
+        let adr_path = repo.adr_path();
+        let initial_adr_path = repo
+            .list()
+            .ok()
+            .and_then(|adrs| adrs.into_iter().min_by_key(|a| a.number))
+            .map(|adr| adr_path.join(adr.filename()).display().to_string());
+
+        #[derive(Serialize)]
+        struct InitResult {
+            mode: String,
+            root: String,
+            config_path: String,
+            adr_directory: String,
+            adr_directory_path: String,
+            initial_adr_path: Option<String>,
+        }
+
+        let result = InitResult {
+            mode: if config.is_next_gen() {
+                "nextgen".to_string()
+            } else {
+                "compatible".to_string()
+            },
+            root: root.display().to_string(),
+            config_path: config_path.display().to_string(),
+            adr_directory: config.adr_dir.display().to_string(),
+            adr_directory_path: adr_path.display().to_string(),
+            initial_adr_path,
+        };
+
+        serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
     }
 
     fn create_adr_impl(&self, params: CreateAdrParams) -> Result<String, String> {
@@ -1896,12 +2018,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_tools_returns_all_17() {
+    async fn test_list_tools_returns_all_18() {
         let (client, _tmp) = setup_client(false).await;
         let tools = client.list_all_tools().await.unwrap();
-        assert_eq!(tools.len(), 17, "expected 17 tools, got {}", tools.len());
+        assert_eq!(tools.len(), 18, "expected 18 tools, got {}", tools.len());
 
         let names: Vec<_> = tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains(&"init_repository"));
         assert!(names.contains(&"list_adrs"));
         assert!(names.contains(&"get_adr"));
         assert!(names.contains(&"search_adrs"));
@@ -3384,5 +3507,231 @@ Confirm via tests.
             adr2.get("decision").is_none() || adr2["decision"].is_null(),
             "decision should be absent in metadata_only mode"
         );
+    }
+
+    // ========== Empty-state bootstrap tests (#349) ==========
+
+    /// Helper: create an MCP client bound to an existing but *uninitialized*
+    /// directory (no `Repository::init` call), mirroring `mcp serve` started at
+    /// an unconfigured path.
+    async fn setup_uninitialized_client() -> (McpClient, tempfile::TempDir) {
+        let temp = tempfile::tempdir().unwrap();
+        let router = build_router(temp.path().to_path_buf());
+        let transport = ChannelTransport::new(router);
+        let client = McpClient::connect(transport).await.unwrap();
+        client.initialize("test-client", "1.0.0").await.unwrap();
+        (client, temp)
+    }
+
+    #[tokio::test]
+    async fn test_uninitialized_server_advertises_init_tool() {
+        let (client, _tmp) = setup_uninitialized_client().await;
+        let tools = client.list_all_tools().await.unwrap();
+        assert_eq!(tools.len(), 18, "expected 18 tools, got {}", tools.len());
+        let names: Vec<_> = tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(
+            names.contains(&"init_repository"),
+            "init_repository must be available before initialization"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_repository_tools_error_before_init_without_terminating() {
+        let (client, _tmp) = setup_uninitialized_client().await;
+
+        // A repository-dependent tool returns a structured error, not a crash.
+        let result = client.call_tool("list_adrs", json!({})).await.unwrap();
+        assert!(
+            result.is_error,
+            "list_adrs should error before initialization"
+        );
+
+        // The server is still alive and responsive after the failed call.
+        client.ping().await.unwrap();
+
+        // And it can still be initialized in the same session.
+        let init = client
+            .call_tool("init_repository", json!({}))
+            .await
+            .unwrap();
+        assert!(
+            !init.is_error,
+            "init_repository should succeed on empty dir"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_compatible_mode() {
+        let (client, temp) = setup_uninitialized_client().await;
+
+        let result = client
+            .call_tool_text("init_repository", json!({}))
+            .await
+            .unwrap();
+        let init: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(init["mode"], "compatible");
+        assert_eq!(init["adr_directory"], "doc/adr");
+        assert!(
+            init["config_path"].as_str().unwrap().ends_with(".adr-dir"),
+            "compatible mode writes .adr-dir, got {}",
+            init["config_path"]
+        );
+        assert!(temp.path().join(".adr-dir").exists());
+
+        // The initial ADR exists and repository tools now work in the same session.
+        let initial = init["initial_adr_path"].as_str().unwrap();
+        assert!(
+            std::path::Path::new(initial).exists(),
+            "initial ADR path should exist: {initial}"
+        );
+
+        let adrs: Vec<AdrSummary> =
+            serde_json::from_str(&client.call_tool_text("list_adrs", json!({})).await.unwrap())
+                .unwrap();
+        assert_eq!(adrs.len(), 1);
+        assert_eq!(adrs[0].number, 1);
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_nextgen_mode() {
+        let (client, temp) = setup_uninitialized_client().await;
+
+        let result = client
+            .call_tool_text("init_repository", json!({"nextgen": true}))
+            .await
+            .unwrap();
+        let init: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(init["mode"], "nextgen");
+        assert!(
+            init["config_path"].as_str().unwrap().ends_with("adrs.toml"),
+            "nextgen mode writes adrs.toml, got {}",
+            init["config_path"]
+        );
+        assert!(temp.path().join("adrs.toml").exists());
+
+        // get_repository_info agrees the session is now nextgen.
+        let info: serde_json::Value = serde_json::from_str(
+            &client
+                .call_tool_text("get_repository_info", json!({}))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(info["mode"], "nextgen");
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_custom_adr_dir() {
+        let (client, temp) = setup_uninitialized_client().await;
+
+        let result = client
+            .call_tool_text("init_repository", json!({"adr_dir": "docs/decisions"}))
+            .await
+            .unwrap();
+        let init: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(init["adr_directory"], "docs/decisions");
+        assert!(temp.path().join("docs/decisions").is_dir());
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_rejects_repeat() {
+        let (client, temp) = setup_uninitialized_client().await;
+
+        client
+            .call_tool_text("init_repository", json!({}))
+            .await
+            .unwrap();
+
+        let config_before = std::fs::read_to_string(temp.path().join(".adr-dir")).unwrap();
+
+        // A second initialization is rejected and changes nothing.
+        let repeat = client
+            .call_tool("init_repository", json!({"nextgen": true}))
+            .await
+            .unwrap();
+        assert!(repeat.is_error, "repeated init should be rejected");
+
+        assert!(
+            !temp.path().join("adrs.toml").exists(),
+            "rejected repeat must not write a new config"
+        );
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join(".adr-dir")).unwrap(),
+            config_before,
+            "rejected repeat must not modify existing config"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_rejects_repeat_on_preinitialized() {
+        // A server bound to an already-initialized repo must refuse init.
+        let (client, _tmp) = setup_client(false).await;
+        let result = client
+            .call_tool("init_repository", json!({}))
+            .await
+            .unwrap();
+        assert!(
+            result.is_error,
+            "init on an existing repository should be rejected"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_rejects_parent_traversal() {
+        let (client, temp) = setup_uninitialized_client().await;
+        let result = client
+            .call_tool("init_repository", json!({"adr_dir": "../escape"}))
+            .await
+            .unwrap();
+        assert!(
+            result.is_error,
+            "adr_dir escaping the root must be rejected"
+        );
+        assert!(
+            !temp.path().join(".adr-dir").exists(),
+            "rejected init must not write config"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_rejects_absolute_adr_dir() {
+        let (client, _tmp) = setup_uninitialized_client().await;
+        let result = client
+            .call_tool("init_repository", json!({"adr_dir": "/etc/adr"}))
+            .await
+            .unwrap();
+        assert!(result.is_error, "absolute adr_dir must be rejected");
+    }
+
+    #[tokio::test]
+    async fn test_full_session_works_after_init() {
+        let (client, _tmp) = setup_uninitialized_client().await;
+
+        client
+            .call_tool_text("init_repository", json!({}))
+            .await
+            .unwrap();
+
+        // Create and read back an ADR without restarting the server.
+        let created: serde_json::Value = serde_json::from_str(
+            &client
+                .call_tool_text("create_adr", json!({"title": "Use PostgreSQL"}))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(created["number"], 2);
+
+        let adr: AdrDetail = serde_json::from_str(
+            &client
+                .call_tool_text("get_adr", json!({"number": 2}))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(adr.title, "Use PostgreSQL");
     }
 }
