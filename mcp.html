@@ -214,8 +214,23 @@
   }
 }
 </code></pre>
+<h2 id="empty-state-bootstrap"><a class="header" href="#empty-state-bootstrap">Empty-state bootstrap</a></h2>
+<p>Agents typically register the MCP server with a static command and working
+directory, then start it on demand. That directory may not be an ADR repository
+yet.</p>
+<p>The server starts even when its bound directory is not initialized. Before
+initialization:</p>
+<ul>
+<li>repository-dependent tools return a structured "repository not initialized"
+error and the server stays alive; and</li>
+<li>the <code>init_repository</code> tool is available to create the repository in place.</li>
+</ul>
+<p>Call <code>init_repository</code> (optionally with <code>nextgen: true</code> and/or a custom
+<code>adr_dir</code>) to bootstrap the repository, then use the other tools in the same
+session without restarting the server. Initialization operates only on the
+bound root and refuses to overwrite an existing repository.</p>
 <h2 id="available-tools"><a class="header" href="#available-tools">Available Tools</a></h2>
-<p>The MCP server provides 17 tools organized by function:</p>
+<p>The MCP server provides 18 tools organized by function:</p>
 <h3 id="read-operations"><a class="header" href="#read-operations">Read Operations</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>list_adrs</code></td><td>List all ADRs with optional status/tag/date/decider filters</td></tr>
@@ -230,6 +245,7 @@
 </div>
 <h3 id="write-operations"><a class="header" href="#write-operations">Write Operations</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>init_repository</code></td><td>Initialize an ADR repository at the server's bound directory (compatible or NextGen mode)</td></tr>
 <tr><td><code>create_adr</code></td><td>Create a new ADR (uses the repository's configured default status; proposed if not configured)</td></tr>
 <tr><td><code>update_status</code></td><td>Change an ADR's status</td></tr>
 <tr><td><code>link_adrs</code></td><td>Create bidirectional links between ADRs</td></tr>
@@ -284,6 +300,24 @@
 <li><code>case_sensitive</code> (optional): Perform case-sensitive search (default: false)</li>
 </ul>
 <p><strong>Returns:</strong> List of matching ADRs with match snippets showing which section matched and context around the match.</p>
+<h3 id="init_repository"><a class="header" href="#init_repository">init_repository</a></h3>
+<p>Initialize an ADR repository at the directory the server is bound to (its
+current working directory, or the path given with <code>-C</code>). This lets a client
+bootstrap a first-run repository without an interactive <code>adrs init</code> step. See
+<a href="#empty-state-bootstrap">Empty-state bootstrap</a> below.</p>
+<p>The tool operates only on the bound root. It does not create parent
+directories, does not accept a per-call path, and refuses to overwrite an
+existing configuration or ADR collection.</p>
+<p><strong>Parameters:</strong></p>
+<ul>
+<li><code>nextgen</code> (optional): Initialize in NextGen mode (<code>adrs.toml</code>, YAML
+frontmatter). Defaults to <code>false</code> (compatible mode, <code>.adr-dir</code>). Equivalent
+to <code>adrs --ng init</code>.</li>
+<li><code>adr_dir</code> (optional): ADR directory relative to the root (default <code>doc/adr</code>).
+Must be relative and stay within the root.</li>
+</ul>
+<p><strong>Returns:</strong> The <code>mode</code>, <code>root</code>, <code>config_path</code>, <code>adr_directory</code>,
+<code>adr_directory_path</code>, and <code>initial_adr_path</code>.</p>
 <h3 id="create_adr"><a class="header" href="#create_adr">create_adr</a></h3>
 <p>Create a new ADR. Uses the repository's configured default status (proposed
 if not configured); the created ADR still requires human review before
