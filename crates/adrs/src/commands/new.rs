@@ -18,6 +18,9 @@ pub fn new(
     template: Option<PathBuf>,
     status: Option<String>,
     tags: Option<Vec<String>>,
+    deciders: Option<Vec<String>>,
+    consulted: Option<Vec<String>>,
+    informed: Option<Vec<String>>,
     no_edit: bool,
     config: &Config,
 ) -> Result<()> {
@@ -111,6 +114,32 @@ pub fn new(
             adr.set_tags(tag_list);
             repo.update_metadata(&adr)
                 .context("Failed to update ADR tags")?;
+        }
+    }
+
+    // Set MADR participant fields if specified (requires ng mode for YAML frontmatter).
+    if deciders.is_some() || consulted.is_some() || informed.is_some() {
+        if !is_ng {
+            anyhow::bail!(
+                "--deciders/--consulted/--informed require --ng mode (YAML frontmatter). Use: adrs --ng new --deciders ... or set mode = \"ng\" in adrs.toml"
+            );
+        }
+        let mut changed = false;
+        if let Some(list) = deciders {
+            adr.set_decision_makers(list);
+            changed = true;
+        }
+        if let Some(list) = consulted {
+            adr.set_consulted(list);
+            changed = true;
+        }
+        if let Some(list) = informed {
+            adr.set_informed(list);
+            changed = true;
+        }
+        if changed {
+            repo.update_metadata(&adr)
+                .context("Failed to update ADR participants")?;
         }
     }
 
