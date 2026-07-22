@@ -858,27 +858,27 @@ fn main() -> Result<()> {
         #[cfg(all(feature = "mcp", not(feature = "mcp-http")))]
         Commands::Mcp { command } => match command {
             McpCommands::Serve {} => {
-                let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+                let root = resolve_mcp_root(&start_dir);
                 tokio::runtime::Runtime::new()
                     .context("Failed to create tokio runtime")?
-                    .block_on(mcp::serve_stdio(discovered.root))
+                    .block_on(mcp::serve_stdio(root))
                     .context("MCP server error")
             }
         },
         #[cfg(feature = "mcp-http")]
         Commands::Mcp { command } => match command {
             McpCommands::Serve { http } => {
-                let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+                let root = resolve_mcp_root(&start_dir);
                 let runtime =
                     tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
 
                 if let Some(addr) = http {
                     runtime
-                        .block_on(mcp::serve_http(discovered.root, addr))
+                        .block_on(mcp::serve_http(root, addr))
                         .context("MCP HTTP server error")
                 } else {
                     runtime
-                        .block_on(mcp::serve_stdio(discovered.root))
+                        .block_on(mcp::serve_stdio(root))
                         .context("MCP server error")
                 }
             }
@@ -959,6 +959,20 @@ fn resolve_cli_path(working_dir: Option<&std::path::Path>, path: PathBuf) -> Pat
         Some(dir) if path.is_relative() => dir.join(path),
         _ => path,
     }
+}
+
+/// Resolve the root directory the MCP server binds to.
+///
+/// Unlike the other commands, `mcp serve` must start even when the directory is
+/// not yet an ADR repository, so that a client can bootstrap one through the
+/// `init_repository` tool. When discovery finds a repository we bind its root;
+/// otherwise we bind the start directory as-is and let repository-dependent
+/// tools return structured "not initialized" errors without exiting.
+#[cfg(feature = "mcp")]
+fn resolve_mcp_root(start_dir: &std::path::Path) -> PathBuf {
+    discover(start_dir)
+        .map(|discovered| discovered.root)
+        .unwrap_or_else(|_| start_dir.to_path_buf())
 }
 
 /// Discover config or return a helpful error.
