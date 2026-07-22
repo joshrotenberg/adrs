@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.1] - 2026-07-22
+
+### Bug Fixes
+
+- Map MADR H3 Consequences under Decision Outcome to consequences on read (closes #338)
+- Reject POSIX-style absolute adr_dir on all platforms in init_repository
+
+### Features
+
+- Add MCP init_repository tool and start server at unconfigured paths (closes #349)
+- Add --deciders/--consulted/--informed flags to adrs new (closes #85)
+
+
 ## [0.10.0] - 2026-07-16
 
 ### Bug Fixes
