@@ -1842,6 +1842,76 @@ fn test_smoke_nextgen_workflow() {
     temp.close().unwrap();
 }
 
+/// `new --deciders/--consulted/--informed` writes MADR participant frontmatter in ng mode.
+#[test]
+fn test_new_madr_participant_flags() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "--ng",
+            "new",
+            "--no-edit",
+            "--deciders",
+            "Alice, Bob",
+            "--consulted",
+            "Security Team",
+            "--informed",
+            "Engineering",
+            "Use OAuth2",
+        ])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp.path().join("doc/adr/0002-use-oauth2.md")).unwrap();
+    assert!(content.starts_with("---"));
+    assert!(content.contains("decision-makers:"));
+    assert!(content.contains("Alice"));
+    assert!(content.contains("Bob"));
+    assert!(content.contains("consulted:"));
+    assert!(content.contains("Security Team"));
+    assert!(content.contains("informed:"));
+    assert!(content.contains("Engineering"));
+
+    // Decider filter finds the ADR.
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "list", "--decider", "Alice"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-use-oauth2.md"));
+
+    temp.close().unwrap();
+}
+
+/// The MADR participant flags require ng mode and error clearly in legacy mode.
+#[test]
+fn test_new_madr_participant_flags_require_ng() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "--deciders", "Alice", "Use OAuth2"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--ng mode"));
+
+    temp.close().unwrap();
+}
+
 // ============================================================================
 // -C Relative Path Resolution
 // ============================================================================

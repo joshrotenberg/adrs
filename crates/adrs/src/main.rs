@@ -163,6 +163,18 @@ LINK FORMAT:
         #[arg(short = 't', long, value_name = "TAGS", value_delimiter = ',')]
         tags: Option<Vec<String>>,
 
+        /// Decision makers (comma-separated, requires --ng)
+        #[arg(long, value_name = "NAMES", value_delimiter = ',')]
+        deciders: Option<Vec<String>>,
+
+        /// People consulted before the decision (comma-separated, requires --ng)
+        #[arg(long, value_name = "NAMES", value_delimiter = ',')]
+        consulted: Option<Vec<String>>,
+
+        /// People informed after the decision (comma-separated, requires --ng)
+        #[arg(long, value_name = "NAMES", value_delimiter = ',')]
+        informed: Option<Vec<String>>,
+
         /// Create ADR without opening editor (for scripting/CI)
         #[arg(long)]
         no_edit: bool,
@@ -657,6 +669,9 @@ fn main() -> Result<()> {
             template,
             status,
             tags,
+            deciders,
+            consulted,
+            informed,
             no_edit,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
@@ -671,6 +686,9 @@ fn main() -> Result<()> {
                 template.map(|t| resolve_cli_path(cli.working_dir.as_deref(), t)),
                 status,
                 tags,
+                deciders,
+                consulted,
+                informed,
                 no_edit,
                 &discovered.config,
             )
