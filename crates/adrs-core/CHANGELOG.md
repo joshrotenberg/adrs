@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.1] - 2026-07-22
+
+### Bug Fixes
+
+- Preserve line endings and blank-line separators in body patches (closes #339, closes #340)
+- Map MADR H3 Consequences under Decision Outcome to consequences on read (closes #338)
+- Preserve CRLF line endings in legacy-mode metadata writes (closes #344)
+- Separate consecutive list items in parse_sections (closes #346)
+- Detect ADR format from headings so ng-init repos pass doctor (closes #348)
+
+### Features
+
+- Add MCP init_repository tool and start server at unconfigured paths (closes #349)
+
+
 ## [0.10.0] - 2026-07-16
 
 ### Bug Fixes
