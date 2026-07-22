@@ -1021,7 +1021,12 @@ impl AdrState {
             }
             Some(dir) => {
                 let path = PathBuf::from(dir);
-                if path.is_absolute() {
+                // Reject absolute paths on any platform. `Path::is_absolute` is
+                // platform-specific (on Windows a POSIX-style "/etc" is not
+                // absolute without a drive prefix), so also reject a leading
+                // path separator regardless of the host OS.
+                let starts_with_separator = dir.starts_with('/') || dir.starts_with('\\');
+                if path.is_absolute() || starts_with_separator {
                     return Err(format!(
                         "adr_dir must be a relative path within the repository root, got absolute path: {dir}"
                     ));
@@ -3698,12 +3703,17 @@ Confirm via tests.
 
     #[tokio::test]
     async fn test_init_repository_rejects_absolute_adr_dir() {
-        let (client, _tmp) = setup_uninitialized_client().await;
-        let result = client
-            .call_tool("init_repository", json!({"adr_dir": "/etc/adr"}))
-            .await
-            .unwrap();
-        assert!(result.is_error, "absolute adr_dir must be rejected");
+        // POSIX-style absolute paths ("/etc") and paths with a leading
+        // separator ("\\etc") must be rejected on every platform, even where
+        // `Path::is_absolute` does not treat them as absolute (Windows).
+        for dir in ["/etc/adr", "\\etc\\adr"] {
+            let (client, _tmp) = setup_uninitialized_client().await;
+            let result = client
+                .call_tool("init_repository", json!({ "adr_dir": dir }))
+                .await
+                .unwrap();
+            assert!(result.is_error, "absolute adr_dir must be rejected: {dir}");
+        }
     }
 
     #[tokio::test]
