@@ -684,6 +684,218 @@ fn test_status_by_flag_requires_superseded() {
 }
 
 // ============================================================================
+// Renumber Command
+// ============================================================================
+
+#[test]
+fn test_renumber_help() {
+    adrs()
+        .args(["renumber", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Repair a duplicate or misassigned ADR number",
+        ));
+}
+
+#[test]
+fn test_renumber_happy_path() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "Use MySQL"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "Use PostgreSQL", "--supersedes", "2"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["renumber", "2", "5"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Renamed"))
+        .stdout(predicate::str::contains("0002-use-mysql.md"))
+        .stdout(predicate::str::contains("0005-use-mysql.md"))
+        .stdout(predicate::str::contains("Updated 1 inbound reference"));
+
+    temp.child("doc/adr/0002-use-mysql.md")
+        .assert(predicate::path::missing());
+    temp.child("doc/adr/0005-use-mysql.md")
+        .assert(predicate::path::exists());
+
+    let new_content = fs::read_to_string(temp.path().join("doc/adr/0005-use-mysql.md")).unwrap();
+    assert!(new_content.contains("number: 5"));
+    assert!(new_content.contains("# 5. Use MySQL"));
+
+    let other_content =
+        fs::read_to_string(temp.path().join("doc/adr/0003-use-postgresql.md")).unwrap();
+    assert!(other_content.contains("Supersedes [5. Use MySQL](0005-use-mysql.md)"));
+    assert!(!other_content.contains("0002-use-mysql.md"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_renumber_dry_run_writes_nothing() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "Use MySQL"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    let before = fs::read(temp.path().join("doc/adr/0002-use-mysql.md")).unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["renumber", "2", "5", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Would rename"))
+        .stdout(predicate::str::contains("Dry run - no files written"));
+
+    temp.child("doc/adr/0002-use-mysql.md")
+        .assert(predicate::path::exists());
+    temp.child("doc/adr/0005-use-mysql.md")
+        .assert(predicate::path::missing());
+
+    let after = fs::read(temp.path().join("doc/adr/0002-use-mysql.md")).unwrap();
+    assert_eq!(before, after, "dry run must not write anything");
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_renumber_ambiguous_source_refuses() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    let content_a = "---\nnumber: 3\ntitle: Branch A\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 3. Branch A\n\n## Context\n\nA.\n";
+    let content_b = "---\nnumber: 3\ntitle: Branch B\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 3. Branch B\n\n## Context\n\nB.\n";
+    temp.child("doc/adr/0003-branch-a.md")
+        .write_str(content_a)
+        .unwrap();
+    temp.child("doc/adr/0003-branch-b.md")
+        .write_str(content_b)
+        .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["renumber", "3", "4"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("ambiguous"))
+        .stderr(predicate::str::contains("0003-branch-a.md"))
+        .stderr(predicate::str::contains("0003-branch-b.md"))
+        .stderr(predicate::str::contains("--file"));
+
+    // Nothing written.
+    assert_eq!(
+        fs::read_to_string(temp.path().join("doc/adr/0003-branch-a.md")).unwrap(),
+        content_a
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("doc/adr/0003-branch-b.md")).unwrap(),
+        content_b
+    );
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_renumber_occupied_target_refuses() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "Second decision"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["renumber", "2", "1"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("already used"))
+        .stderr(predicate::str::contains("try 3 instead"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_renumber_notes_prose_reference_outside_adr_dir() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "Use MySQL"])
+        .env("EDITOR", "true")
+        .assert()
+        .success();
+
+    temp.child("README.md")
+        .write_str("See [2. Use MySQL](doc/adr/0002-use-mysql.md) for details.\n")
+        .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["renumber", "2", "5"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "1 file(s) outside the ADR directory mention the old filename",
+        ))
+        .stdout(predicate::str::contains("README.md"));
+
+    // Reported, never rewritten.
+    let readme = fs::read_to_string(temp.path().join("README.md")).unwrap();
+    assert!(readme.contains("0002-use-mysql.md"));
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // Format Flag Tests
 // ============================================================================
 

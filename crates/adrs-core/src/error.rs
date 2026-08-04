@@ -59,6 +59,45 @@ pub enum Error {
     #[error("Invalid link format: {0}")]
     InvalidLink(String),
 
+    /// `Repository::renumber`'s `from` number matched more than one record
+    /// and no `--file` was given to disambiguate.
+    #[error(
+        "ADR {number} is ambiguous: {} records are numbered {number} ({candidates:?}). Use --file <path> to select one.",
+        candidates.len()
+    )]
+    AmbiguousRenumberSource {
+        /// The ambiguous source number.
+        number: u32,
+        /// Paths of every record numbered `number`.
+        candidates: Vec<String>,
+    },
+
+    /// `Repository::renumber`'s `--file` did not match any record numbered `from`.
+    #[error("{file} does not match any ADR numbered {number}. Candidates: {candidates:?}")]
+    RenumberFileMismatch {
+        /// The source number `--file` was expected to disambiguate.
+        number: u32,
+        /// The `--file` path given.
+        file: PathBuf,
+        /// Paths of every record numbered `number`.
+        candidates: Vec<String>,
+    },
+
+    /// `Repository::renumber`'s `to` number is already used by another record.
+    #[error(
+        "ADR {to} is already used by '{occupant_title}' ({occupant_path}); try {suggestion} instead"
+    )]
+    RenumberTargetOccupied {
+        /// The requested destination number.
+        to: u32,
+        /// Title of the record currently occupying `to`.
+        occupant_title: String,
+        /// Path of the record currently occupying `to`.
+        occupant_path: PathBuf,
+        /// The smallest free number, offered as a suggestion.
+        suggestion: u32,
+    },
+
     /// Template not found.
     #[error("Template not found: {0}")]
     TemplateNotFound(String),
