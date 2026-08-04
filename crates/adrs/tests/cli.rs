@@ -1553,6 +1553,36 @@ fn test_doctor_without_ng_flag_prints_no_note() {
     temp.close().unwrap();
 }
 
+#[test]
+fn test_doctor_nextgen_broken_frontmatter_link_exits_nonzero() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    // init() creates ADR #1; add ADR #2 with a frontmatter link to a
+    // nonexistent ADR 99 (issue #355's reproduction).
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        "---\nnumber: 2\ntitle: Second\ndate: 2024-01-01\nstatus: proposed\nlinks:\n  - target: 99\n    kind: relatesto\n---\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\nSome consequences.\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(predicate::str::contains("ADR013"))
+        .stdout(predicate::str::contains("links to non-existent ADR 99"));
+
+    temp.close().unwrap();
+}
+
 // Tests for [doctor].ignore / --ignore and warnings-as-errors config (issue #316)
 
 /// Nygard-format ADR content that trips only warning-severity collection rules
