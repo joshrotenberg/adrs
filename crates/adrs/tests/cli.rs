@@ -143,6 +143,149 @@ fn test_init_with_cwd_flag() {
     temp.close().unwrap();
 }
 
+// Regression tests for issue #358: `init` ignored every configured
+// `adr_dir` source (adrs.toml, .adr-dir, ADR_DIRECTORY, global config),
+// always created doc/adr, and clobbered any existing config.
+
+#[test]
+fn test_init_no_config_falls_back_to_default_doc_adr() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    temp.child("doc/adr").assert(predicate::path::is_dir());
+    temp.child(".adr-dir")
+        .assert(predicate::str::contains("doc/adr"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_init_respects_existing_adrs_toml_adr_dir() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let original_config = "adr_dir = \"docs/adr\"\n";
+    temp.child("adrs.toml").write_str(original_config).unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // The configured directory is honored, not doc/adr.
+    temp.child("docs/adr").assert(predicate::path::is_dir());
+    temp.child("doc/adr")
+        .assert(predicate::path::exists().not());
+
+    // The existing config file is left byte-for-byte untouched.
+    let config_after = fs::read_to_string(temp.path().join("adrs.toml")).unwrap();
+    assert_eq!(
+        config_after, original_config,
+        "existing adrs.toml must not be rewritten"
+    );
+
+    // Issue #358's exact failure: a subsequent command must succeed.
+    adrs()
+        .current_dir(temp.path())
+        .arg("list")
+        .assert()
+        .success();
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_init_respects_existing_adr_dir_file() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".adr-dir").write_str("existing/adrs\n").unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    temp.child("existing/adrs")
+        .assert(predicate::path::is_dir());
+    temp.child("doc/adr")
+        .assert(predicate::path::exists().not());
+
+    let config_after = fs::read_to_string(temp.path().join(".adr-dir")).unwrap();
+    assert_eq!(
+        config_after, "existing/adrs\n",
+        "existing .adr-dir must not be repointed"
+    );
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_init_respects_adr_directory_env_var() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .env("ADR_DIRECTORY", "env/configured/adr")
+        .arg("init")
+        .assert()
+        .success();
+
+    temp.child("env/configured/adr")
+        .assert(predicate::path::is_dir());
+    temp.child("doc/adr")
+        .assert(predicate::path::exists().not());
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_init_explicit_directory_overrides_config() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("adrs.toml")
+        .write_str("adr_dir = \"docs/adr\"\n")
+        .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["init", "explicit/path"])
+        .assert()
+        .success();
+
+    temp.child("explicit/path")
+        .assert(predicate::path::is_dir());
+    temp.child("docs/adr")
+        .assert(predicate::path::exists().not());
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_init_ng_preserves_existing_config_settings() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let original_config = "adr_dir = \"doc/adr\"\nmode = \"ng\"\ndefault_status = \"accepted\"\n\n[templates]\nformat = \"madr\"\n";
+    temp.child("adrs.toml").write_str(original_config).unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    let config_after = fs::read_to_string(temp.path().join("adrs.toml")).unwrap();
+    assert_eq!(
+        config_after, original_config,
+        "existing adrs.toml settings must survive init"
+    );
+    assert!(config_after.contains("default_status = \"accepted\""));
+    assert!(config_after.contains("format = \"madr\""));
+
+    temp.close().unwrap();
+}
+
 // ============================================================================
 // List Command
 // ============================================================================

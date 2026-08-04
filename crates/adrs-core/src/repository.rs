@@ -116,9 +116,28 @@ impl Repository {
     }
 
     /// Initialize a new repository at the given root.
+    ///
+    /// If a config file (`adrs.toml` or `.adr-dir`) already exists at `root`
+    /// and its configured `adr_dir` already matches the resolved directory,
+    /// the file is left untouched -- including settings this function does
+    /// not otherwise know about, such as `default_status`, `templates`,
+    /// `generate`, `export`, and `doctor`. Otherwise a fresh config is
+    /// written for the resolved directory and mode, as before.
     pub fn init(root: impl Into<PathBuf>, adr_dir: Option<PathBuf>, ng: bool) -> Result<Self> {
         let root = root.into();
         let adr_dir = adr_dir.unwrap_or_else(|| PathBuf::from(crate::config::DEFAULT_ADR_DIR));
+
+        let legacy_path = root.join(crate::config::LEGACY_CONFIG_FILE);
+        let toml_path = root.join(crate::config::CONFIG_FILE);
+
+        // Reuse an existing config file if it already points at the resolved
+        // directory, so we don't silently discard settings it carries.
+        let existing_config = if legacy_path.exists() || toml_path.exists() {
+            Config::load(&root).ok().filter(|c| c.adr_dir == adr_dir)
+        } else {
+            None
+        };
+
         let adr_path = root.join(&adr_dir);
 
         // Check if directory exists and count existing ADRs
@@ -130,17 +149,35 @@ impl Repository {
             0
         };
 
-        // Create config
-        let config = Config {
-            adr_dir,
-            mode: if ng {
-                ConfigMode::NextGen
-            } else {
-                ConfigMode::Compatible
-            },
-            ..Default::default()
+        let config = match existing_config {
+            Some(existing) => existing,
+            None => {
+                // Create config
+                let config = Config {
+                    adr_dir,
+                    mode: if ng {
+                        ConfigMode::NextGen
+                    } else {
+                        ConfigMode::Compatible
+                    },
+                    ..Default::default()
+                };
+                // Config::load() always prefers adrs.toml over .adr-dir, so
+                // a stale sibling in the other format could silently shadow
+                // the file we're about to write. Remove it so only one
+                // config file is authoritative after init.
+                let stale = if config.is_next_gen() {
+                    &legacy_path
+                } else {
+                    &toml_path
+                };
+                if stale.exists() {
+                    fs::remove_file(stale)?;
+                }
+                config.save(&root)?;
+                config
+            }
         };
-        config.save(&root)?;
 
         let template_engine = Self::engine_from_config(&config);
 
