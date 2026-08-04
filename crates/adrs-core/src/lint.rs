@@ -296,6 +296,7 @@ pub fn lint_all(repo: &Repository) -> Result<LintReport> {
 /// - Duplicate numbers (ADR012)
 /// - Broken links (ADR013)
 /// - Superseded ADRs have replacements (ADR010)
+/// - Asymmetric links (`asymmetric-link`)
 pub fn check_repository(repo: &Repository) -> Result<LintReport> {
     let mut report = LintReport::new();
     let adrs = repo.list()?;
@@ -367,6 +368,60 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
                     message: format!(
                         "ADR {} '{}' links to non-existent ADR {}",
                         adr.number, adr.title, link.target
+                    ),
+                    path: adr.path.clone(),
+                    line: None,
+                    column: None,
+                    adr_number: Some(adr.number),
+                    related_adrs: Vec::new(),
+                });
+            }
+        }
+    }
+
+    // Check that every link is reciprocated (#357). `adrs link` maintains
+    // both halves of a relationship by construction, so an asymmetric pair
+    // is evidence that something outside the tool edited the record -- a
+    // hand edit, a renumber, a badly resolved merge. For each link A -> B,
+    // require that B carries some link back to A.
+    //
+    // The back-link is matched by target only, not by `LinkKind::reverse()`'s
+    // exact kind. `adrs link` accepts an explicit `reverse_kind` override
+    // (see commands/link.rs), so requiring the derived kind exactly would
+    // flag the tool's own supported output as corruption; asking only "does
+    // B link back to A" agrees with the tool by construction.
+    //
+    // Links whose target does not exist are skipped: that is a broken link,
+    // already reported as ADR013 above (frontmatter) or below (markdown
+    // body). Reporting it again as asymmetry would give two diagnostics for
+    // one problem.
+    //
+    // Unlike the frontmatter check above, this is not gated to nextgen mode:
+    // `adr.links` is populated in compatible mode by parsing legacy body
+    // syntax (see parse.rs) and in nextgen mode from frontmatter, and there
+    // is no upstream rule here to conflict with.
+    let adrs_by_number: std::collections::HashMap<u32, &Adr> =
+        adrs.iter().map(|a| (a.number, a)).collect();
+
+    for adr in &adrs {
+        for link in &adr.links {
+            let Some(target_adr) = adrs_by_number.get(&link.target) else {
+                continue;
+            };
+
+            let has_back_link = target_adr
+                .links
+                .iter()
+                .any(|back| back.target == adr.number);
+
+            if !has_back_link {
+                report.add(Issue {
+                    rule_id: "asymmetric-link".to_string(),
+                    rule_name: "adr-asymmetric-link".to_string(),
+                    severity: IssueSeverity::Warning,
+                    message: format!(
+                        "ADR {} '{}' links to ADR {} as '{}' but ADR {} has no link back to ADR {}",
+                        adr.number, adr.title, link.target, link.kind, link.target, adr.number
                     ),
                     path: adr.path.clone(),
                     line: None,
@@ -1042,6 +1097,312 @@ Some consequences.
                 .collect::<Vec<_>>()
         );
         assert_eq!(adr013_issues[0].severity, IssueSeverity::Error);
+    }
+
+    // ========== check_repository asymmetric-link rule (issue #357) ==========
+
+    #[test]
+    fn test_check_repository_asymmetric_link_half_deleted_one_warning() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // Compatible mode, matching the issue's own reproduction. `init`
+        // creates ADR #1 with no links -- the "half-deleted" state: its
+        // `Superseded by` line was removed by hand, leaving ADR #2's
+        // `Supersedes` link with nothing pointing back (issue #357 case 1).
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(
+                2,
+                "Second",
+                "Accepted",
+                "\n\nSupersedes [1. Record architecture decisions](0001-record-architecture-decisions.md)\n",
+            ),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        let warnings: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "asymmetric-link")
+            .collect();
+        assert_eq!(
+            warnings.len(),
+            1,
+            "expected exactly one asymmetric-link warning, got: {:?}",
+            report
+                .issues
+                .iter()
+                .map(|i| (&i.rule_id, &i.message))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(warnings[0].rule_name, "adr-asymmetric-link");
+        assert_eq!(warnings[0].severity, IssueSeverity::Warning);
+        assert_eq!(warnings[0].adr_number, Some(2));
+        assert!(
+            warnings[0].message.contains("ADR 2")
+                && warnings[0].message.contains("ADR 1")
+                && warnings[0].message.contains("no link back to ADR 2"),
+            "unexpected message: {}",
+            warnings[0].message
+        );
+    }
+
+    #[test]
+    fn test_check_repository_asymmetric_link_mis_targeted_two_warnings() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // Nextgen mode (frontmatter links) -- covers the both-modes requirement.
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // ADR 1's reverse link is repointed at ADR 3, which exists but has no
+        // relationship to either. ADR 2 still claims to supersede ADR 1
+        // (issue #357 case 2). Both halves are independently broken, so this
+        // must produce two warnings, not one.
+        std::fs::write(
+            adr_dir.join("0001-record-architecture-decisions.md"),
+            make_frontmatter_adr(
+                1,
+                "Record architecture decisions",
+                "superseded",
+                "links:\n  - target: 3\n    kind: supersededby\n",
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_frontmatter_adr(
+                2,
+                "Second",
+                "proposed",
+                "links:\n  - target: 1\n    kind: supersedes\n",
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0003-third.md"),
+            make_frontmatter_adr(3, "Third", "proposed", ""),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        let warnings: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "asymmetric-link")
+            .collect();
+        assert_eq!(
+            warnings.len(),
+            2,
+            "expected two asymmetric-link warnings, one per independently broken half, got: {:?}",
+            report
+                .issues
+                .iter()
+                .map(|i| (&i.rule_id, &i.message))
+                .collect::<Vec<_>>()
+        );
+
+        let adr_numbers: Vec<_> = warnings.iter().filter_map(|i| i.adr_number).collect();
+        assert!(
+            adr_numbers.contains(&1) && adr_numbers.contains(&2),
+            "expected warnings naming both ADR 1 and ADR 2, got: {adr_numbers:?}"
+        );
+        assert!(
+            warnings
+                .iter()
+                .all(|i| i.severity == IssueSeverity::Warning)
+        );
+    }
+
+    #[test]
+    fn test_check_repository_symmetric_link_via_repository_link_no_warning() {
+        use crate::{LinkKind, Repository};
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // ADR 2, so `repo.link` has two existing ADRs to connect.
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_frontmatter_adr(2, "Second", "proposed", ""),
+        )
+        .unwrap();
+
+        // Built through the tool's own API, not by hand, so this test breaks
+        // if the rule and `adrs link` ever disagree about what counts as
+        // symmetric.
+        repo.link(2, 1, LinkKind::Supersedes, LinkKind::SupersededBy)
+            .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        assert!(
+            !report.issues.iter().any(|i| i.rule_id == "asymmetric-link"),
+            "a pair built through Repository::link must not be flagged, got: {:?}",
+            report
+                .issues
+                .iter()
+                .map(|i| (&i.rule_id, &i.message))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_repository_non_derived_reverse_kind_no_warning() {
+        use crate::{LinkKind, Repository};
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_frontmatter_adr(2, "Second", "proposed", ""),
+        )
+        .unwrap();
+
+        // `adrs link` accepts an explicit `reverse_kind` override
+        // (commands/link.rs), so a pair whose reverse kind is not
+        // `LinkKind::Supersedes.reverse()` (`SupersededBy`) is still valid
+        // tool output, not corruption. Here ADR 1's link back to ADR 2 is
+        // `RelatesTo` rather than the derived `SupersededBy`.
+        repo.link(2, 1, LinkKind::Supersedes, LinkKind::RelatesTo)
+            .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        assert!(
+            !report.issues.iter().any(|i| i.rule_id == "asymmetric-link"),
+            "a non-derived but present reverse link must not be flagged, got: {:?}",
+            report
+                .issues
+                .iter()
+                .map(|i| (&i.rule_id, &i.message))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_repository_broken_link_no_asymmetric_link_warning() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // init creates ADR #1 automatically.
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // ADR 2 links to nonexistent ADR 99: a broken link, not an
+        // asymmetric one. It must be reported once, as ADR013, and not
+        // again as asymmetric-link.
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(
+                2,
+                "Second",
+                "Accepted",
+                "\n\nSupersedes [99. Unknown](0099-unknown.md)\n",
+            ),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        assert!(
+            report.issues.iter().any(|i| i.rule_id == "ADR013"),
+            "expected the broken-link diagnostic to still fire"
+        );
+        assert!(
+            !report.issues.iter().any(|i| i.rule_id == "asymmetric-link"),
+            "a link to a nonexistent ADR must not also be flagged as asymmetric, got: {:?}",
+            report
+                .issues
+                .iter()
+                .map(|i| (&i.rule_id, &i.message))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_repository_symmetric_relates_to_no_warning() {
+        use crate::{LinkKind, Repository};
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(2, "Second", "Accepted", ""),
+        )
+        .unwrap();
+
+        // `LinkKind::RelatesTo.reverse()` is `RelatesTo` itself, so a
+        // symmetric `RelatesTo` pair is the default `repo.link` output.
+        repo.link(2, 1, LinkKind::RelatesTo, LinkKind::RelatesTo)
+            .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        assert!(
+            !report.issues.iter().any(|i| i.rule_id == "asymmetric-link"),
+            "a symmetric RelatesTo pair must not be flagged, got: {:?}",
+            report
+                .issues
+                .iter()
+                .map(|i| (&i.rule_id, &i.message))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_repository_one_way_relates_to_one_warning() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // init creates ADR #1 with no links.
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // ADR 2 relates to ADR 1, but ADR 1 has no reciprocal link -- a
+        // one-way RelatesTo is a plausible hand-written relationship, and
+        // should be a single warning, not silence.
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(
+                2,
+                "Second",
+                "Accepted",
+                "\n\nRelates to [1. Record architecture decisions](0001-record-architecture-decisions.md)\n",
+            ),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        let warnings: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "asymmetric-link")
+            .collect();
+        assert_eq!(
+            warnings.len(),
+            1,
+            "expected exactly one asymmetric-link warning for a one-way RelatesTo, got: {:?}",
+            report
+                .issues
+                .iter()
+                .map(|i| (&i.rule_id, &i.message))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
