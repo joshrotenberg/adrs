@@ -311,6 +311,66 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
         }
     }
 
+    // Resolve frontmatter `links[].target` against the ADR numbers actually
+    // present in the repository. This is distinct from the upstream ADR013
+    // rule below, which only checks markdown link *filenames* in the
+    // rendered body and has no notion of frontmatter (#355). A frontmatter
+    // link is a structured reference to an ADR number, so an unresolvable
+    // target is unambiguously broken and reported at `Error` rather than the
+    // upstream rule's `Warning`.
+    //
+    // Gated to nextgen mode: in compatible mode, `adr.links` is populated by
+    // parsing legacy body syntax like `Supersedes [1. Title](0001-title.md)`
+    // (see parse.rs), not frontmatter, and that path is already covered by
+    // the upstream markdown-filename check below. Checking it again here
+    // would change compatible-mode severity/exit-code behavior, which is out
+    // of scope for this fix.
+    //
+    // Track the markdown fragment the upstream ADR013 rule would emit for
+    // each broken link so its warning can be suppressed once our error
+    // covers the same broken link. Nygard-family templates render an
+    // unresolved link both in frontmatter and as a body markdown link using
+    // the same fallback filename (see template.rs's `resolve_link_titles`,
+    // which falls back to `{:04}-....md` for a target it can't resolve), so
+    // without this a single broken link would otherwise produce two ADR013
+    // issues for the same record.
+    let mut broken_link_fragments: Vec<String> = Vec::new();
+
+    if repo.config().is_next_gen() {
+        let existing_numbers: std::collections::HashSet<u32> =
+            adrs.iter().map(|a| a.number).collect();
+
+        for adr in &adrs {
+            for link in &adr.links {
+                if existing_numbers.contains(&link.target) {
+                    continue;
+                }
+
+                let path = adr.path.clone().unwrap_or_default();
+                broken_link_fragments.push(format!(
+                    "{}: Link to '{:04}-....md' references non-existent ADR file",
+                    path.display(),
+                    link.target
+                ));
+
+                report.add(Issue {
+                    rule_id: "ADR013".to_string(),
+                    rule_name: "adr-valid-adr-links".to_string(),
+                    severity: IssueSeverity::Error,
+                    message: format!(
+                        "ADR {} '{}' links to non-existent ADR {}",
+                        adr.number, adr.title, link.target
+                    ),
+                    path: adr.path.clone(),
+                    line: None,
+                    column: None,
+                    adr_number: Some(adr.number),
+                    related_adrs: Vec::new(),
+                });
+            }
+        }
+    }
+
     // Run collection rules
     let collection_rules: Vec<Box<dyn CollectionRule>> = vec![
         Box::new(Adr010),
@@ -323,6 +383,17 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
         match rule.check_collection(&documents) {
             Ok(violations) => {
                 for violation in violations {
+                    // Suppress the upstream markdown-filename ADR013 warning
+                    // when the frontmatter check above already reported the
+                    // same broken link as an error (see comment above).
+                    if violation.rule_id == "ADR013"
+                        && broken_link_fragments
+                            .iter()
+                            .any(|fragment| violation.message.contains(fragment.as_str()))
+                    {
+                        continue;
+                    }
+
                     // Collection rule violations may have path in the message
                     // We need to parse it out or handle it differently
                     report.add(Issue {
@@ -806,6 +877,130 @@ Some consequences.
             "Expected ADR013 broken-link issue, got: {:?}",
             report.issues.iter().map(|i| &i.rule_id).collect::<Vec<_>>()
         );
+    }
+
+    fn make_frontmatter_adr(number: u32, title: &str, status: &str, links_yaml: &str) -> String {
+        format!(
+            "---\nnumber: {}\ntitle: {}\ndate: 2024-01-01\nstatus: {}\n{}---\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\nSome consequences.\n",
+            number, title, status, links_yaml
+        )
+    }
+
+    #[test]
+    fn test_check_repository_frontmatter_broken_link_adr013_error() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // nextgen mode: links live in YAML frontmatter (issue #355 repro)
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // ADR 2 has a frontmatter link to nonexistent ADR 99
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_frontmatter_adr(
+                2,
+                "Second",
+                "proposed",
+                "links:\n  - target: 99\n    kind: relatesto\n",
+            ),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        let broken = report
+            .issues
+            .iter()
+            .find(|i| i.rule_id == "ADR013" && i.severity == IssueSeverity::Error);
+        assert!(
+            broken.is_some(),
+            "Expected ADR013 error for frontmatter link to non-existent ADR 99, got: {:?}",
+            report
+                .issues
+                .iter()
+                .map(|i| (&i.rule_id, i.severity, &i.message))
+                .collect::<Vec<_>>()
+        );
+        let issue = broken.unwrap();
+        assert_eq!(issue.adr_number, Some(2));
+        assert!(
+            issue.path.is_some(),
+            "expected a file location on the issue"
+        );
+        assert!(
+            issue.message.contains("links to non-existent ADR 99"),
+            "unexpected message: {}",
+            issue.message
+        );
+        assert!(
+            report.has_errors(),
+            "a broken frontmatter link must make the report (and doctor's exit code) nonzero"
+        );
+    }
+
+    #[test]
+    fn test_check_repository_frontmatter_link_to_existing_adr_no_issue() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // init() creates ADR #1; link ADR 2 to it.
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_frontmatter_adr(
+                2,
+                "Second",
+                "proposed",
+                "links:\n  - target: 1\n    kind: relatesto\n",
+            ),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        assert!(
+            !report.issues.iter().any(|i| i.rule_id == "ADR013"),
+            "link to an existing ADR should not produce ADR013, got: {:?}",
+            report.issues.iter().map(|i| &i.message).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_repository_dedups_frontmatter_and_body_broken_link() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // A Nygard-format nextgen render puts a broken link's target in both
+        // the frontmatter `links:` block and a body markdown link, with the
+        // same unresolved fallback filename (see template.rs's
+        // `resolve_link_titles`, which falls back to `{:04}-....md` for a
+        // target it can't find). One broken link should report once.
+        let content = "---\nnumber: 2\ntitle: Second\ndate: 2024-01-01\nstatus: proposed\nlinks:\n  - target: 99\n    kind: relatesto\n---\n\n# 2. Second\n\nDate: 2024-01-01\n\n## Status\n\nProposed\n\nRelates to [99. ...](0099-....md)\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\nSome consequences.\n";
+        std::fs::write(adr_dir.join("0002-second.md"), content).unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        let adr013_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR013")
+            .collect();
+        assert_eq!(
+            adr013_issues.len(),
+            1,
+            "a broken link present in both frontmatter and body should report once, got: {:?}",
+            adr013_issues
+                .iter()
+                .map(|i| (&i.severity, &i.message))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(adr013_issues[0].severity, IssueSeverity::Error);
     }
 
     #[test]
