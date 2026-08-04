@@ -326,14 +326,21 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
     // would change compatible-mode severity/exit-code behavior, which is out
     // of scope for this fix.
     //
-    // Track the markdown fragment the upstream ADR013 rule would emit for
-    // each broken link so its warning can be suppressed once our error
-    // covers the same broken link. Nygard-family templates render an
-    // unresolved link both in frontmatter and as a body markdown link using
-    // the same fallback filename (see template.rs's `resolve_link_titles`,
-    // which falls back to `{:04}-....md` for a target it can't resolve), so
-    // without this a single broken link would otherwise produce two ADR013
-    // issues for the same record.
+    // Track the prefix of the message the upstream ADR013 rule would emit for
+    // each broken link so its warning can be suppressed once our error covers
+    // the same broken link. Nygard-family templates render a link both in
+    // frontmatter and as a body markdown link, so without this a single
+    // broken link would otherwise produce two ADR013 issues for the same
+    // record.
+    //
+    // The prefix stops at the target's zero-padded number rather than
+    // spelling out a whole filename, because the body filename varies: an
+    // unresolvable target renders as the `{:04}-....md` fallback (see
+    // template.rs's `resolve_link_titles`), but a link rendered while its
+    // target still existed keeps that target's real filename, which is the
+    // case #355 was found through. Anchoring on the record's path and the
+    // padded number matches both without matching a different record or a
+    // different target.
     let mut broken_link_fragments: Vec<String> = Vec::new();
 
     if repo.config().is_next_gen() {
@@ -348,7 +355,7 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
 
                 let path = adr.path.clone().unwrap_or_default();
                 broken_link_fragments.push(format!(
-                    "{}: Link to '{:04}-....md' references non-existent ADR file",
+                    "{}: Link to '{:04}",
                     path.display(),
                     link.target
                 ));
@@ -995,6 +1002,40 @@ Some consequences.
             adr013_issues.len(),
             1,
             "a broken link present in both frontmatter and body should report once, got: {:?}",
+            adr013_issues
+                .iter()
+                .map(|i| (&i.severity, &i.message))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(adr013_issues[0].severity, IssueSeverity::Error);
+    }
+
+    #[test]
+    fn test_check_repository_dedups_frontmatter_and_body_link_with_real_filename() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // A link that was rendered while its target still existed carries the
+        // target's real filename, not the `{:04}-....md` unresolved fallback.
+        // This is the case #355 was found through: renumbering left a stale
+        // target behind. It is still one broken link and must report once.
+        let content = "---\nnumber: 2\ntitle: Second\ndate: 2024-01-01\nstatus: proposed\nlinks:\n  - target: 99\n    kind: relatesto\n---\n\n# 2. Second\n\nDate: 2024-01-01\n\n## Status\n\nProposed\n\nRelates to [99. Old Title](0099-old-title.md)\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\nSome consequences.\n";
+        std::fs::write(adr_dir.join("0002-second.md"), content).unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        let adr013_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR013")
+            .collect();
+        assert_eq!(
+            adr013_issues.len(),
+            1,
+            "a broken link whose body filename resolved should report once, got: {:?}",
             adr013_issues
                 .iter()
                 .map(|i| (&i.severity, &i.message))
