@@ -106,7 +106,7 @@ pub use lint::{
     lint_all,
 };
 pub use parse::Parser;
-pub use repository::{BodySectionPatch, Repository};
+pub use repository::{BodySectionPatch, RenumberResult, Repository};
 pub use template::{Template, TemplateEngine, TemplateFormat, TemplateVariant};
 pub use types::{Adr, AdrLink, AdrStatus, LinkKind};
 

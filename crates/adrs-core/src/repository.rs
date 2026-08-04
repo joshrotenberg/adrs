@@ -6,6 +6,7 @@ use crate::{
 };
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use regex::Regex;
 use serde_yaml_neo::{Mapping, Value};
 use std::collections::HashMap;
 use std::fs;
@@ -68,6 +69,36 @@ impl BodySectionPatch {
         self.consequences = Some(text.into());
         self
     }
+}
+
+/// Describes what [`Repository::renumber`] changed (or, with `dry_run: true`,
+/// would change) so the caller can print a plan or a report without needing
+/// to inspect the filesystem itself.
+#[derive(Debug, Default, Clone)]
+#[non_exhaustive]
+pub struct RenumberResult {
+    /// The source number.
+    pub from: u32,
+    /// The destination number.
+    pub to: u32,
+    /// True when `from == to`; every other field is left at its default.
+    pub no_op: bool,
+    /// The renumbered record's old and new file paths.
+    pub renamed_file: Option<(PathBuf, PathBuf)>,
+    /// True when the record's own frontmatter `number` field was rewritten
+    /// (nextgen mode only).
+    pub frontmatter_updated: bool,
+    /// True when the record's own H1 heading was rewritten. Nygard-style
+    /// templates number the H1 (`# 3. Title`); MADR's bare `# Title` has no
+    /// number and is never rewritten.
+    pub h1_updated: bool,
+    /// Paths of other records whose inbound references (frontmatter
+    /// `links[].target` and/or a rendered body markdown link) were rewritten
+    /// to point at `to` instead of `from`.
+    pub updated_references: Vec<PathBuf>,
+    /// Paths outside the ADR directory that still mention the old filename.
+    /// Informational only -- never rewritten.
+    pub prose_warnings: Vec<PathBuf>,
 }
 
 /// A repository of Architecture Decision Records.
@@ -511,6 +542,373 @@ impl Repository {
         Ok(())
     }
 
+    /// Repair a duplicate or misassigned ADR number by moving `from` to `to`.
+    ///
+    /// Renumbering touches four things and gets all four right in a single
+    /// pass: the filename, the record's own frontmatter `number` (nextgen)
+    /// and H1 heading, and every *other* record's inbound reference to it
+    /// (frontmatter `links[].target` and rendered body markdown links).
+    /// Records are edited surgically in place -- never re-rendered from a
+    /// template -- so hand-written content that doesn't round-trip through
+    /// the template survives (see #310).
+    ///
+    /// # Preconditions (checked before any write)
+    ///
+    /// 1. `from` is resolved via [`Self::list`], not [`Self::get`], because
+    ///    `get` silently returns only the first match for a number and the
+    ///    motivating scenario is a duplicate number. Zero matches is an
+    ///    error. More than one match with no `file` given is an error
+    ///    listing every candidate path. If `file` is given, it must match
+    ///    one of the candidates.
+    /// 2. `from == to` is a no-op: returns immediately with
+    ///    [`RenumberResult::no_op`] set, before any occupancy check.
+    /// 3. `to` must be free. If occupied, the error names the occupying
+    ///    record and suggests the smallest free number.
+    ///
+    /// # Writes
+    ///
+    /// When `dry_run` is `false` and every precondition passes: the file is
+    /// renamed, the record's own frontmatter `number` and H1 are updated,
+    /// and every other record whose frontmatter links or body markdown links
+    /// reference the old number/filename are rewritten. A record with no
+    /// reference to `from` at all is left byte-for-byte untouched. CRLF line
+    /// endings are preserved throughout (see #339/#340).
+    ///
+    /// After a successful renumber (dry run or not), the rest of the
+    /// repository root is scanned for the old filename outside the ADR
+    /// directory (skipping `.git`, `target`, `node_modules`); matches are
+    /// reported in [`RenumberResult::prose_warnings`] but never rewritten.
+    ///
+    /// With `dry_run: true`, nothing on disk changes; the returned
+    /// [`RenumberResult`] describes exactly what would have happened.
+    pub fn renumber(
+        &self,
+        from: u32,
+        to: u32,
+        file: Option<&Path>,
+        dry_run: bool,
+    ) -> Result<RenumberResult> {
+        let all = self.list()?;
+
+        let candidates: Vec<&Adr> = all.iter().filter(|a| a.number == from).collect();
+        if candidates.is_empty() {
+            return Err(Error::AdrNotFound(from.to_string()));
+        }
+
+        let source_adr: Adr = if let Some(file) = file {
+            let file_canon = fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
+            let found = candidates.iter().find(|a| {
+                a.path
+                    .as_ref()
+                    .map(|p| fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+                    == Some(file_canon.clone())
+            });
+            match found {
+                Some(adr) => (*adr).clone(),
+                None => {
+                    return Err(Error::RenumberFileMismatch {
+                        number: from,
+                        file: file.to_path_buf(),
+                        candidates: Self::renumber_candidate_paths(&candidates),
+                    });
+                }
+            }
+        } else if candidates.len() > 1 {
+            return Err(Error::AmbiguousRenumberSource {
+                number: from,
+                candidates: Self::renumber_candidate_paths(&candidates),
+            });
+        } else {
+            candidates[0].clone()
+        };
+
+        if from == to {
+            return Ok(RenumberResult {
+                from,
+                to,
+                no_op: true,
+                ..Default::default()
+            });
+        }
+
+        if let Some(occupant) = all.iter().find(|a| a.number == to) {
+            return Err(Error::RenumberTargetOccupied {
+                to,
+                occupant_title: occupant.title.clone(),
+                occupant_path: occupant.path.clone().unwrap_or_default(),
+                suggestion: Self::smallest_free_number(&all),
+            });
+        }
+
+        // -- Everything above validates; everything below only computes new
+        // -- content in memory. No file is written until every computation
+        // -- below has succeeded, so a failure here leaves the repository
+        // -- completely untouched.
+
+        let old_path = source_adr
+            .path
+            .clone()
+            .ok_or_else(|| Error::InvalidFormat {
+                path: PathBuf::new(),
+                reason: format!("ADR {from} has no on-disk path"),
+            })?;
+        let old_filename = old_path
+            .file_name()
+            .and_then(|f| f.to_str())
+            .ok_or_else(|| Error::InvalidFormat {
+                path: old_path.clone(),
+                reason: "filename is not valid UTF-8".into(),
+            })?
+            .to_string();
+        let prefix = format!("{from:04}-");
+        let slug_part =
+            old_filename
+                .strip_prefix(prefix.as_str())
+                .ok_or_else(|| Error::InvalidFormat {
+                    path: old_path.clone(),
+                    reason: format!("filename does not start with '{prefix}'"),
+                })?;
+        let new_filename = format!("{to:04}-{slug_part}");
+        let new_path = self.adr_path().join(&new_filename);
+
+        // The renumbered record's own file: rewrite frontmatter `number`
+        // (nextgen only) and the H1 heading.
+        let original_own_content = fs::read_to_string(&old_path)?;
+        let mut target_adr = source_adr.clone();
+        target_adr.number = to;
+
+        let after_frontmatter = if Self::has_frontmatter(&original_own_content) {
+            self.update_frontmatter_metadata(&target_adr, &original_own_content)?
+        } else {
+            original_own_content.clone()
+        };
+        let frontmatter_updated = after_frontmatter != original_own_content;
+
+        let after_h1 = Self::rewrite_h1_number(&after_frontmatter, from, to);
+        let h1_updated = after_h1.is_some();
+        let final_own_content = after_h1.unwrap_or(after_frontmatter);
+
+        // Every other record: rewrite frontmatter `links[].target == from`
+        // and any rendered body markdown link pointing at the old filename.
+        let mut updated_references = Vec::new();
+        let mut pending_writes: Vec<(PathBuf, String)> = Vec::new();
+
+        for adr in all.iter().filter(|a| a.number != from) {
+            let Some(path) = adr.path.clone() else {
+                continue;
+            };
+            let original = fs::read_to_string(&path)?;
+            let mut working = original.clone();
+            let mut this_changed = false;
+
+            if Self::has_frontmatter(&working) && adr.links.iter().any(|l| l.target == from) {
+                let mut mutated_adr = adr.clone();
+                for link in mutated_adr.links.iter_mut() {
+                    if link.target == from {
+                        link.target = to;
+                    }
+                }
+                let rewritten = self.update_frontmatter_metadata(&mutated_adr, &working)?;
+                if rewritten != working {
+                    working = rewritten;
+                    this_changed = true;
+                }
+            }
+
+            if let Some(rewritten) =
+                Self::rewrite_body_link_references(&working, to, &old_filename, &new_filename)
+            {
+                working = rewritten;
+                this_changed = true;
+            }
+
+            if this_changed {
+                updated_references.push(path.clone());
+                pending_writes.push((path, working));
+            }
+        }
+
+        if !dry_run {
+            fs::rename(&old_path, &new_path)?;
+            fs::write(&new_path, &final_own_content)?;
+            for (path, content) in &pending_writes {
+                fs::write(path, content)?;
+            }
+        }
+
+        let prose_warnings = self.scan_prose_references(&old_filename);
+
+        Ok(RenumberResult {
+            from,
+            to,
+            no_op: false,
+            renamed_file: Some((old_path, new_path)),
+            frontmatter_updated,
+            h1_updated,
+            updated_references,
+            prose_warnings,
+        })
+    }
+
+    /// Format renumber candidates as `path (display)` strings for error messages.
+    fn renumber_candidate_paths(candidates: &[&Adr]) -> Vec<String> {
+        candidates
+            .iter()
+            .map(|a| {
+                a.path
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| format!("<no path for ADR {}>", a.number))
+            })
+            .collect()
+    }
+
+    /// The smallest ADR number not currently in use (fills gaps, unlike
+    /// [`Self::next_number`] which always appends after the highest number).
+    fn smallest_free_number(adrs: &[Adr]) -> u32 {
+        let existing: std::collections::HashSet<u32> = adrs.iter().map(|a| a.number).collect();
+        let mut n = 1;
+        while existing.contains(&n) {
+            n += 1;
+        }
+        n
+    }
+
+    /// Rewrite the record's own H1 heading from `# {from}. Title` to `# {to}. Title`.
+    ///
+    /// Only the first H1 line is considered, and only when it carries an
+    /// explicit number prefix (Nygard-style templates render `# {{ number }}.
+    /// {{ title }}`). MADR's bare `# {{ title }}` H1 has no number and is
+    /// correctly left untouched. Returns `None` when nothing changed;
+    /// preserves the file's CRLF/LF line ending either way.
+    fn rewrite_h1_number(content: &str, from: u32, to: u32) -> Option<String> {
+        let crlf = content.contains("\r\n");
+        let normalized = if crlf {
+            std::borrow::Cow::Owned(content.replace("\r\n", "\n"))
+        } else {
+            std::borrow::Cow::Borrowed(content)
+        };
+
+        let old_prefix = format!("# {from}. ");
+        let new_prefix = format!("# {to}. ");
+
+        let mut found_h1 = false;
+        let mut changed = false;
+        let mut result = String::with_capacity(normalized.len() + 4);
+
+        for (i, line) in normalized.split('\n').enumerate() {
+            if i > 0 {
+                result.push('\n');
+            }
+            if !found_h1 && line.starts_with("# ") {
+                found_h1 = true;
+                if let Some(rest) = line.strip_prefix(old_prefix.as_str()) {
+                    result.push_str(&new_prefix);
+                    result.push_str(rest);
+                    changed = true;
+                    continue;
+                }
+            }
+            result.push_str(line);
+        }
+
+        if !changed {
+            return None;
+        }
+
+        Some(if crlf {
+            result.replace('\n', "\r\n")
+        } else {
+            result
+        })
+    }
+
+    /// Rewrite markdown links in `content` whose href is exactly
+    /// `old_filename`, pointing them at `new_filename` instead, and updating
+    /// the ADR number in the link text where present
+    /// (`[3. Title](0003-slug.md)` -> `[4. Title](0004-slug.md)`). Link text
+    /// with no leading number is left as-is aside from the href.
+    ///
+    /// Returns `None` when `content` has no reference to `old_filename` at
+    /// all, so a record unrelated to the renumbered one is never rewritten.
+    /// Preserves CRLF/LF.
+    fn rewrite_body_link_references(
+        content: &str,
+        to: u32,
+        old_filename: &str,
+        new_filename: &str,
+    ) -> Option<String> {
+        if !content.contains(old_filename) {
+            return None;
+        }
+
+        let crlf = content.contains("\r\n");
+        let normalized = if crlf {
+            std::borrow::Cow::Owned(content.replace("\r\n", "\n"))
+        } else {
+            std::borrow::Cow::Borrowed(content)
+        };
+
+        let link_pattern = format!(r"\[([^\]]*)\]\({}\)", regex::escape(old_filename));
+        let link_re = Regex::new(&link_pattern).expect("valid regex");
+        let number_prefix_re = Regex::new(r"^(\d+)(\..*)?$").expect("valid regex");
+
+        let mut changed = false;
+        let rewritten = link_re
+            .replace_all(&normalized, |caps: &regex::Captures| {
+                changed = true;
+                let text = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+                let new_text = match number_prefix_re.captures(text) {
+                    Some(tc) => format!("{to}{}", tc.get(2).map(|m| m.as_str()).unwrap_or("")),
+                    None => text.to_string(),
+                };
+                format!("[{new_text}]({new_filename})")
+            })
+            .into_owned();
+
+        if !changed {
+            return None;
+        }
+
+        Some(if crlf {
+            rewritten.replace('\n', "\r\n")
+        } else {
+            rewritten
+        })
+    }
+
+    /// Scan the repository root (outside the ADR directory) for files that
+    /// still mention `old_filename`, informationally. Skips `.git`,
+    /// `target`, and `node_modules`. Never rewrites anything; the caller is
+    /// expected to surface the results as a warning.
+    fn scan_prose_references(&self, old_filename: &str) -> Vec<PathBuf> {
+        let adr_dir = self.adr_path();
+        let mut matches: Vec<PathBuf> = WalkDir::new(&self.root)
+            .into_iter()
+            .filter_entry(|e| {
+                if !e.file_type().is_dir() {
+                    return true;
+                }
+                !matches!(
+                    e.file_name().to_str(),
+                    Some(".git") | Some("target") | Some("node_modules")
+                )
+            })
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .map(|e| e.path().to_path_buf())
+            .filter(|p| !p.starts_with(&adr_dir))
+            .filter(|p| {
+                fs::read_to_string(p)
+                    .map(|content| content.contains(old_filename))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        matches.sort();
+        matches
+    }
+
     /// Update an existing ADR.
     ///
     /// When `body` is non-empty, only the listed body sections are patched in place;
@@ -609,10 +1007,16 @@ impl Repository {
     /// Update managed metadata fields in a YAML frontmatter file.
     ///
     /// Parses the frontmatter into a YAML [`Mapping`], mutates managed keys
-    /// (`status`, `links`, `tags`, and MADR people fields), and re-emits the
-    /// mapping. Unknown keys are preserved; the markdown body is untouched.
-    /// When no managed field changes, the original file bytes are returned
-    /// completely untouched, regardless of line ending.
+    /// (`number`, `status`, `links`, `tags`, and MADR people fields), and
+    /// re-emits the mapping. Unknown keys are preserved; the markdown body is
+    /// untouched. When no managed field changes, the original file bytes are
+    /// returned completely untouched, regardless of line ending.
+    ///
+    /// `number` is managed so [`Self::renumber`] can rewrite it through this
+    /// same surgical path rather than a dedicated one. Every other caller
+    /// passes an `Adr` whose `number` was parsed from this same file (fetched
+    /// via [`Self::get`] or [`Self::list`] and never mutated before the
+    /// metadata write), so the comparison below is a no-op for them.
     ///
     /// Re-emitting via a standard YAML parser may drop YAML comments (e.g. SPDX
     /// headers) when any managed field changes — see ADR 0006.
@@ -669,26 +1073,33 @@ impl Repository {
 
         let mut dirty = false;
 
-        // 1. status
+        // 1. number (see #356 renumber support)
+        let number_val = serde_yaml_neo::to_value(adr.number)?;
+        if map.get(Self::yaml_str_key("number")) != Some(&number_val) {
+            map.insert(Self::yaml_str_key("number"), number_val);
+            dirty = true;
+        }
+
+        // 2. status
         let status_val = Value::String(adr.status.to_string().to_lowercase());
         if map.get(Self::yaml_str_key("status")) != Some(&status_val) {
             map.insert(Self::yaml_str_key("status"), status_val);
             dirty = true;
         }
 
-        // 2. links
+        // 3. links
         if Self::set_yaml_sequence_field(&mut map, "links", &adr.links)? {
             dirty = true;
         }
 
-        // 3. tags (string-or-list on disk)
+        // 4. tags (string-or-list on disk)
         if !Self::yaml_string_list_matches(&map, "tags", &adr.tags)
             && Self::set_yaml_string_list_field(&mut map, "tags", &adr.tags)?
         {
             dirty = true;
         }
 
-        // 4. MADR people fields (string-or-list on disk; leave Value untouched when
+        // 5. MADR people fields (string-or-list on disk; leave Value untouched when
         // semantically equal so block scalars survive no-op metadata writes).
         if !Self::yaml_string_list_matches(&map, "decision-makers", &adr.decision_makers)
             && Self::set_yaml_string_list_field(&mut map, "decision-makers", &adr.decision_makers)?
@@ -4125,6 +4536,30 @@ We decided.
     }
 
     #[test]
+    fn test_update_metadata_number_field_is_noop_when_unchanged() {
+        // #356: `update_frontmatter_metadata` now manages `number` too, so
+        // `Repository::renumber` can rewrite it through the same surgical
+        // path. Every existing caller fetches its `Adr` via `get`/`list`
+        // immediately before writing, so `adr.number` always matches the
+        // on-disk value already -- pin that this stays a true no-op and
+        // doesn't spuriously mark the file dirty.
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let adr = repo.get(1).unwrap();
+        let path = adr.path.clone().unwrap();
+        let before = fs::read(&path).unwrap();
+
+        repo.update_metadata(&adr).unwrap();
+
+        let after = fs::read(&path).unwrap();
+        assert_eq!(
+            before, after,
+            "update_metadata with an unchanged number must be byte-identical"
+        );
+    }
+
+    #[test]
     fn test_update_legacy_metadata_on_crlf_file_preserves_crlf() {
         // #344: `update_legacy_metadata` (no-frontmatter adr-tools files) rebuilt
         // the file via `lines()` + `\n` joins, so a metadata write on a CRLF
@@ -4297,5 +4732,333 @@ We decided.
             after_first, after_second,
             "repeating an identical patch must produce identical bytes"
         );
+    }
+
+    // ========== Renumber Tests (#356) ==========
+
+    /// Snapshot every file under `dir` as (path, bytes), sorted, for
+    /// before/after byte-identity comparisons.
+    fn snapshot_dir(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut files: Vec<(PathBuf, Vec<u8>)> = WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .map(|e| {
+                let path = e.path().to_path_buf();
+                let bytes = fs::read(&path).unwrap();
+                (path, bytes)
+            })
+            .collect();
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+        files
+    }
+
+    #[test]
+    fn test_renumber_nextgen_rewrites_filename_frontmatter_h1_and_inbound_link() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        // `supersede` bakes the link into the new record's body at creation
+        // time (unlike a later `link()` call, which in nextgen mode only
+        // touches frontmatter -- see the compatible-mode test below for
+        // that path), so ADR 3 ends up with both a frontmatter
+        // `links[].target` *and* a rendered body markdown link to ADR 2.
+        repo.new_adr("Use MySQL").unwrap(); // ADR 2
+        repo.supersede("Use PostgreSQL", 2).unwrap(); // ADR 3, supersedes ADR 2
+
+        let old_path = repo.adr_path().join("0002-use-mysql.md");
+        let new_path = repo.adr_path().join("0005-use-mysql.md");
+
+        let result = repo.renumber(2, 5, None, false).unwrap();
+
+        assert!(!result.no_op);
+        assert_eq!(
+            result.renamed_file,
+            Some((old_path.clone(), new_path.clone()))
+        );
+        assert!(result.frontmatter_updated);
+        assert!(result.h1_updated);
+
+        assert!(!old_path.exists());
+        assert!(new_path.exists());
+
+        let content = fs::read_to_string(&new_path).unwrap();
+        assert!(
+            content.contains("number: 5"),
+            "frontmatter number must be rewritten\n{content}"
+        );
+        assert!(
+            content.contains("# 5. Use MySQL"),
+            "H1 must be rewritten\n{content}"
+        );
+
+        // The other record's frontmatter `links[].target` and rendered body
+        // link must both point at the new number/filename.
+        let adr3 = repo.get(3).unwrap();
+        assert!(adr3.links.iter().any(|l| l.target == 5));
+        assert!(!adr3.links.iter().any(|l| l.target == 2));
+
+        let adr3_path = repo.adr_path().join("0003-use-postgresql.md");
+        let adr3_content = fs::read_to_string(&adr3_path).unwrap();
+        assert!(
+            adr3_content.contains("Supersedes [5. Use MySQL](0005-use-mysql.md)"),
+            "inbound body link must be rewritten\n{adr3_content}"
+        );
+        assert!(!adr3_content.contains("0002-use-mysql.md"));
+
+        assert_eq!(result.updated_references, vec![adr3_path]);
+        assert!(result.prose_warnings.is_empty());
+    }
+
+    #[test]
+    fn test_renumber_compatible_rewrites_filename_h1_and_inbound_body_link() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+
+        repo.new_adr("First decision").unwrap(); // ADR 2
+        repo.new_adr("Second decision").unwrap(); // ADR 3
+        repo.link(3, 2, LinkKind::RelatesTo, LinkKind::RelatesTo)
+            .unwrap();
+
+        let old_path = repo.adr_path().join("0002-first-decision.md");
+        let new_path = repo.adr_path().join("0005-first-decision.md");
+
+        let result = repo.renumber(2, 5, None, false).unwrap();
+
+        assert!(!result.no_op);
+        // Compatible mode has no frontmatter to rewrite.
+        assert!(!result.frontmatter_updated);
+        assert!(result.h1_updated);
+
+        assert!(!old_path.exists());
+        assert!(new_path.exists());
+
+        let content = fs::read_to_string(&new_path).unwrap();
+        assert!(
+            content.starts_with("# 5. First decision"),
+            "H1 must be rewritten\n{content}"
+        );
+
+        let adr3_path = repo.adr_path().join("0003-second-decision.md");
+        let adr3_content = fs::read_to_string(&adr3_path).unwrap();
+        assert!(
+            adr3_content.contains("[5. First decision](0005-first-decision.md)"),
+            "inbound body link, including its text, must be rewritten\n{adr3_content}"
+        );
+        assert!(!adr3_content.contains("0002-first-decision.md"));
+
+        assert_eq!(result.updated_references, vec![adr3_path]);
+    }
+
+    #[test]
+    fn test_renumber_resolves_duplicate_via_file_and_leaves_other_untouched() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content_a = "---\nnumber: 3\ntitle: Branch A\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 3. Branch A\n\n## Context\n\nA.\n";
+        let path_a = repo.adr_path().join("0003-branch-a.md");
+        fs::write(&path_a, content_a).unwrap();
+
+        let content_b = "---\nnumber: 3\ntitle: Branch B\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 3. Branch B\n\n## Context\n\nB.\n";
+        let path_b = repo.adr_path().join("0003-branch-b.md");
+        fs::write(&path_b, content_b).unwrap();
+
+        let before = crate::lint::check_all(&repo).unwrap();
+        assert!(
+            before.issues.iter().any(|i| i.rule_id == "ADR012"),
+            "expected ADR012 (duplicate number) before the fix: {:?}",
+            before.issues
+        );
+
+        let new_path = repo.adr_path().join("0004-branch-b.md");
+        let result = repo.renumber(3, 4, Some(&path_b), false).unwrap();
+
+        assert_eq!(
+            result.renamed_file,
+            Some((path_b.clone(), new_path.clone()))
+        );
+        assert!(!path_b.exists());
+        assert!(new_path.exists());
+
+        // Untouched: byte-identical.
+        let content_a_after = fs::read(&path_a).unwrap();
+        assert_eq!(content_a_after, content_a.as_bytes());
+
+        let after = crate::lint::check_all(&repo).unwrap();
+        assert!(
+            !after.issues.iter().any(|i| i.rule_id == "ADR012"),
+            "doctor should be clean after the fix: {:?}",
+            after.issues
+        );
+    }
+
+    #[test]
+    fn test_renumber_ambiguous_source_without_file_errors() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content_a = "---\nnumber: 3\ntitle: Branch A\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 3. Branch A\n\n## Context\n\nA.\n";
+        let path_a = repo.adr_path().join("0003-branch-a.md");
+        fs::write(&path_a, content_a).unwrap();
+
+        let content_b = "---\nnumber: 3\ntitle: Branch B\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 3. Branch B\n\n## Context\n\nB.\n";
+        let path_b = repo.adr_path().join("0003-branch-b.md");
+        fs::write(&path_b, content_b).unwrap();
+
+        let err = repo.renumber(3, 4, None, false).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("0003-branch-a.md") && msg.contains("0003-branch-b.md"),
+            "error should name both candidates: {msg}"
+        );
+        assert!(
+            msg.contains("--file"),
+            "error should direct the user to --file: {msg}"
+        );
+
+        // Nothing written.
+        assert_eq!(fs::read(&path_a).unwrap(), content_a.as_bytes());
+        assert_eq!(fs::read(&path_b).unwrap(), content_b.as_bytes());
+    }
+
+    #[test]
+    fn test_renumber_occupied_target_errors_and_writes_nothing() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        repo.new_adr("Second decision").unwrap(); // ADR 2
+
+        let before = snapshot_dir(&repo.adr_path());
+
+        let err = repo.renumber(2, 1, None, false).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("already used") && msg.contains(crate::init_adr::TITLE),
+            "error should name the occupying record: {msg}"
+        );
+        // Numbers 1 and 2 both exist; the smallest free number is 3.
+        assert!(
+            msg.contains("try 3"),
+            "error should suggest the smallest free number: {msg}"
+        );
+
+        let after = snapshot_dir(&repo.adr_path());
+        assert_eq!(before, after, "nothing should be written on refusal");
+    }
+
+    #[test]
+    fn test_renumber_from_equals_to_is_a_reported_noop() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let before = snapshot_dir(&repo.adr_path());
+        let result = repo.renumber(1, 1, None, false).unwrap();
+        let after = snapshot_dir(&repo.adr_path());
+
+        assert!(result.no_op);
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn test_renumber_dry_run_writes_nothing() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        repo.new_adr("First decision").unwrap(); // ADR 2
+        repo.new_adr("Second decision").unwrap(); // ADR 3
+        repo.link(3, 2, LinkKind::RelatesTo, LinkKind::RelatesTo)
+            .unwrap();
+
+        let before = snapshot_dir(&repo.adr_path());
+
+        let result = repo.renumber(2, 5, None, true).unwrap();
+
+        assert!(!result.no_op);
+        assert!(result.renamed_file.is_some());
+        assert!(result.frontmatter_updated);
+        assert!(result.h1_updated);
+        assert_eq!(result.updated_references.len(), 1);
+
+        let after = snapshot_dir(&repo.adr_path());
+        assert_eq!(before, after, "dry run must not write anything");
+    }
+
+    #[test]
+    fn test_renumber_preserves_crlf_and_leaves_unrelated_file_untouched() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let lf_content = "---\nnumber: 2\ntitle: CRLF renumber\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 2. CRLF renumber\n\n## Context\n\nContext.\n";
+        let crlf_content = lf_content.replace('\n', "\r\n");
+        let path = repo.adr_path().join("0002-crlf-renumber.md");
+        fs::write(&path, crlf_content.as_bytes()).unwrap();
+
+        repo.new_adr("Unrelated").unwrap(); // ADR 3, no reference to ADR 2 at all
+        let unrelated_path = repo.adr_path().join("0003-unrelated.md");
+        let unrelated_before = fs::read(&unrelated_path).unwrap();
+
+        let result = repo.renumber(2, 5, None, false).unwrap();
+
+        let new_path = repo.adr_path().join("0005-crlf-renumber.md");
+        let after = fs::read_to_string(&new_path).unwrap();
+        assert!(
+            is_uniformly_crlf(&after),
+            "expected uniform CRLF, found a bare \\n\n{after:?}"
+        );
+        assert!(after.contains("number: 5"));
+        assert!(after.contains("# 5. CRLF renumber"));
+
+        let unrelated_after = fs::read(&unrelated_path).unwrap();
+        assert_eq!(
+            unrelated_before, unrelated_after,
+            "a record with no reference to `from` must not be rewritten at all"
+        );
+        assert!(result.updated_references.is_empty());
+    }
+
+    #[test]
+    fn test_renumber_preserves_hand_written_body_content() {
+        // Regression guard against reusing import's render-and-write path
+        // (#310-class data loss): a section with no template counterpart
+        // must survive renumbering byte-for-byte, aside from the number/H1.
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        let content = "---\nnumber: 2\ntitle: Hand Written\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 2. Hand Written\n\n## Context\n\nSome context with <!-- a comment --> and a\ncustom code block:\n\n```rust\nfn custom() {}\n```\n\n## Decision\n\nHand-authored, not template-derived: * bullet * bullet\n\n## Consequences\n\nConsequences.\n\n## My Custom Section\n\nThis section is not part of any template and must survive verbatim.\n";
+        let path = repo.adr_path().join("0002-hand-written.md");
+        fs::write(&path, content).unwrap();
+
+        repo.renumber(2, 5, None, false).unwrap();
+
+        let new_path = repo.adr_path().join("0005-hand-written.md");
+        let after = fs::read_to_string(&new_path).unwrap();
+
+        let expected = content
+            .replace("number: 2", "number: 5")
+            .replace("# 2. Hand Written", "# 5. Hand Written");
+        assert_eq!(
+            after, expected,
+            "only number/H1 may change; everything else must survive verbatim"
+        );
+    }
+
+    #[test]
+    fn test_renumber_reports_prose_references_outside_adr_dir_without_rewriting() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        repo.new_adr("First decision").unwrap(); // ADR 2
+
+        let readme_path = temp.path().join("README.md");
+        let readme_before =
+            "See [2. First decision](doc/adr/0002-first-decision.md) for details.\n";
+        fs::write(&readme_path, readme_before).unwrap();
+
+        let result = repo.renumber(2, 5, None, false).unwrap();
+
+        assert_eq!(result.prose_warnings, vec![readme_path.clone()]);
+
+        // Reported, never rewritten.
+        let readme_after = fs::read_to_string(&readme_path).unwrap();
+        assert_eq!(readme_after, readme_before);
     }
 }

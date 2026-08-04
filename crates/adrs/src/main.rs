@@ -313,6 +313,41 @@ Note: Use --by with 'superseded' to create a link to the replacing ADR.")]
         by: Option<u32>,
     },
 
+    /// Repair a duplicate or misassigned ADR number
+    #[command(after_long_help = "\
+EXAMPLES:
+  adrs renumber 3 4                          Move ADR 3 to ADR 4
+  adrs renumber 3 4 --dry-run                Preview the change without writing
+  adrs renumber 3 5 --file doc/adr/0003-b.md Pick one of two ADRs numbered 3
+
+WHAT IT REWRITES:
+  The filename, the record's own frontmatter `number` (nextgen mode) and H1
+  heading, and every other record's inbound reference to it (frontmatter
+  `links[].target` and rendered body markdown links, including the number in
+  the link text).
+
+DUPLICATE NUMBERS:
+  If more than one ADR is numbered <from>, --file <path> selects which one to
+  move; without it the command refuses and lists the candidates.
+
+  Files outside the ADR directory that still mention the old filename are
+  reported as a note, never rewritten.")]
+    Renumber {
+        /// Current ADR number
+        from: u32,
+
+        /// New ADR number
+        to: u32,
+
+        /// Preview the change without writing anything
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Select which ADR to renumber when `from` is ambiguous (duplicate numbers)
+        #[arg(long, value_name = "PATH")]
+        file: Option<PathBuf>,
+    },
+
     /// Show configuration
     Config,
 
@@ -734,6 +769,16 @@ fn main() -> Result<()> {
         Commands::Status { adr, status, by } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
             commands::status(&discovered.root, adr, &status, by)
+        }
+        Commands::Renumber {
+            from,
+            to,
+            dry_run,
+            file,
+        } => {
+            let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
+            let file = file.map(|f| resolve_cli_path(cli.working_dir.as_deref(), f));
+            commands::renumber(&discovered.root, from, to, file.as_deref(), dry_run)
         }
         Commands::Config => {
             let discovered = discover(&start_dir).ok();
