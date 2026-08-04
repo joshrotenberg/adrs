@@ -1,15 +1,34 @@
 //! Initialize command.
 
-use adrs_core::Repository;
+use adrs_core::{Config, Repository, discover};
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::path::PathBuf;
 
-pub fn init(root: &Path, directory: PathBuf, ng: bool) -> Result<()> {
-    let repo = Repository::init(root, Some(directory.clone()), ng).with_context(|| {
+/// Resolve the root to initialize in and the ADR directory to use.
+///
+/// An explicit `directory` argument always wins. Otherwise the ADR
+/// directory is resolved through the same config discovery every other
+/// command uses (`adrs.toml`, then `.adr-dir`, then `ADR_DIRECTORY`, then
+/// the global config), falling back to `doc/adr` only when nothing is
+/// configured.
+fn resolve_init_target(root: &Path, directory: Option<PathBuf>) -> (PathBuf, PathBuf) {
+    match directory {
+        Some(dir) => (root.to_path_buf(), dir),
+        None => match discover(root) {
+            Ok(discovered) => (discovered.root, discovered.config.adr_dir),
+            Err(_) => (root.to_path_buf(), Config::default().adr_dir),
+        },
+    }
+}
+
+pub fn init(root: &Path, directory: Option<PathBuf>, ng: bool) -> Result<()> {
+    let (init_root, adr_dir) = resolve_init_target(root, directory);
+
+    let repo = Repository::init(&init_root, Some(adr_dir.clone()), ng).with_context(|| {
         format!(
             "Failed to initialize ADR repository in {}",
-            directory.display()
+            adr_dir.display()
         )
     })?;
 

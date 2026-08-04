@@ -109,9 +109,8 @@ EXAMPLES:
 Creates the ADR directory and an initial ADR documenting the use of ADRs.
 If ADRs already exist in the directory, they are preserved.")]
     Init {
-        /// Directory to store ADRs [default: doc/adr]
-        #[arg(default_value = "doc/adr")]
-        directory: PathBuf,
+        /// Directory to store ADRs [default: doc/adr, or the configured adr_dir]
+        directory: Option<PathBuf>,
     },
 
     /// Create a new ADR
