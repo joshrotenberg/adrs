@@ -1726,6 +1726,61 @@ fn test_doctor_nextgen_broken_frontmatter_link_exits_nonzero() {
     temp.close().unwrap();
 }
 
+#[test]
+fn test_doctor_asymmetric_link_reports_warning_exits_zero() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // init() creates ADR #1 with no links; ADR #2 claims to supersede it by
+    // hand, with nothing pointing back (issue #357 case 1).
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        "# 2. Second\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\nSupersedes [1. Record architecture decisions](0001-record-architecture-decisions.md)\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\nSome consequences.\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("asymmetric-link"))
+        .stdout(predicate::str::contains("no link back"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_doctor_asymmetric_link_warnings_as_errors_exits_1() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        "# 2. Second\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\nSupersedes [1. Record architecture decisions](0001-record-architecture-decisions.md)\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\nSome consequences.\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["doctor", "--warnings-as-errors"])
+        .assert()
+        .failure()
+        .code(1);
+
+    temp.close().unwrap();
+}
+
 // Tests for [doctor].ignore / --ignore and warnings-as-errors config (issue #316)
 
 /// Nygard-format ADR content that trips only warning-severity collection rules
