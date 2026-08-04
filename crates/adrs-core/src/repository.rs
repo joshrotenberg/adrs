@@ -99,6 +99,10 @@ pub struct RenumberResult {
     /// Paths outside the ADR directory that still mention the old filename.
     /// Informational only -- never rewritten.
     pub prose_warnings: Vec<PathBuf>,
+    /// Paths of records holding a frontmatter `links[].target` equal to `from`
+    /// that were deliberately left alone because `from` was a duplicate, so
+    /// the reference could have meant either record. Informational only.
+    pub ambiguous_references: Vec<PathBuf>,
 }
 
 /// A repository of Architecture Decision Records.
@@ -594,6 +598,10 @@ impl Repository {
         if candidates.is_empty() {
             return Err(Error::AdrNotFound(from.to_string()));
         }
+        // More than one record holds `from`, so inbound references that name it
+        // by number cannot be attributed to either one. Drives the decision to
+        // report such references rather than rewrite them, below.
+        let source_was_ambiguous = candidates.len() > 1;
 
         let source_adr: Adr = if let Some(file) = file {
             let file_canon = fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
@@ -690,10 +698,20 @@ impl Repository {
 
         // Every other record: rewrite frontmatter `links[].target == from`
         // and any rendered body markdown link pointing at the old filename.
+        //
+        // The source is excluded by path, not by number. When `from` is a
+        // duplicate, the record left behind still carries that number, and
+        // any reference it holds to the file being renamed has to be
+        // rewritten like anyone else's. Excluding by number would skip it and
+        // leave the reference dangling.
         let mut updated_references = Vec::new();
+        let mut ambiguous_references = Vec::new();
         let mut pending_writes: Vec<(PathBuf, String)> = Vec::new();
 
-        for adr in all.iter().filter(|a| a.number != from) {
+        for adr in all
+            .iter()
+            .filter(|a| a.path.as_deref() != Some(old_path.as_path()))
+        {
             let Some(path) = adr.path.clone() else {
                 continue;
             };
@@ -702,16 +720,26 @@ impl Repository {
             let mut this_changed = false;
 
             if Self::has_frontmatter(&working) && adr.links.iter().any(|l| l.target == from) {
-                let mut mutated_adr = adr.clone();
-                for link in mutated_adr.links.iter_mut() {
-                    if link.target == from {
-                        link.target = to;
+                if source_was_ambiguous {
+                    // `from` was held by more than one record, so a link
+                    // targeting it by number could have meant either. The
+                    // record left behind keeps the number, so leaving the
+                    // link alone preserves the reading that is still valid;
+                    // rewriting it would silently repoint a correct
+                    // relationship at the record that moved. Report instead.
+                    ambiguous_references.push(path.clone());
+                } else {
+                    let mut mutated_adr = adr.clone();
+                    for link in mutated_adr.links.iter_mut() {
+                        if link.target == from {
+                            link.target = to;
+                        }
                     }
-                }
-                let rewritten = self.update_frontmatter_metadata(&mutated_adr, &working)?;
-                if rewritten != working {
-                    working = rewritten;
-                    this_changed = true;
+                    let rewritten = self.update_frontmatter_metadata(&mutated_adr, &working)?;
+                    if rewritten != working {
+                        working = rewritten;
+                        this_changed = true;
+                    }
                 }
             }
 
@@ -747,6 +775,7 @@ impl Repository {
             h1_updated,
             updated_references,
             prose_warnings,
+            ambiguous_references,
         })
     }
 
@@ -4889,6 +4918,73 @@ We decided.
             !after.issues.iter().any(|i| i.rule_id == "ADR012"),
             "doctor should be clean after the fix: {:?}",
             after.issues
+        );
+    }
+
+    #[test]
+    fn test_renumber_leaves_ambiguous_number_references_alone_and_reports_them() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        // ADR 1 is superseded by the PostgreSQL record, which is number 2.
+        // A second record numbered 2 then arrives from another branch. Moving
+        // that second record to 3 must not repoint ADR 1's link: the link
+        // means PostgreSQL, PostgreSQL keeps number 2, and rewriting it to 3
+        // would silently aim a correct relationship at the wrong record.
+        let adr1 = "---\nnumber: 1\ntitle: Record architecture decisions\ndate: 2026-01-15\nstatus: superseded\nlinks:\n- target: 2\n  kind: supersededby\n---\n\n# 1. Record architecture decisions\n\n## Context\n\nOne.\n";
+        let path1 = repo
+            .adr_path()
+            .join("0001-record-architecture-decisions.md");
+        fs::write(&path1, adr1).unwrap();
+
+        let pg = "---\nnumber: 2\ntitle: Use PostgreSQL\ndate: 2026-01-15\nstatus: accepted\nlinks:\n- target: 1\n  kind: supersedes\n---\n\n# 2. Use PostgreSQL\n\n## Context\n\nPg.\n";
+        fs::write(repo.adr_path().join("0002-use-postgresql.md"), pg).unwrap();
+
+        let redis = "---\nnumber: 2\ntitle: Use Redis\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 2. Use Redis\n\n## Context\n\nFrom another branch.\n";
+        let redis_path = repo.adr_path().join("0002-use-redis.md");
+        fs::write(&redis_path, redis).unwrap();
+
+        let result = repo.renumber(2, 3, Some(&redis_path), false).unwrap();
+
+        // ADR 1 is byte-identical: its link still reads `target: 2`.
+        assert_eq!(fs::read(&path1).unwrap(), adr1.as_bytes());
+        assert!(
+            !result.updated_references.contains(&path1),
+            "ADR 1 must not be counted as rewritten"
+        );
+        assert!(
+            result.ambiguous_references.contains(&path1),
+            "ADR 1's ambiguous reference should be reported, got: {:?}",
+            result.ambiguous_references
+        );
+    }
+
+    #[test]
+    fn test_renumber_rewrites_reference_held_by_the_other_duplicate() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+
+        // Two records share number 3. The one that stays behind holds a body
+        // link naming the other's file, so renaming that file must rewrite it.
+        // Skipping every record numbered `from` would leave this dangling.
+        let content_a = "---\nnumber: 3\ntitle: Branch A\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 3. Branch A\n\n## Context\n\nSee [3. Branch B](0003-branch-b.md).\n";
+        let path_a = repo.adr_path().join("0003-branch-a.md");
+        fs::write(&path_a, content_a).unwrap();
+
+        let content_b = "---\nnumber: 3\ntitle: Branch B\ndate: 2026-01-15\nstatus: proposed\n---\n\n# 3. Branch B\n\n## Context\n\nB.\n";
+        let path_b = repo.adr_path().join("0003-branch-b.md");
+        fs::write(&path_b, content_b).unwrap();
+
+        repo.renumber(3, 4, Some(&path_b), false).unwrap();
+
+        let after_a = fs::read_to_string(&path_a).unwrap();
+        assert!(
+            after_a.contains("[4. Branch B](0004-branch-b.md)"),
+            "the remaining duplicate's link to the renumbered file should be rewritten, got: {after_a}"
+        );
+        assert!(
+            !after_a.contains("0003-branch-b.md"),
+            "no reference to the old filename should survive, got: {after_a}"
         );
     }
 

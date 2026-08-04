@@ -53,6 +53,16 @@ pub fn renumber(root: &Path, from: u32, to: u32, file: Option<&Path>, dry_run: b
         }
     }
 
+    if !result.ambiguous_references.is_empty() {
+        println!(
+            "\nNote: {} record(s) link to ADR {from} by number. Another record still\nhas that number, so the reference was left as-is rather than repointed:",
+            result.ambiguous_references.len()
+        );
+        for path in &result.ambiguous_references {
+            println!("  {}", path.display());
+        }
+    }
+
     if !result.prose_warnings.is_empty() {
         println!(
             "\nNote: {} file(s) outside the ADR directory mention the old filename (not rewritten):",
