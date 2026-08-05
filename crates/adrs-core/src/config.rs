@@ -210,6 +210,9 @@ impl Config {
         if other.doctor.warnings_as_errors {
             self.doctor.warnings_as_errors = other.doctor.warnings_as_errors;
         }
+        if !other.doctor.ignore_path.is_empty() {
+            self.doctor.ignore_path = other.doctor.ignore_path.clone();
+        }
     }
 }
 
@@ -461,12 +464,41 @@ pub struct ExportConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DoctorConfig {
-    /// Rule IDs or rule names to suppress (e.g. "ADR011", "adr-numbering-sequential").
-    /// Matched case-insensitively against both Issue.rule_id and Issue.rule_name.
+    /// Rule IDs or rule names to suppress repository-wide (e.g. "ADR011",
+    /// "adr-numbering-sequential"). Matched case-insensitively against both
+    /// Issue.rule_id and Issue.rule_name.
     pub ignore: Vec<String>,
 
     /// When true, `adrs doctor` exits with status 1 if there are warnings, not just errors.
     pub warnings_as_errors: bool,
+
+    /// Path-scoped rule exemptions (issue #365). Unlike `ignore`, which
+    /// suppresses a rule everywhere, each entry here suppresses `rules` only
+    /// for diagnostics whose path (relative to the repository root) matches
+    /// `glob`.
+    pub ignore_path: Vec<DoctorIgnorePath>,
+}
+
+/// A single path-scoped rule exemption under `[[doctor.ignore_path]]`.
+///
+/// `glob` is matched, using `globset`, against a diagnostic's path relative
+/// to the repository root with separators normalized to `/`. `rules` is
+/// matched the same way `[doctor].ignore` is: case-insensitively against
+/// both `Issue.rule_id` and `Issue.rule_name`.
+///
+/// Only diagnostics that carry a path can be scoped this way -- some rules
+/// (the upstream collection rules ADR010-ADR012) never populate `path`, so
+/// an entry that names only those rules can never suppress anything. See
+/// `lint::check_all_filtered`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DoctorIgnorePath {
+    /// Glob pattern matched against the diagnostic's path relative to the
+    /// repository root (forward slashes, even on Windows).
+    pub glob: String,
+
+    /// Rule IDs or rule names to suppress when `glob` matches.
+    pub rules: Vec<String>,
 }
 
 #[cfg(test)]
@@ -1531,6 +1563,7 @@ bogus = "value"
             doctor: DoctorConfig {
                 ignore: vec!["ADR011".to_string()],
                 warnings_as_errors: true,
+                ignore_path: Vec::new(),
             },
         };
         original.save(temp.path()).unwrap();
@@ -1920,6 +1953,7 @@ warnings_as_errors = true
             doctor: DoctorConfig {
                 ignore: vec!["ADR011".to_string()],
                 warnings_as_errors: false,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -1932,6 +1966,7 @@ warnings_as_errors = true
             doctor: DoctorConfig {
                 ignore: vec!["ADR011".to_string()],
                 warnings_as_errors: false,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -1952,6 +1987,7 @@ warnings_as_errors = true
             doctor: DoctorConfig {
                 ignore: vec![],
                 warnings_as_errors: true,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -1971,6 +2007,7 @@ warnings_as_errors = true
             doctor: DoctorConfig {
                 ignore: vec!["ADR011".to_string()],
                 warnings_as_errors: true,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -1980,5 +2017,148 @@ warnings_as_errors = true
 
         assert_eq!(loaded.doctor.ignore, vec!["ADR011".to_string()]);
         assert!(loaded.doctor.warnings_as_errors);
+    }
+
+    // ========== DoctorConfig / ignore_path Tests (issue #365) ==========
+
+    #[test]
+    fn test_doctor_ignore_path_default_empty() {
+        let config = DoctorConfig::default();
+        assert!(config.ignore_path.is_empty());
+    }
+
+    #[test]
+    fn test_doctor_ignore_path_from_toml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+
+[doctor]
+ignore = ["ADR011"]
+
+[[doctor.ignore_path]]
+glob = "doc/adr/0025-*.md"
+rules = ["ADR014"]
+
+[[doctor.ignore_path]]
+glob = "doc/adr/legacy/**"
+rules = ["ADR001", "adr-required-sections"]
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert_eq!(config.doctor.ignore, vec!["ADR011".to_string()]);
+        assert_eq!(config.doctor.ignore_path.len(), 2);
+        assert_eq!(config.doctor.ignore_path[0].glob, "doc/adr/0025-*.md");
+        assert_eq!(
+            config.doctor.ignore_path[0].rules,
+            vec!["ADR014".to_string()]
+        );
+        assert_eq!(config.doctor.ignore_path[1].glob, "doc/adr/legacy/**");
+        assert_eq!(
+            config.doctor.ignore_path[1].rules,
+            vec!["ADR001".to_string(), "adr-required-sections".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_doctor_ignore_path_absent_defaults_empty() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+
+        let config = Config::load(temp.path()).unwrap();
+        assert!(config.doctor.ignore_path.is_empty());
+    }
+
+    #[test]
+    fn test_doctor_ignore_path_save_load_roundtrip() {
+        let temp = TempDir::new().unwrap();
+        let original = Config {
+            mode: ConfigMode::NextGen,
+            doctor: DoctorConfig {
+                ignore: vec!["ADR011".to_string()],
+                warnings_as_errors: true,
+                ignore_path: vec![DoctorIgnorePath {
+                    glob: "doc/adr/0025-*.md".to_string(),
+                    rules: vec!["ADR014".to_string()],
+                }],
+            },
+            ..Default::default()
+        };
+
+        original.save(temp.path()).unwrap();
+        let loaded = Config::load(temp.path()).unwrap();
+
+        assert_eq!(loaded.doctor.ignore_path.len(), 1);
+        assert_eq!(loaded.doctor.ignore_path[0].glob, "doc/adr/0025-*.md");
+        assert_eq!(
+            loaded.doctor.ignore_path[0].rules,
+            vec!["ADR014".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_config_merge_doctor_ignore_path() {
+        let mut base = Config::default();
+        let other = Config {
+            doctor: DoctorConfig {
+                ignore_path: vec![DoctorIgnorePath {
+                    glob: "doc/adr/0025-*.md".to_string(),
+                    rules: vec!["ADR014".to_string()],
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        base.merge(&other);
+        assert_eq!(base.doctor.ignore_path.len(), 1);
+        assert_eq!(base.doctor.ignore_path[0].glob, "doc/adr/0025-*.md");
+
+        // An empty ignore_path list in `other` must not clobber an existing base list.
+        let mut base = Config {
+            doctor: DoctorConfig {
+                ignore_path: vec![DoctorIgnorePath {
+                    glob: "doc/adr/0025-*.md".to_string(),
+                    rules: vec!["ADR014".to_string()],
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let other = Config::default(); // doctor.ignore_path is empty
+
+        base.merge(&other);
+        assert_eq!(
+            base.doctor.ignore_path.len(),
+            1,
+            "merge with empty doctor.ignore_path should not overwrite existing value"
+        );
+    }
+
+    #[test]
+    fn test_deserialize_config_reports_unknown_key_in_doctor_ignore_path() {
+        // The #363 warning walks the whole document, so an unknown key inside
+        // an array-of-tables entry must be reported the same way as an unknown
+        // top-level or nested-table key.
+        let (_config, unknown_keys) = deserialize_config(
+            r#"
+adr_dir = "doc/adr"
+
+[[doctor.ignore_path]]
+glob = "doc/adr/0025-*.md"
+rules = ["ADR014"]
+reason = "false positive on this record"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            unknown_keys,
+            vec!["doctor.ignore_path.0.reason".to_string()]
+        );
     }
 }

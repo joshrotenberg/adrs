@@ -5,13 +5,36 @@
 //! (sequential numbering, duplicate detection, broken links).
 
 use crate::{Adr, Repository, Result};
+use globset::Glob;
 use mdbook_lint_core::Document;
 use mdbook_lint_core::rule::{CollectionRule, Rule};
 use mdbook_lint_rulesets::adr::{
     Adr001, Adr002, Adr003, Adr004, Adr005, Adr006, Adr007, Adr008, Adr009, Adr010, Adr011, Adr012,
     Adr013, Adr014, Adr015, Adr016, Adr017, AdrFormat,
 };
+use std::collections::HashSet;
 use std::path::PathBuf;
+
+/// Rule IDs and rule names that are *always* produced without a path.
+///
+/// These are the upstream collection rules whose only source is
+/// `check_repository`'s `CollectionRule::check_collection` loop (`path: None`
+/// there -- see the comment on that loop). `ADR013` / `adr-valid-adr-links` is
+/// deliberately excluded: that rule id is also used by the frontmatter
+/// broken-link check above the collection-rule loop, which *does* set a path,
+/// so a `[[doctor.ignore_path]]` entry naming it can fire for that source even
+/// though it can never match the collection-rule source.
+///
+/// Used to warn when a `[[doctor.ignore_path]]` entry names a rule that can
+/// never be suppressed by path (issue #365).
+const ALWAYS_PATHLESS_RULES: &[&str] = &[
+    "ADR010",
+    "adr-superseded-has-replacement",
+    "ADR011",
+    "adr-sequential-numbering",
+    "ADR012",
+    "adr-no-duplicate-numbers",
+];
 
 /// Severity level for lint issues.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -499,18 +522,35 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
     Ok(report)
 }
 
-/// Run all checks and filter out issues matching ignored rule IDs/names.
+/// A compiled `[[doctor.ignore_path]]` entry, ready to match against issue paths.
+struct CompiledIgnorePath {
+    matcher: globset::GlobMatcher,
+    rules: HashSet<String>,
+}
+
+/// Run all checks and filter out issues matching ignored rule IDs/names,
+/// repository-wide or path-scoped.
 ///
-/// Ignored rules are `repo.config().doctor.ignore` unioned with `extra_ignore`
-/// (e.g. CLI `--ignore` flags for a single invocation). Matching is
-/// case-insensitive against both `Issue.rule_id` and `Issue.rule_name`.
+/// Repository-wide ignores are `repo.config().doctor.ignore` unioned with
+/// `extra_ignore` (e.g. CLI `--ignore` flags for a single invocation).
+/// Path-scoped ignores are `repo.config().doctor.ignore_path`: each entry
+/// suppresses its `rules` only for issues whose path, relative to the
+/// repository root with separators normalized to `/`, matches its `glob`.
+/// Both forms match rules case-insensitively against `Issue.rule_id` and
+/// `Issue.rule_name` (issue #365).
 ///
-/// Returns the filtered report and the count of issues that were suppressed.
+/// Returns the filtered report, the count of issues that were suppressed
+/// (repository-wide and path-scoped combined, each issue counted once even
+/// if it matched both), and any config warnings: an invalid glob that could
+/// not be compiled, or a `[[doctor.ignore_path]]` entry naming a rule that
+/// only ever produces path-less diagnostics and so can never be suppressed
+/// this way.
 pub fn check_all_filtered(
     repo: &Repository,
     extra_ignore: &[String],
-) -> Result<(LintReport, usize)> {
+) -> Result<(LintReport, usize, Vec<String>)> {
     let mut report = LintReport::new();
+    let mut warnings = Vec::new();
 
     // Use list_with_errors to capture parse failures
     let (adrs, parse_errors) = repo.list_with_errors()?;
@@ -543,7 +583,7 @@ pub fn check_all_filtered(
 
     report.sort();
 
-    let ignore_set: std::collections::HashSet<String> = repo
+    let ignore_set: HashSet<String> = repo
         .config()
         .doctor
         .ignore
@@ -552,18 +592,69 @@ pub fn check_all_filtered(
         .map(|s| s.to_lowercase())
         .collect();
 
-    if ignore_set.is_empty() {
-        return Ok((report, 0));
+    // Compile each `[[doctor.ignore_path]]` entry. An invalid glob is a
+    // config error in the same family as #363 -- the user believes an
+    // exemption is active when it is not -- so it is reported as a warning
+    // rather than silently dropped, and the rest of the config still loads
+    // and applies (see `warn_unknown_config_keys` in the CLI for the same
+    // non-fatal-warning convention).
+    let mut compiled_ignore_paths: Vec<CompiledIgnorePath> = Vec::new();
+    for entry in &repo.config().doctor.ignore_path {
+        match Glob::new(&entry.glob) {
+            Ok(glob) => compiled_ignore_paths.push(CompiledIgnorePath {
+                matcher: glob.compile_matcher(),
+                rules: entry.rules.iter().map(|s| s.to_lowercase()).collect(),
+            }),
+            Err(e) => warnings.push(format!(
+                "[[doctor.ignore_path]] glob '{}' is invalid and will not be applied: {e}",
+                entry.glob
+            )),
+        }
+
+        for rule in &entry.rules {
+            if ALWAYS_PATHLESS_RULES
+                .iter()
+                .any(|pathless| pathless.eq_ignore_ascii_case(rule))
+            {
+                warnings.push(format!(
+                    "[[doctor.ignore_path]] entry for glob '{}' names rule '{}', which only ever produces diagnostics without a path; this exemption can never suppress it",
+                    entry.glob, rule
+                ));
+            }
+        }
     }
 
+    if ignore_set.is_empty() && compiled_ignore_paths.is_empty() {
+        return Ok((report, 0, warnings));
+    }
+
+    let root = repo.root();
     let before = report.issues.len();
     report.issues.retain(|issue| {
-        !ignore_set.contains(&issue.rule_id.to_lowercase())
-            && !ignore_set.contains(&issue.rule_name.to_lowercase())
+        if ignore_set.contains(&issue.rule_id.to_lowercase())
+            || ignore_set.contains(&issue.rule_name.to_lowercase())
+        {
+            return false;
+        }
+
+        let Some(path) = &issue.path else {
+            return true;
+        };
+
+        let relative = path.strip_prefix(root).unwrap_or(path);
+        let relative_str = relative.to_string_lossy().replace('\\', "/");
+
+        let rule_id = issue.rule_id.to_lowercase();
+        let rule_name = issue.rule_name.to_lowercase();
+
+        !compiled_ignore_paths.iter().any(|entry| {
+            entry.matcher.is_match(&relative_str)
+                && (entry.rules.contains(&rule_id) || entry.rules.contains(&rule_name))
+        })
     });
     let suppressed = before - report.issues.len();
 
-    Ok((report, suppressed))
+    Ok((report, suppressed, warnings))
 }
 
 /// Run all checks: per-file lint + repository-level checks.
@@ -571,7 +662,7 @@ pub fn check_all_filtered(
 /// Also reports files that look like ADRs (digit-prefixed `.md` files in the
 /// ADR directory) but could not be parsed (e.g., invalid YAML frontmatter).
 pub fn check_all(repo: &Repository) -> Result<LintReport> {
-    check_all_filtered(repo, &[]).map(|(report, _)| report)
+    check_all_filtered(repo, &[]).map(|(report, _, _)| report)
 }
 
 #[cfg(test)]
@@ -1610,11 +1701,362 @@ Some consequences.
         .unwrap();
         let repo = Repository::open(temp.path()).unwrap();
 
-        let (filtered, suppressed_count) = check_all_filtered(&repo, &[]).unwrap();
+        let (filtered, suppressed_count, warnings) = check_all_filtered(&repo, &[]).unwrap();
         assert_eq!(suppressed_count, unfiltered_adr011);
         assert!(
             filtered.issues.iter().all(|i| i.rule_id != "ADR011"),
             "filtered report should not contain ADR011"
+        );
+        assert!(
+            warnings.is_empty(),
+            "no [[doctor.ignore_path]] entries configured, expected no warnings"
+        );
+    }
+
+    // ========== check_all_filtered / [[doctor.ignore_path]] (issue #365) ==========
+
+    /// An ADR with an explicit Consequences body, so a test can trigger
+    /// ADR014's placeholder-text check on demand.
+    fn make_nygard_adr_with_consequences(
+        number: u32,
+        title: &str,
+        status: &str,
+        consequences: &str,
+    ) -> String {
+        format!(
+            "# {number}. {title}\n\nDate: 2024-01-01\n\n## Status\n\n{status}\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\n{consequences}\n"
+        )
+    }
+
+    #[test]
+    fn test_check_all_filtered_scoped_ignore_suppresses_on_matching_record_only() {
+        // The headline test (#365): a scoped ignore suppresses ADR014 on the
+        // record it names and leaves ADR014 firing on a different record that
+        // trips the same placeholder-text check.
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+
+        // ADR 1 (created by init) already has real content; add two more ADRs
+        // that both trip ADR014 via placeholder text in Consequences.
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr_with_consequences(2, "Second", "Accepted", "TBD"),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0003-third.md"),
+            make_nygard_adr_with_consequences(3, "Third", "Accepted", "TBD"),
+        )
+        .unwrap();
+
+        // Unfiltered: both records trip ADR014.
+        let (unfiltered, _, _) = check_all_filtered(&repo, &[]).unwrap();
+        let unfiltered_adr014_paths: Vec<_> = unfiltered
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR014")
+            .filter_map(|i| i.path.clone())
+            .collect();
+        assert!(
+            unfiltered_adr014_paths
+                .iter()
+                .any(|p| p.ends_with("0002-second.md")),
+            "expected ADR014 on 0002-second.md before scoping, got: {unfiltered_adr014_paths:?}"
+        );
+        assert!(
+            unfiltered_adr014_paths
+                .iter()
+                .any(|p| p.ends_with("0003-third.md")),
+            "expected ADR014 on 0003-third.md before scoping, got: {unfiltered_adr014_paths:?}"
+        );
+
+        // Scope the exemption to 0002-second.md only.
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\n\n[[doctor.ignore_path]]\nglob = \"doc/adr/0002-*.md\"\nrules = [\"ADR014\"]\n",
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (filtered, suppressed_count, warnings) = check_all_filtered(&repo, &[]).unwrap();
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
+        assert!(suppressed_count > 0);
+
+        let filtered_adr014_paths: Vec<_> = filtered
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR014")
+            .filter_map(|i| i.path.clone())
+            .collect();
+        assert!(
+            !filtered_adr014_paths
+                .iter()
+                .any(|p| p.ends_with("0002-second.md")),
+            "0002-second.md's ADR014 should be suppressed, got: {filtered_adr014_paths:?}"
+        );
+        assert!(
+            filtered_adr014_paths
+                .iter()
+                .any(|p| p.ends_with("0003-third.md")),
+            "0003-third.md's ADR014 should still fire, got: {filtered_adr014_paths:?}"
+        );
+    }
+
+    #[test]
+    fn test_check_all_filtered_scoped_ignore_double_star_matches_subdirectory() {
+        // `**` must span the intermediate directory components of a nested
+        // `adr_dir` (e.g. "docs/architecture/decisions", the shape used in
+        // #363's own reproduction), not just match within a single directory.
+        // `Repository::list` only reads ADR files directly inside `adr_dir`
+        // (`max_depth(1)`), so the subdirectory being spanned here is
+        // `adr_dir` itself relative to the repository root, not a
+        // subdirectory of `adr_dir`.
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(
+            temp.path(),
+            Some(PathBuf::from("docs/architecture/decisions")),
+            false,
+        )
+        .unwrap();
+        let adr_dir = repo.adr_path();
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr_with_consequences(2, "Second", "Accepted", "TBD"),
+        )
+        .unwrap();
+
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"docs/architecture/decisions\"\n\n[[doctor.ignore_path]]\nglob = \"**/0002-*.md\"\nrules = [\"ADR014\"]\n",
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (filtered, suppressed_count, warnings) = check_all_filtered(&repo, &[]).unwrap();
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
+        assert!(
+            suppressed_count > 0,
+            "expected the ** glob to match the nested record"
+        );
+        assert!(
+            !filtered.issues.iter().any(|i| i.rule_id == "ADR014"
+                && i.path
+                    .as_ref()
+                    .is_some_and(|p| p.ends_with("0002-second.md"))),
+            "nested record's ADR014 should be suppressed by the ** glob"
+        );
+    }
+
+    #[test]
+    fn test_check_all_filtered_scoped_ignore_matching_nothing_suppresses_nothing() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr_with_consequences(2, "Second", "Accepted", "TBD"),
+        )
+        .unwrap();
+
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\n\n[[doctor.ignore_path]]\nglob = \"doc/adr/9999-*.md\"\nrules = [\"ADR014\"]\n",
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (filtered, suppressed_count, warnings) = check_all_filtered(&repo, &[]).unwrap();
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
+        assert_eq!(
+            suppressed_count, 0,
+            "a glob matching nothing should suppress nothing"
+        );
+        assert!(
+            filtered.issues.iter().any(|i| i.rule_id == "ADR014"),
+            "ADR014 should still fire since the glob did not match"
+        );
+    }
+
+    #[test]
+    fn test_check_all_filtered_scoped_and_repo_wide_ignores_compose() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+        // 0002 trips ADR014 (scoped away below); 0003/0005 create a numbering
+        // gap that trips ADR011 (suppressed repository-wide below).
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr_with_consequences(2, "Second", "Accepted", "TBD"),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0003-third.md"),
+            make_nygard_adr(3, "Third", "Accepted", ""),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0005-fifth.md"),
+            make_nygard_adr(5, "Fifth", "Accepted", ""),
+        )
+        .unwrap();
+
+        let (unfiltered, _, _) =
+            check_all_filtered(&Repository::open(temp.path()).unwrap(), &[]).unwrap();
+        let unfiltered_adr014 = unfiltered
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR014")
+            .count();
+        let unfiltered_adr011 = unfiltered
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR011")
+            .count();
+        assert!(unfiltered_adr014 > 0);
+        assert!(unfiltered_adr011 > 0);
+
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\n\n[doctor]\nignore = [\"ADR011\"]\n\n[[doctor.ignore_path]]\nglob = \"doc/adr/0002-*.md\"\nrules = [\"ADR014\"]\n",
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (filtered, suppressed_count, warnings) = check_all_filtered(&repo, &[]).unwrap();
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
+        assert_eq!(
+            suppressed_count,
+            unfiltered_adr014 + unfiltered_adr011,
+            "both the scoped and repository-wide ignores should count, with no double counting"
+        );
+        assert!(!filtered.issues.iter().any(|i| i.rule_id == "ADR014"));
+        assert!(!filtered.issues.iter().any(|i| i.rule_id == "ADR011"));
+    }
+
+    #[test]
+    fn test_check_all_filtered_scoped_ignore_matches_by_rule_name() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr_with_consequences(2, "Second", "Accepted", "TBD"),
+        )
+        .unwrap();
+
+        // Confirm ADR014's rule name before relying on it below.
+        let (unfiltered, _, _) =
+            check_all_filtered(&Repository::open(temp.path()).unwrap(), &[]).unwrap();
+        let rule_name = unfiltered
+            .issues
+            .iter()
+            .find(|i| i.rule_id == "ADR014")
+            .map(|i| i.rule_name.clone())
+            .expect("expected an ADR014 issue");
+
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            format!(
+                "adr_dir = \"doc/adr\"\n\n[[doctor.ignore_path]]\nglob = \"doc/adr/0002-*.md\"\nrules = [\"{rule_name}\"]\n"
+            ),
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (filtered, suppressed_count, warnings) = check_all_filtered(&repo, &[]).unwrap();
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
+        assert!(suppressed_count > 0);
+        assert!(!filtered.issues.iter().any(|i| i.rule_id == "ADR014"));
+    }
+
+    #[test]
+    fn test_check_all_filtered_invalid_glob_warns_and_config_still_loads() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr_with_consequences(2, "Second", "Accepted", "TBD"),
+        )
+        .unwrap();
+
+        // '[' with no closing ']' is an invalid glob pattern.
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\n\n[[doctor.ignore_path]]\nglob = \"doc/adr/[0002-*.md\"\nrules = [\"ADR014\"]\n",
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (filtered, suppressed_count, warnings) = check_all_filtered(&repo, &[]).unwrap();
+        assert_eq!(
+            suppressed_count, 0,
+            "an invalid glob must not suppress anything"
+        );
+        assert!(
+            filtered.issues.iter().any(|i| i.rule_id == "ADR014"),
+            "ADR014 should still fire since the invalid glob was not applied"
+        );
+        assert!(
+            warnings.iter().any(|w| w.contains("doc/adr/[0002-*.md")),
+            "expected a warning naming the invalid glob, got: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_check_all_filtered_ignore_path_naming_collection_rule_warns() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, false).unwrap();
+        let adr_dir = repo.adr_path();
+        std::fs::write(
+            adr_dir.join("0002-second.md"),
+            make_nygard_adr(2, "Second", "Accepted", ""),
+        )
+        .unwrap();
+
+        // ADR011 (sequential numbering) is an upstream collection rule and
+        // never carries a path, so this exemption can never fire.
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "adr_dir = \"doc/adr\"\n\n[[doctor.ignore_path]]\nglob = \"doc/adr/0002-*.md\"\nrules = [\"ADR011\"]\n",
+        )
+        .unwrap();
+        let repo = Repository::open(temp.path()).unwrap();
+
+        let (_filtered, _suppressed_count, warnings) = check_all_filtered(&repo, &[]).unwrap();
+        assert!(
+            warnings.iter().any(|w| w.contains("ADR011")),
+            "expected a warning naming the rule that can never fire, got: {warnings:?}"
         );
     }
 }

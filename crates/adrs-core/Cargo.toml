@@ -27,6 +27,7 @@ walkdir.workspace = true
 time.workspace = true
 fuzzy-matcher.workspace = true
 regex.workspace = true
+globset.workspace = true
 
 # Linting (mdbook-lint integration)
 mdbook-lint-core = "0.14.4"
