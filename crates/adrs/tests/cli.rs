@@ -1570,6 +1570,94 @@ fn test_new_no_edit_flag() {
 }
 
 // ============================================================================
+// Unicode Title Slugs (issue #367)
+// ============================================================================
+
+#[test]
+fn test_new_unicode_title_produces_non_empty_slug() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Reporter's exact case: a title with no ASCII letters must not collapse
+    // to an empty slug (which used to produce a bare "0002-.md").
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "魚"])
+        .assert()
+        .success();
+
+    let adr_path = temp.child("doc/adr/0002-yu.md");
+    adr_path.assert(predicate::path::exists());
+
+    // The record's title and heading keep the original characters; only the
+    // filename is transliterated.
+    let content = fs::read_to_string(adr_path.path()).unwrap();
+    assert!(content.contains("魚"));
+    assert!(!content.contains("yu"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_unicode_title_round_trip_list_doctor_renumber() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "日本語のタイトル"])
+        .assert()
+        .success();
+
+    temp.child("doc/adr/0002-ri-ben-yu-notaitoru.md")
+        .assert(predicate::path::exists());
+
+    // `adrs list` should surface the transliterated filename without erroring.
+    adrs()
+        .current_dir(temp.path())
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-ri-ben-yu-notaitoru.md"));
+
+    // `adrs doctor` should treat the record as a normal, healthy ADR.
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success();
+
+    // `adrs renumber` should move the record and preserve its slug.
+    adrs()
+        .current_dir(temp.path())
+        .args(["renumber", "2", "5"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-ri-ben-yu-notaitoru.md"))
+        .stdout(predicate::str::contains("0005-ri-ben-yu-notaitoru.md"));
+
+    temp.child("doc/adr/0002-ri-ben-yu-notaitoru.md")
+        .assert(predicate::path::missing());
+    let renumbered = temp.child("doc/adr/0005-ri-ben-yu-notaitoru.md");
+    renumbered.assert(predicate::path::exists());
+
+    let content = fs::read_to_string(renumbered.path()).unwrap();
+    assert!(content.contains("日本語のタイトル"));
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // Custom Template Flag Tests
 // ============================================================================
 

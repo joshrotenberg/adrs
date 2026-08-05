@@ -35,6 +35,7 @@ dependencies = [
 name = "adrs-core"
 version = "0.10.1"
 dependencies = [
+ "deunicode",
  "fuzzy-matcher",
  "globset",
  "mdbook-lint-core",
