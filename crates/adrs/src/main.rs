@@ -782,6 +782,9 @@ fn main() -> Result<()> {
         }
         Commands::Config => {
             let discovered = discover(&start_dir).ok();
+            if let Some(ref discovered) = discovered {
+                warn_unknown_config_keys(discovered);
+            }
             commands::config_with_discovery(&start_dir, discovered)
         }
         Commands::Doctor {
@@ -1032,9 +1035,13 @@ fn resolve_cli_path(working_dir: Option<&std::path::Path>, path: PathBuf) -> Pat
 /// tools return structured "not initialized" errors without exiting.
 #[cfg(feature = "mcp")]
 fn resolve_mcp_root(start_dir: &std::path::Path) -> PathBuf {
-    discover(start_dir)
-        .map(|discovered| discovered.root)
-        .unwrap_or_else(|_| start_dir.to_path_buf())
+    match discover(start_dir) {
+        Ok(discovered) => {
+            warn_unknown_config_keys(&discovered);
+            discovered.root
+        }
+        Err(_) => start_dir.to_path_buf(),
+    }
 }
 
 /// Discover config or return a helpful error.
@@ -1057,5 +1064,31 @@ fn discover_or_error(
         );
     }
 
+    warn_unknown_config_keys(&discovered);
+
     Ok(discovered)
+}
+
+/// Print a warning to stderr naming the config file and every key in it that
+/// did not match a known field (see issue #363: an unrecognized key, such as
+/// a typo in `warnings_as_errors`, was silently dropped with no diagnostic).
+///
+/// Does not affect the exit code -- the config still loads and the command
+/// proceeds using its defaults for the unrecognized keys.
+pub(crate) fn warn_unknown_config_keys(discovered: &adrs_core::DiscoveredConfig) {
+    if discovered.unknown_keys.is_empty() {
+        return;
+    }
+
+    let source = match &discovered.source {
+        ConfigSource::Project(path) => path.display().to_string(),
+        ConfigSource::Global(path) => format!("{} (global)", path.display()),
+        ConfigSource::Environment => "the ADRS_CONFIG config file".to_string(),
+        ConfigSource::Default => "the config".to_string(),
+    };
+
+    eprintln!(
+        "warning: {source} has unrecognized key(s): {}",
+        discovered.unknown_keys.join(", ")
+    );
 }

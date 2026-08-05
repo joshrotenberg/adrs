@@ -2145,6 +2145,85 @@ fn test_doctor_ignore_flag_works_without_config() {
     temp.close().unwrap();
 }
 
+// Tests for warning on unrecognized adrs.toml keys (issue #363)
+
+#[test]
+fn test_doctor_unknown_doctor_config_key_warns_on_stderr() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Invented `[doctor].path` key from the issue's reproduction: it is not a
+    // recognized field, so it must be reported, not silently dropped.
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\n\n[doctor]\npath = \"doc/adr/0001-example.md\"\n",
+    )
+    .unwrap();
+
+    // A fresh `init` produces a healthy repo, so doctor exits on the merits
+    // of the ADRs (success), not on the config warning.
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("doctor.path"))
+        .stderr(predicate::str::contains("unrecognized"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_doctor_invented_path_key_no_longer_looks_like_working_scope() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Numbering gap trips the ADR011 warning (ADR #1 from init, plus #2 and
+    // #4, skipping #3).
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        nygard_adr(2, "Second"),
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("doc/adr/0004-fourth.md"),
+        nygard_adr(4, "Fourth"),
+    )
+    .unwrap();
+
+    // The issue's exact shape: an invented `path` alongside a real `ignore`
+    // key. `path` never scoped anything -- `ignore` suppresses ADR011
+    // repository-wide, which reads as confirmation that `path` worked.
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\n\n[doctor]\npath = \"doc/adr/0002-second.md\"\nignore = [\"ADR011\"]\n",
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success()
+        // The suppression count is real (ignore is a recognized key)...
+        .stdout(predicate::str::contains("suppressed by ignore rules"))
+        // ...but stderr now says outright that `path` did nothing, so the
+        // per-file scope no longer reads as working.
+        .stderr(predicate::str::contains("doctor.path"));
+
+    temp.close().unwrap();
+}
+
 /// Smoke test for MCP feature availability (default since 0.6.1)
 #[test]
 #[cfg(feature = "mcp")]

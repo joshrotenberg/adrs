@@ -16,7 +16,10 @@ fn resolve_init_target(root: &Path, directory: Option<PathBuf>) -> (PathBuf, Pat
     match directory {
         Some(dir) => (root.to_path_buf(), dir),
         None => match discover(root) {
-            Ok(discovered) => (discovered.root, discovered.config.adr_dir),
+            Ok(discovered) => {
+                crate::warn_unknown_config_keys(&discovered);
+                (discovered.root, discovered.config.adr_dir)
+            }
             Err(_) => (root.to_path_buf(), Config::default().adr_dir),
         },
     }
