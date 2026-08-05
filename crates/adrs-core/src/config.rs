@@ -70,6 +70,25 @@ impl Default for Config {
     }
 }
 
+/// Deserialize a [`Config`] from TOML content, reporting any keys that do not
+/// match a known field instead of silently dropping them.
+///
+/// Returns the parsed config together with the sorted, deduplicated list of
+/// unrecognized keys as dotted paths (e.g. `"doctor.path"` for a stray `path`
+/// key under `[doctor]`). Malformed TOML still produces `Error::Toml`, exactly
+/// as `toml::from_str` does; only the handling of *unknown but otherwise
+/// well-formed* keys changes.
+fn deserialize_config(content: &str) -> Result<(Config, Vec<String>)> {
+    let mut unknown_keys = Vec::new();
+    let deserializer = toml::Deserializer::new(content);
+    let config: Config = serde_ignored::deserialize(deserializer, |path| {
+        unknown_keys.push(path.to_string());
+    })?;
+    unknown_keys.sort();
+    unknown_keys.dedup();
+    Ok((config, unknown_keys))
+}
+
 impl Config {
     /// Load configuration from the given directory.
     ///
@@ -82,7 +101,7 @@ impl Config {
         let config_path = root.join(CONFIG_FILE);
         if config_path.exists() {
             let content = std::fs::read_to_string(&config_path)?;
-            let config: Config = toml::from_str(&content)?;
+            let (config, _unknown_keys) = deserialize_config(&content)?;
             if config.adr_dir.as_os_str().is_empty() {
                 return Err(Error::ConfigError(
                     "adr_dir cannot be empty in adrs.toml".into(),
@@ -203,6 +222,10 @@ pub struct DiscoveredConfig {
     pub root: PathBuf,
     /// Where the config was loaded from.
     pub source: ConfigSource,
+    /// Dotted paths of any keys in the loaded config file that did not match
+    /// a known field (e.g. `"doctor.path"`). Empty when the config had no
+    /// unrecognized keys, or when no config file was read (`ConfigSource::Default`).
+    pub unknown_keys: Vec<String>,
 }
 
 /// Where the configuration was loaded from.
@@ -233,7 +256,7 @@ pub fn discover(start_dir: &Path) -> Result<DiscoveredConfig> {
         let path = PathBuf::from(&config_path);
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;
-            let mut config: Config = toml::from_str(&content)?;
+            let (mut config, unknown_keys) = deserialize_config(&content)?;
             apply_env_overrides(&mut config);
             return Ok(DiscoveredConfig {
                 config,
@@ -242,29 +265,32 @@ pub fn discover(start_dir: &Path) -> Result<DiscoveredConfig> {
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| start_dir.to_path_buf()),
                 source: ConfigSource::Environment,
+                unknown_keys,
             });
         }
     }
 
     // Search upward for project config
-    if let Some((root, config, source)) = search_upward(start_dir)? {
+    if let Some((root, config, source, unknown_keys)) = search_upward(start_dir)? {
         let mut config = config;
         apply_env_overrides(&mut config);
         return Ok(DiscoveredConfig {
             config,
             root,
             source,
+            unknown_keys,
         });
     }
 
     // Try global config
-    if let Some((config, path)) = load_global_config()? {
+    if let Some((config, path, unknown_keys)) = load_global_config()? {
         let mut config = config;
         apply_env_overrides(&mut config);
         return Ok(DiscoveredConfig {
             config,
             root: start_dir.to_path_buf(),
             source: ConfigSource::Global(path),
+            unknown_keys,
         });
     }
 
@@ -275,11 +301,13 @@ pub fn discover(start_dir: &Path) -> Result<DiscoveredConfig> {
         config,
         root: start_dir.to_path_buf(),
         source: ConfigSource::Default,
+        unknown_keys: Vec::new(),
     })
 }
 
 /// Search upward from the given directory for a config file.
-fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSource)>> {
+#[allow(clippy::type_complexity)]
+fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSource, Vec<String>)>> {
     let mut current = start_dir.to_path_buf();
 
     loop {
@@ -287,8 +315,13 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
         let config_path = current.join(CONFIG_FILE);
         if config_path.exists() {
             let content = std::fs::read_to_string(&config_path)?;
-            let config: Config = toml::from_str(&content)?;
-            return Ok(Some((current, config, ConfigSource::Project(config_path))));
+            let (config, unknown_keys) = deserialize_config(&content)?;
+            return Ok(Some((
+                current,
+                config,
+                ConfigSource::Project(config_path),
+                unknown_keys,
+            )));
         }
 
         // Check for .adr-dir
@@ -305,13 +338,23 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
                 export: ExportConfig::default(),
                 doctor: DoctorConfig::default(),
             };
-            return Ok(Some((current, config, ConfigSource::Project(legacy_path))));
+            return Ok(Some((
+                current,
+                config,
+                ConfigSource::Project(legacy_path),
+                Vec::new(),
+            )));
         }
 
         // Check for default ADR directory (indicates project root)
         let default_dir = current.join(DEFAULT_ADR_DIR);
         if default_dir.exists() {
-            return Ok(Some((current, Config::default(), ConfigSource::Default)));
+            return Ok(Some((
+                current,
+                Config::default(),
+                ConfigSource::Default,
+                Vec::new(),
+            )));
         }
 
         // Stop at git repository root
@@ -330,14 +373,14 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
 }
 
 /// Load the global configuration file.
-fn load_global_config() -> Result<Option<(Config, PathBuf)>> {
+fn load_global_config() -> Result<Option<(Config, PathBuf, Vec<String>)>> {
     let config_dir = dirs_config_dir()?;
     let global_path = config_dir.join("adrs").join(GLOBAL_CONFIG_FILE);
 
     if global_path.exists() {
         let content = std::fs::read_to_string(&global_path)?;
-        let config: Config = toml::from_str(&content)?;
-        return Ok(Some((config, global_path)));
+        let (config, unknown_keys) = deserialize_config(&content)?;
+        return Ok(Some((config, global_path, unknown_keys)));
     }
 
     Ok(None)
@@ -1299,7 +1342,9 @@ variant = "bogus"
 
     #[test]
     fn test_unknown_toml_fields_accepted() {
-        // Serde's default behavior: unknown fields are silently ignored.
+        // Unknown fields don't fail `Config::load` -- they never have, and
+        // still don't after adding unknown-key reporting (see the
+        // `deserialize_config` tests below for the reporting behavior itself).
         let temp = TempDir::new().unwrap();
         std::fs::write(
             temp.path().join("adrs.toml"),
@@ -1315,6 +1360,188 @@ also_unknown = true
 
         let config = Config::load(temp.path()).unwrap();
         assert_eq!(config.adr_dir, PathBuf::from("doc/adr"));
+    }
+
+    // ========== deserialize_config / unknown-key reporting tests (issue #363) ==========
+
+    #[test]
+    fn test_deserialize_config_reports_unknown_top_level_key() {
+        let (config, unknown_keys) = deserialize_config(
+            r#"
+adr_dir = "doc/adr"
+made_up_key = "hello"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.adr_dir, PathBuf::from("doc/adr"));
+        assert_eq!(unknown_keys, vec!["made_up_key".to_string()]);
+    }
+
+    #[test]
+    fn test_deserialize_config_reports_nested_doctor_key_as_dotted_path() {
+        // The issue's exact reproduction: an invented `[doctor].path` key.
+        let (_config, unknown_keys) = deserialize_config(
+            r#"
+adr_dir = "doc/adr"
+
+[doctor]
+path = "docs/decisions/0025-example.md"
+ignore = ["ADR014"]
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(unknown_keys, vec!["doctor.path".to_string()]);
+    }
+
+    #[test]
+    fn test_deserialize_config_reports_typo_in_warnings_as_errors() {
+        let (config, unknown_keys) = deserialize_config(
+            r#"
+adr_dir = "doc/adr"
+
+[doctor]
+warnings_as_erors = true
+"#,
+        )
+        .unwrap();
+
+        // The typo'd key is reported...
+        assert_eq!(unknown_keys, vec!["doctor.warnings_as_erors".to_string()]);
+        // ...and the real field silently keeps its default, exactly the trap
+        // described in the issue: no diagnostic either way without this fix.
+        assert!(!config.doctor.warnings_as_errors);
+    }
+
+    #[test]
+    fn test_deserialize_config_reports_nothing_for_valid_config() {
+        let (config, unknown_keys) = deserialize_config(
+            r#"
+adr_dir = "doc/adr"
+mode = "ng"
+default_status = "accepted"
+no_edit = true
+
+[templates]
+format = "madr"
+variant = "minimal"
+custom = "templates/adr.md"
+
+[generate]
+toc_prefix = "./"
+
+[export]
+base_url = "https://example.com/adr"
+
+[doctor]
+ignore = ["ADR011"]
+warnings_as_errors = true
+"#,
+        )
+        .unwrap();
+
+        assert!(
+            unknown_keys.is_empty(),
+            "expected no unknown keys, got {unknown_keys:?}"
+        );
+        assert_eq!(config.adr_dir, PathBuf::from("doc/adr"));
+    }
+
+    #[test]
+    fn test_deserialize_config_reports_unknown_key_in_templates() {
+        let (_config, unknown_keys) = deserialize_config(
+            r#"
+adr_dir = "doc/adr"
+
+[templates]
+format = "madr"
+bogus = "value"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(unknown_keys, vec!["templates.bogus".to_string()]);
+    }
+
+    #[test]
+    fn test_deserialize_config_reports_unknown_key_in_generate() {
+        let (_config, unknown_keys) = deserialize_config(
+            r#"
+adr_dir = "doc/adr"
+
+[generate]
+toc_prefix = "./"
+bogus = "value"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(unknown_keys, vec!["generate.bogus".to_string()]);
+    }
+
+    #[test]
+    fn test_deserialize_config_reports_unknown_key_in_export() {
+        let (_config, unknown_keys) = deserialize_config(
+            r#"
+adr_dir = "doc/adr"
+
+[export]
+base_url = "https://example.com/adr"
+bogus = "value"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(unknown_keys, vec!["export.bogus".to_string()]);
+    }
+
+    #[test]
+    fn test_deserialize_config_malformed_toml_still_errors() {
+        let result = deserialize_config("this is not valid toml {{{");
+        assert!(result.is_err(), "malformed TOML should still error");
+        assert!(
+            matches!(result, Err(Error::Toml(_))),
+            "malformed TOML should still produce Error::Toml, unchanged from toml::from_str"
+        );
+    }
+
+    #[test]
+    fn test_deserialize_config_written_by_adrs_config_reports_no_unknown_keys() {
+        // Round-trip: a config written by `Config::save` (what `adrs config`
+        // and `adrs init --ng` write) must not itself look like it has
+        // unrecognized keys.
+        let temp = TempDir::new().unwrap();
+        let original = Config {
+            adr_dir: PathBuf::from("docs/decisions"),
+            mode: ConfigMode::NextGen,
+            default_status: Some("accepted".to_string()),
+            no_edit: true,
+            templates: TemplateConfig {
+                format: Some("madr".to_string()),
+                variant: Some("minimal".to_string()),
+                custom: Some(PathBuf::from("templates/adr.md")),
+            },
+            generate: GenerateConfig {
+                toc_prefix: Some("./".to_string()),
+            },
+            export: ExportConfig {
+                base_url: Some("https://example.com/adr".to_string()),
+            },
+            doctor: DoctorConfig {
+                ignore: vec!["ADR011".to_string()],
+                warnings_as_errors: true,
+            },
+        };
+        original.save(temp.path()).unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join("adrs.toml")).unwrap();
+        let (_config, unknown_keys) = deserialize_config(&content).unwrap();
+
+        assert!(
+            unknown_keys.is_empty(),
+            "a config written by Config::save should report no unknown keys, got {unknown_keys:?}"
+        );
     }
 
     #[test]
