@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2026-08-05
+
+### Bug Fixes
+
+- Init respects configured adr_dir and preserves existing config (closes #358)
+- Check frontmatter links[].target in doctor's lint path (closes #355)
+- Correct renumber's handling of references when the number is duplicated
+- Warn on unrecognized keys in adrs.toml (closes #363)
+- Transliterate non-ASCII titles before slugging (closes #367)
+
+### Features
+
+- Add doctor rule for asymmetric ADR links (closes #357)
+- Add adrs renumber command to repair duplicate ADR numbers (closes #356)
+- Add path-scoped doctor ignore rules (closes #365)
+
+
 ## [0.10.1] - 2026-07-22
 
 ### Bug Fixes
