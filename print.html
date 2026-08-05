@@ -354,6 +354,14 @@ no_edit = false
 # If omitted, defaults to false
 # warnings_as_errors = false
 
+# Suppress rules for records matching a glob, instead of repository-wide.
+# Use this when one record trips a rule you want kept everywhere else.
+# 'glob' is matched against each record's path relative to the project root.
+# Repeat the block for more than one exemption.
+# [[doctor.ignore_path]]
+# glob = "doc/adr/0025-*.md"
+# rules = ["ADR014"]
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"
@@ -1982,6 +1990,25 @@ from config, so you can suppress an extra rule for a single run without editing
 <code>adrs.toml</code>. <code>--warnings-as-errors</code> on the command line ORs with
 <code>[doctor].warnings_as_errors</code>, so either one being set is enough to make warnings
 fail the check.</p>
+<h3 id="suppressing-a-rule-for-specific-records"><a class="header" href="#suppressing-a-rule-for-specific-records">Suppressing a rule for specific records</a></h3>
+<p><code>[doctor].ignore</code> applies to the whole repository, which means one record with a
+false positive costs you the rule everywhere. To scope a suppression instead, add
+one or more <code>[[doctor.ignore_path]]</code> entries:</p>
+<pre><code class="language-toml">[[doctor.ignore_path]]
+glob = "doc/adr/0025-*.md"
+rules = ["ADR014"]
+</code></pre>
+<p><code>glob</code> is matched against each record's path relative to the project root, using
+forward slashes on every platform. <code>rules</code> accepts rule IDs or rule names, matched
+case-insensitively, the same as <code>[doctor].ignore</code>.</p>
+<p>Two cases produce a warning on stderr rather than failing:</p>
+<ul>
+<li>A glob that does not compile. The rest of the config still applies, but the
+entry does not, so you are told instead of assuming the exemption is live.</li>
+<li>An entry naming <code>ADR010</code>, <code>ADR011</code>, or <code>ADR012</code>. Those rules report on the
+repository as a whole rather than on a file, so there is no path to match and a
+scoped exemption for them can never fire. Use <code>[doctor].ignore</code> for those.</li>
+</ul>
 <h2 id="pre-commit-hook"><a class="header" href="#pre-commit-hook">Pre-commit Hook</a></h2>
 <p><code>adrs</code> ships a <a href="https://pre-commit.com">pre-commit</a> hook (also compatible
 with <a href="https://prek.j178.dev">prek</a>) that runs <code>doctor</code> whenever a markdown
