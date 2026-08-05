@@ -98,8 +98,16 @@ impl Adr {
     }
 
     /// Returns the formatted filename for this ADR.
+    ///
+    /// If the title's slug is empty (e.g. a punctuation-only title, or a
+    /// title in a script that transliterates to nothing usable), falls back
+    /// to `untitled` so the filename never ends up with a bare trailing
+    /// dash like `0005-.md`. The `{:04}-` number prefix is always present,
+    /// since `Repository::renumber` parses filenames by stripping it.
     pub fn filename(&self) -> String {
-        format!("{:04}-{}.md", self.number, slug(&self.title))
+        let slug = slug(&self.title);
+        let slug = if slug.is_empty() { "untitled" } else { &slug };
+        format!("{:04}-{}.md", self.number, slug)
     }
 
     /// Returns the full title with number prefix (e.g., "1. Use Rust").
@@ -335,10 +343,18 @@ impl LinkKind {
 
 /// Convert a title to a URL-safe slug.
 ///
-/// Only ASCII alphanumeric characters are preserved; everything else becomes a dash.
+/// Non-ASCII characters are first transliterated to their closest ASCII
+/// equivalent (e.g. "café" -> "cafe", "魚" -> "yu"). ASCII input passes
+/// through the transliteration step unchanged. After that, only ASCII
+/// alphanumeric characters are preserved; everything else becomes a dash.
 /// Consecutive dashes are collapsed, and leading/trailing dashes are removed.
+///
+/// A title that transliterates to nothing usable (e.g. punctuation-only, or
+/// scripts with no ASCII approximation) produces an empty string. Callers
+/// that need a non-empty filename component must apply their own fallback;
+/// see `Adr::filename`.
 fn slug(title: &str) -> String {
-    title
+    deunicode::deunicode(title)
         .to_lowercase()
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
@@ -434,11 +450,57 @@ mod tests {
     #[test_case("Hello, World!" => "hello-world"; "punctuation")]
     #[test_case("C++ vs Rust" => "c-vs-rust"; "special chars")]
     #[test_case("100% Complete" => "100-complete"; "percentage")]
-    #[test_case("Über Design" => "ber-design"; "unicode umlaut")]
-    #[test_case("日本語" => ""; "japanese characters")]
-    #[test_case("café" => "caf"; "accented characters")]
+    #[test_case("Über Design" => "uber-design"; "unicode umlaut is transliterated")]
+    #[test_case("日本語" => "ri-ben-yu"; "japanese characters are transliterated")]
+    #[test_case("café" => "cafe"; "accented characters are transliterated")]
+    #[test_case("魚" => "yu"; "reporter's exact case (issue #367)")]
+    #[test_case("Использовать Redis" => "ispol-zovat-redis"; "cyrillic transliteration")]
+    #[test_case("Café déjà vu" => "cafe-deja-vu"; "accented latin transliteration")]
+    #[test_case("日本語のタイトル" => "ri-ben-yu-notaitoru"; "cjk transliteration")]
+    #[test_case("Redis と 日本語" => "redis-to-ri-ben-yu"; "mixed scripts in one title")]
+    #[test_case("???" => ""; "punctuation-only title still slugs to nothing")]
     fn test_slug_cases(input: &str) -> String {
         slug(input)
+    }
+
+    #[test]
+    fn test_slug_ascii_passthrough_unchanged() {
+        // `deunicode` is documented to pass ASCII through unchanged, but every
+        // existing repository's filenames depend on that being true, so confirm
+        // it directly rather than assuming.
+        let ascii_titles = [
+            "Use Rust",
+            "API v2.0 Design",
+            "  Multiple   Spaces  ",
+            "CamelCase",
+            "kebab-case",
+            "snake_case",
+            "MixedCase-and_stuff",
+            "",
+            "---",
+            "Hello, World!",
+            "C++ vs Rust",
+            "100% Complete",
+        ];
+        for title in ascii_titles {
+            assert_eq!(
+                deunicode::deunicode(title),
+                title,
+                "deunicode altered ASCII input: {title:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_slug_two_stage_composition() {
+        // deunicode transliterates the em dash to a run of ASCII hyphens
+        // (not a single one), which the slug pipeline's dash-collapsing must
+        // then reduce back to a single separator. This confirms the two
+        // stages (transliterate, then lowercase/replace/collapse/trim)
+        // compose correctly rather than leaving artifacts behind.
+        let result = slug("Naïve — approach");
+        assert_eq!(result, "naive-approach");
+        assert!(!result.contains("--"));
     }
 
     proptest! {
@@ -489,8 +551,25 @@ mod tests {
     #[test_case(999, "Last Decision" => "0999-last-decision.md"; "three digits")]
     #[test_case(9999, "Max Normal" => "9999-max-normal.md"; "four digits")]
     #[test_case(10000, "Beyond Four Digits" => "10000-beyond-four-digits.md"; "five digits")]
+    #[test_case(5, "魚" => "0005-yu.md"; "reporter's exact case (issue #367)")]
+    #[test_case(3, "Использовать Redis" => "0003-ispol-zovat-redis.md"; "cyrillic title")]
+    #[test_case(4, "Café déjà vu" => "0004-cafe-deja-vu.md"; "accented latin title")]
+    #[test_case(5, "日本語のタイトル" => "0005-ri-ben-yu-notaitoru.md"; "cjk title")]
+    #[test_case(1, "???" => "0001-untitled.md"; "punctuation-only title falls back to untitled")]
+    #[test_case(2, "!!! ... ---" => "0002-untitled.md"; "another punctuation-only title falls back")]
     fn test_adr_filename(number: u32, title: &str) -> String {
         Adr::new(number, title).filename()
+    }
+
+    #[test]
+    fn test_adr_filename_fallback_never_leaves_trailing_dash() {
+        // The number prefix ("{:04}-") must stay intact even when the slug
+        // is empty, since `Repository::renumber` parses filenames with
+        // `strip_prefix("{from:04}-")`.
+        let filename = Adr::new(7, "???").filename();
+        assert_eq!(filename, "0007-untitled.md");
+        assert!(!filename.ends_with("-.md"));
+        assert!(filename.starts_with("0007-"));
     }
 
     #[test]

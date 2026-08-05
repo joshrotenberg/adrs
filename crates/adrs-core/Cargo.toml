@@ -28,6 +28,7 @@ time.workspace = true
 fuzzy-matcher.workspace = true
 regex.workspace = true
 globset.workspace = true
+deunicode = "1.6.2"
 
 # Linting (mdbook-lint integration)
 mdbook-lint-core = "0.14.4"
