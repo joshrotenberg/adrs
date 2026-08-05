@@ -26,8 +26,11 @@ pub fn doctor(root: &Path, ng: bool, ignore: Vec<String>, warnings_as_errors: bo
     let repo =
         Repository::open(root).context("Failed to open repository. Have you run 'adrs init'?")?;
 
-    let (report, suppressed_count) =
+    let (report, suppressed_count, config_warnings) =
         check_all_filtered(&repo, &ignore).context("Failed to run health checks")?;
+    for warning in &config_warnings {
+        eprintln!("warning: {warning}");
+    }
     let warnings_as_errors = warnings_as_errors || repo.config().doctor.warnings_as_errors;
 
     if report.issues.is_empty() {

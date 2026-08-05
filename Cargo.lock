@@ -36,6 +36,7 @@ name = "adrs-core"
 version = "0.10.1"
 dependencies = [
  "fuzzy-matcher",
+ "globset",
  "mdbook-lint-core",
  "mdbook-lint-rulesets",
  "minijinja",

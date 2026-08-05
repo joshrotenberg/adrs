@@ -2224,6 +2224,57 @@ fn test_doctor_invented_path_key_no_longer_looks_like_working_scope() {
     temp.close().unwrap();
 }
 
+// Tests for path-scoped doctor ignores (issue #365)
+
+fn nygard_adr_with_consequences(number: u32, title: &str, consequences: &str) -> String {
+    format!(
+        "# {number}. {title}\n\nDate: 2024-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nSome context.\n\n## Decision\n\nA decision.\n\n## Consequences\n\n{consequences}\n"
+    )
+}
+
+#[test]
+fn test_doctor_ignore_path_scopes_suppression_to_matching_record() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    // Both records trip ADR014 (placeholder text in Consequences); only
+    // 0002 should be exempted.
+    fs::write(
+        temp.path().join("doc/adr/0002-second.md"),
+        nygard_adr_with_consequences(2, "Second", "TBD"),
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("doc/adr/0003-third.md"),
+        nygard_adr_with_consequences(3, "Third", "TBD"),
+    )
+    .unwrap();
+
+    fs::write(
+        temp.path().join("adrs.toml"),
+        "adr_dir = \"doc/adr\"\n\n[[doctor.ignore_path]]\nglob = \"doc/adr/0002-*.md\"\nrules = [\"ADR014\"]\n",
+    )
+    .unwrap();
+
+    // ADR014 is a Warning, so doctor exits 0 without --warnings-as-errors;
+    // the important assertions are what shows up in the report.
+    adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("0002-second.md").not())
+        .stdout(predicate::str::contains("0003-third.md"))
+        .stdout(predicate::str::contains("suppressed by ignore rules"));
+
+    temp.close().unwrap();
+}
+
 /// Smoke test for MCP feature availability (default since 0.6.1)
 #[test]
 #[cfg(feature = "mcp")]
