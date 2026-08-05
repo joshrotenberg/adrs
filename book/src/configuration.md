@@ -67,6 +67,14 @@ no_edit = false
 # If omitted, defaults to false
 # warnings_as_errors = false
 
+# Suppress rules for records matching a glob, instead of repository-wide.
+# Use this when one record trips a rule you want kept everywhere else.
+# 'glob' is matched against each record's path relative to the project root.
+# Repeat the block for more than one exemption.
+# [[doctor.ignore_path]]
+# glob = "doc/adr/0025-*.md"
+# rules = ["ADR014"]
+
 # Template configuration
 [templates]
 # Default format: "nygard" or "madr"

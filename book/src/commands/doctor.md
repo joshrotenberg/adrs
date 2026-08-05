@@ -113,6 +113,30 @@ from config, so you can suppress an extra rule for a single run without editing
 `[doctor].warnings_as_errors`, so either one being set is enough to make warnings
 fail the check.
 
+### Suppressing a rule for specific records
+
+`[doctor].ignore` applies to the whole repository, which means one record with a
+false positive costs you the rule everywhere. To scope a suppression instead, add
+one or more `[[doctor.ignore_path]]` entries:
+
+```toml
+[[doctor.ignore_path]]
+glob = "doc/adr/0025-*.md"
+rules = ["ADR014"]
+```
+
+`glob` is matched against each record's path relative to the project root, using
+forward slashes on every platform. `rules` accepts rule IDs or rule names, matched
+case-insensitively, the same as `[doctor].ignore`.
+
+Two cases produce a warning on stderr rather than failing:
+
+- A glob that does not compile. The rest of the config still applies, but the
+  entry does not, so you are told instead of assuming the exemption is live.
+- An entry naming `ADR010`, `ADR011`, or `ADR012`. Those rules report on the
+  repository as a whole rather than on a file, so there is no path to match and a
+  scoped exemption for them can never fire. Use `[doctor].ignore` for those.
+
 ## Pre-commit Hook
 
 `adrs` ships a [pre-commit](https://pre-commit.com) hook (also compatible
