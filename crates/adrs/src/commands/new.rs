@@ -91,10 +91,11 @@ pub fn new(
         repo.new_adr(&title).context("Failed to create new ADR")?
     };
 
-    // Apply explicit CLI status if specified (superseding sets its own status).
-    if supersedes.is_none()
-        && let Some(status) = cli_status
-    {
+    // Apply explicit CLI status if specified. This also covers the supersede
+    // path: only the superseded ADR's status is forced (to Superseded), the
+    // new ADR follows the usual --status > default_status > proposed
+    // precedence (#371).
+    if let Some(status) = cli_status {
         adr.status = status;
         repo.update_metadata(&adr)
             .context("Failed to update ADR status")?;
