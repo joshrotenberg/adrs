@@ -465,9 +465,15 @@ impl Repository {
     }
 
     /// Create a new ADR that supersedes another.
+    ///
+    /// The new ADR honors `config.default_status` the same way `new_adr()`
+    /// does (#371); only the superseded ADR is forced to `Superseded`.
     pub fn supersede(&self, title: impl Into<String>, superseded: u32) -> Result<(Adr, PathBuf)> {
         let number = self.next_number()?;
         let mut adr = Adr::new(number, title);
+        if let Some(default_status) = self.config.default_status.as_deref() {
+            adr.status = default_status.parse::<AdrStatus>().unwrap();
+        }
         adr.add_link(AdrLink::new(superseded, LinkKind::Supersedes));
 
         // Create the new ADR first so its file exists on disk when
@@ -1949,6 +1955,31 @@ default_status = "draft"
         let (adr, _) = repo.new_adr("Custom status ADR").unwrap();
 
         assert_eq!(adr.status, AdrStatus::Custom("draft".into()));
+    }
+
+    #[test]
+    fn test_supersede_uses_custom_default_status_from_config() {
+        // #371: the superseding ADR must honor default_status like new_adr()
+        // does; only the superseded ADR is forced to Superseded.
+        let temp = TempDir::new().unwrap();
+        Repository::init(temp.path(), None, false).unwrap();
+
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            r#"
+adr_dir = "doc/adr"
+mode = "compatible"
+default_status = "accepted"
+"#,
+        )
+        .unwrap();
+
+        let repo = Repository::open(temp.path()).unwrap();
+        repo.new_adr("Original decision").unwrap();
+        let (adr, _) = repo.supersede("Replacement decision", 2).unwrap();
+
+        assert_eq!(adr.status, AdrStatus::Accepted);
+        assert_eq!(repo.get(2).unwrap().status, AdrStatus::Superseded);
     }
 
     // ========== Get and Find Tests ==========

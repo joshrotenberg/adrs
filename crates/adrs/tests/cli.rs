@@ -1570,6 +1570,104 @@ fn test_new_no_edit_flag() {
 }
 
 // ============================================================================
+// Supersede status handling (issue #371)
+// ============================================================================
+
+#[test]
+fn test_new_supersedes_honors_explicit_status() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "--no-edit", "First decision"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "--ng",
+            "new",
+            "--no-edit",
+            "--supersedes",
+            "2",
+            "--status",
+            "accepted",
+            "Replacement decision",
+        ])
+        .assert()
+        .success();
+
+    // #371: the superseding ADR used to land as proposed, silently ignoring
+    // --status. It must carry the explicit status.
+    let new_content =
+        fs::read_to_string(temp.path().join("doc/adr/0003-replacement-decision.md")).unwrap();
+    assert!(new_content.contains("status: accepted"));
+
+    // The superseded ADR is still forced to superseded.
+    let old_content =
+        fs::read_to_string(temp.path().join("doc/adr/0002-first-decision.md")).unwrap();
+    assert!(old_content.contains("status: superseded"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_new_supersedes_honors_default_status_from_config() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    // Prepend so the top-level key can't land inside a [table] section.
+    let config_path = temp.path().join("adrs.toml");
+    let config = fs::read_to_string(&config_path).unwrap();
+    fs::write(
+        &config_path,
+        format!("default_status = \"accepted\"\n{config}"),
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "--no-edit", "First decision"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args([
+            "--ng",
+            "new",
+            "--no-edit",
+            "--supersedes",
+            "2",
+            "Replacement decision",
+        ])
+        .assert()
+        .success();
+
+    let new_content =
+        fs::read_to_string(temp.path().join("doc/adr/0003-replacement-decision.md")).unwrap();
+    assert!(new_content.contains("status: accepted"));
+
+    let old_content =
+        fs::read_to_string(temp.path().join("doc/adr/0002-first-decision.md")).unwrap();
+    assert!(old_content.contains("status: superseded"));
+
+    temp.close().unwrap();
+}
+
+// ============================================================================
 // Unicode Title Slugs (issue #367)
 // ============================================================================
 
