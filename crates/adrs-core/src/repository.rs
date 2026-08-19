@@ -416,28 +416,11 @@ impl Repository {
             if let Ok(target_adr) = self.get(link.target) {
                 map.insert(
                     link.target,
-                    (target_adr.title.clone(), Self::link_href(&target_adr)),
+                    (target_adr.title.clone(), target_adr.link_filename()),
                 );
             }
         }
         map
-    }
-
-    /// The href to use when rendering a link to `target_adr`.
-    ///
-    /// Prefers the target's actual on-disk filename over a filename
-    /// re-derived from its title. The two can diverge (hand-named files,
-    /// files renamed after a title edit), and re-deriving produces hrefs
-    /// that point at files that don't exist (#325). Falls back to the
-    /// title-derived filename only when the target has no resolvable path.
-    fn link_href(target_adr: &Adr) -> String {
-        target_adr
-            .path
-            .as_ref()
-            .and_then(|p| p.file_name())
-            .and_then(|f| f.to_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| target_adr.filename())
     }
 
     /// Create a new ADR.
@@ -3398,25 +3381,22 @@ Context.
     }
 
     #[test]
-    fn test_link_href_prefers_actual_path_over_slugified_title() {
+    fn test_link_filename_prefers_actual_path_over_slugified_title() {
         let target = Adr {
             path: Some(PathBuf::from("/repo/doc/adr/0003-use-rust-for-backend.md")),
             ..Adr::new(3, "Use Rust for backend services")
         };
-        assert_eq!(
-            Repository::link_href(&target),
-            "0003-use-rust-for-backend.md"
-        );
+        assert_eq!(target.link_filename(), "0003-use-rust-for-backend.md");
     }
 
     #[test]
-    fn test_link_href_falls_back_to_slugified_title_when_path_missing() {
+    fn test_link_filename_falls_back_to_slugified_title_when_path_missing() {
         let target = Adr {
             path: None,
             ..Adr::new(3, "Use Rust for backend services")
         };
         assert_eq!(
-            Repository::link_href(&target),
+            target.link_filename(),
             "0003-use-rust-for-backend-services.md"
         );
     }

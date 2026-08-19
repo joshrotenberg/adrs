@@ -39,7 +39,7 @@ pub fn generate_toc(
             bullet,
             adr.full_title(),
             prefix,
-            adr.filename()
+            adr.link_filename()
         );
     }
 
@@ -66,7 +66,9 @@ pub fn generate_graph(root: &Path, prefix: Option<String>, extension: &str) -> R
 
     // Create nodes
     for adr in &adrs {
-        let filename = adr.filename().replace(".md", &format!(".{}", extension));
+        let filename = adr
+            .link_filename()
+            .replace(".md", &format!(".{}", extension));
         println!(
             "  _{} [label=\"{}\"; URL=\"{}{}\"];",
             adr.number,
@@ -136,12 +138,16 @@ build-dir = "book"
     // Create SUMMARY.md
     let mut summary = String::from("# Summary\n\n");
     for adr in &adrs {
-        summary.push_str(&format!("- [{}]({})\n", adr.full_title(), adr.filename()));
+        // Link and copy destination must both use the on-disk filename,
+        // which can differ from the title-derived one (renamed files,
+        // older slug schemes).
+        let filename = adr.link_filename();
+        summary.push_str(&format!("- [{}]({})\n", adr.full_title(), filename));
 
         // Copy ADR file to src
         if let Some(path) = &adr.path {
             let content = fs::read_to_string(path)?;
-            fs::write(src_dir.join(adr.filename()), content)?;
+            fs::write(src_dir.join(&filename), content)?;
         }
     }
     fs::write(src_dir.join("SUMMARY.md"), summary)?;
