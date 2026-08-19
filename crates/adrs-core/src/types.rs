@@ -110,6 +110,22 @@ impl Adr {
         format!("{:04}-{}.md", self.number, slug)
     }
 
+    /// Returns the filename to use when linking to this ADR.
+    ///
+    /// Prefers the actual on-disk file name over one re-derived from the
+    /// title. The two can diverge when the file was created under an older
+    /// slug scheme or renamed by hand, and a re-derived name points at a
+    /// file that doesn't exist. Falls back to [`Adr::filename`] when the
+    /// ADR has no path (not yet written to disk).
+    pub fn link_filename(&self) -> String {
+        self.path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|f| f.to_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| self.filename())
+    }
+
     /// Returns the full title with number prefix (e.g., "1. Use Rust").
     pub fn full_title(&self) -> String {
         format!("{}. {}", self.number, self.title)

@@ -444,6 +444,46 @@ fn test_generate_toc_ordered() {
     temp.close().unwrap();
 }
 
+/// TOC links must use the file's actual on-disk name, not one re-derived
+/// from the title. The two diverge for files created under an older slug
+/// scheme or renamed by hand.
+#[test]
+fn test_generate_toc_uses_on_disk_filename_for_renamed_file() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "Use PostgreSQL"])
+        .env("EDITOR", "true") // Use 'true' as a no-op editor
+        .assert()
+        .success();
+
+    // Rename on disk, keeping the number prefix.
+    fs::rename(
+        temp.path().join("doc/adr/0002-use-postgresql.md"),
+        temp.path().join("doc/adr/0002-use-postgres-db.md"),
+    )
+    .unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["generate", "toc"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "[2. Use PostgreSQL](0002-use-postgres-db.md)",
+        ))
+        .stdout(predicate::str::contains("0002-use-postgresql.md").not());
+
+    temp.close().unwrap();
+}
+
 #[test]
 fn test_generate_graph_help() {
     adrs()
