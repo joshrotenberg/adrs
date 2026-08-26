@@ -55,12 +55,13 @@ EXAMPLES:
 
 ENVIRONMENT VARIABLES:
   ADR_DIRECTORY    Override the ADR directory (default: doc/adr)
-  ADRS_CONFIG      Explicit path to the adrs.toml config file
+  ADRS_CONFIG      Explicit path to the adrs.toml or .adrs.toml config file
 
 CONFIGURATION:
-  adrs.toml is discovered by walking up from the current directory. A global config
-  is also read from $XDG_CONFIG_HOME/adrs/config.toml (~/.config/adrs/config.toml on
-  Linux/macOS, %APPDATA%/adrs/config.toml on Windows).
+  adrs.toml (or .adrs.toml if adrs.toml is absent) is discovered by walking up
+  from the current directory. If both files exist, adrs.toml is used and a warning
+  is printed. A global config is also read from $XDG_CONFIG_HOME/adrs/config.toml
+  (~/.config/adrs/config.toml on Linux/macOS, %APPDATA%/adrs/config.toml on Windows).
 
   Compatible mode (default): metadata stored in the markdown body (adr-tools compatible).
   NextGen mode (--ng):       YAML frontmatter with extended fields (tags, deciders).
@@ -1077,6 +1078,10 @@ fn discover_or_error(
 /// Does not affect the exit code -- the config still loads and the command
 /// proceeds using its defaults for the unrecognized keys.
 pub(crate) fn warn_unknown_config_keys(discovered: &adrs_core::DiscoveredConfig) {
+    if discovered.shadowed_toml.is_some() {
+        eprintln!("warning: {}", adrs_core::DUPLICATE_TOML_CONFIG_MESSAGE);
+    }
+
     if discovered.unknown_keys.is_empty() {
         return;
     }

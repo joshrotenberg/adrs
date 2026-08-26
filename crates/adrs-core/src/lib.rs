@@ -93,7 +93,8 @@ mod template;
 mod types;
 
 pub use config::{
-    CONFIG_FILE, Config, ConfigMode, ConfigSource, DiscoveredConfig, LEGACY_CONFIG_FILE, discover,
+    CONFIG_FILE, Config, ConfigMode, ConfigSource, DUPLICATE_TOML_CONFIG_MESSAGE, DiscoveredConfig,
+    HIDDEN_CONFIG_FILE, LEGACY_CONFIG_FILE, discover,
 };
 pub use error::{Error, Result};
 pub use export::{

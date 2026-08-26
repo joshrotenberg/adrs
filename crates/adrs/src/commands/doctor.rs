@@ -29,6 +29,11 @@ pub fn doctor(root: &Path, ng: bool, ignore: Vec<String>, warnings_as_errors: bo
     let (report, suppressed_count, config_warnings) =
         check_all_filtered(&repo, &ignore).context("Failed to run health checks")?;
     for warning in &config_warnings {
+        // Dual-TOML is already printed for every command via
+        // `warn_unknown_config_keys`; skip the duplicate line here.
+        if warning == adrs_core::DUPLICATE_TOML_CONFIG_MESSAGE {
+            continue;
+        }
         eprintln!("warning: {warning}");
     }
     let warnings_as_errors = warnings_as_errors || repo.config().doctor.warnings_as_errors;

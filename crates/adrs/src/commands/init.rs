@@ -9,9 +9,9 @@ use std::path::PathBuf;
 ///
 /// An explicit `directory` argument always wins. Otherwise the ADR
 /// directory is resolved through the same config discovery every other
-/// command uses (`adrs.toml`, then `.adr-dir`, then `ADR_DIRECTORY`, then
-/// the global config), falling back to `doc/adr` only when nothing is
-/// configured.
+/// command uses (`adrs.toml`, then `.adrs.toml`, then `.adr-dir`, then
+/// `ADR_DIRECTORY`, then the global config), falling back to `doc/adr`
+/// only when nothing is configured.
 fn resolve_init_target(root: &Path, directory: Option<PathBuf>) -> (PathBuf, PathBuf) {
     match directory {
         Some(dir) => (root.to_path_buf(), dir),

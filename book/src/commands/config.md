@@ -59,7 +59,8 @@ Mode: Compatible
 
 | Source | Description |
 |--------|-------------|
-| `adrs.toml` | TOML configuration file |
+| `adrs.toml` | TOML configuration file (preferred if both TOML files exist) |
+| `.adrs.toml` | Hidden TOML fallback when `adrs.toml` is absent |
 | `.adr-dir` | Legacy adr-tools configuration |
 | `global (~/.config/adrs/config.toml)` | User-wide configuration |
 | `environment` | Environment variable override |

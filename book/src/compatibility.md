@@ -6,7 +6,7 @@ This page explains the differences between compatible mode (default) and NextGen
 
 | Aspect | Compatible (default) | NextGen (--ng) | Breaks adr-tools? |
 |--------|---------------------|----------------|-------------------|
-| **Config file** | `.adr-dir` | `adrs.toml` | Yes |
+| **Config file** | `.adr-dir` | `adrs.toml` (or `.adrs.toml`) | Yes |
 | **File format** | Plain markdown | YAML frontmatter | Yes |
 | **Status storage** | `## Status` section | `status:` in YAML | Yes |
 | **Link storage** | Markdown links in Status | `links:` YAML array | Yes |

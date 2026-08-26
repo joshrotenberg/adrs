@@ -5,8 +5,8 @@
 
 use crate::snippet::extract_snippet;
 use adrs_core::{
-    AdrStatus, IssueSeverity, LinkKind, Repository, TemplateFormat, TemplateVariant, check_all,
-    export_repository,
+    AdrStatus, IssueSeverity, LinkKind, Repository, TemplateFormat, TemplateVariant,
+    check_all_filtered, export_repository,
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -470,6 +470,9 @@ struct DoctorResult {
     warning_count: usize,
     info_count: usize,
     issues: Vec<DoctorIssue>,
+    /// Non-fatal config diagnostics (same strings CLI `adrs doctor` prints as
+    /// `warning:` on stderr), e.g. dual `adrs.toml` / `.adrs.toml`.
+    config_warnings: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -632,7 +635,7 @@ fn build_router(root: PathBuf) -> McpRouter {
         ro,
         state,
         "run_doctor",
-        "Run health checks on the ADR repository. Returns broken links, parse errors, duplicate numbers, and other issues. Read-only; does not modify any files.",
+        "Run health checks on the ADR repository. Returns broken links, parse errors, duplicate numbers, and other issues, plus config warnings (the same non-fatal diagnostics CLI doctor prints on stderr, such as both adrs.toml and .adrs.toml being present). Read-only; does not modify any files.",
         run_doctor_impl
     );
 
@@ -650,7 +653,7 @@ fn build_router(root: PathBuf) -> McpRouter {
         rw,
         state,
         "init_repository",
-        "Initialize an ADR repository at the directory the server is bound to (its current working directory or -C path). Use this when repository tools report the repository is not initialized. Set nextgen=true for NextGen mode (adrs.toml, YAML frontmatter); omit or false for compatible mode (.adr-dir). Optionally set adr_dir (relative to the root, default doc/adr). Operates only on the bound root, refuses to overwrite an existing repository, and does not create parent directories. Returns the mode, config path, ADR directory, and initial ADR path.",
+        "Initialize an ADR repository at the directory the server is bound to (its current working directory or -C path). Use this when repository tools report the repository is not initialized. Set nextgen=true for NextGen mode (adrs.toml, YAML frontmatter); omit or false for compatible mode (.adr-dir). Optionally set adr_dir (relative to the root, default doc/adr). Operates only on the bound root, does not create parent directories, and is idempotent like CLI `adrs init`: an existing matching config (adrs.toml, .adrs.toml, or .adr-dir) is left in place. Returns the mode, config path, ADR directory, and initial ADR path.",
         InitRepositoryParams,
         init_repository_impl
     );
@@ -954,15 +957,6 @@ impl AdrState {
             ));
         }
 
-        // Refuse to overwrite an existing configuration or ADR collection.
-        // Repeated initialization is rejected without changing existing files.
-        if Repository::open(root).is_ok() {
-            return Err(format!(
-                "An ADR repository already exists at {}. Initialization was not performed.",
-                root.display()
-            ));
-        }
-
         // Validate the ADR directory: it must stay within the bound root.
         let adr_dir = match params.adr_dir.as_deref() {
             Some(dir) if dir.trim().is_empty() => {
@@ -996,11 +990,17 @@ impl AdrState {
         let repo = Repository::init(root, adr_dir, params.nextgen).map_err(|e| e.to_string())?;
         let config = repo.config();
 
-        let config_path = if config.is_next_gen() {
-            root.join(adrs_core::CONFIG_FILE)
-        } else {
-            root.join(adrs_core::LEGACY_CONFIG_FILE)
-        };
+        // Report the file that is actually present after init (reuse may leave
+        // `.adrs.toml` or `.adr-dir` even when `nextgen` was set).
+        let config_path = [
+            adrs_core::CONFIG_FILE,
+            adrs_core::HIDDEN_CONFIG_FILE,
+            adrs_core::LEGACY_CONFIG_FILE,
+        ]
+        .into_iter()
+        .map(|name| root.join(name))
+        .find(|path| path.exists())
+        .unwrap_or_else(|| root.join(adrs_core::LEGACY_CONFIG_FILE));
 
         // The initial ADR (lowest number) present after initialization, if any.
         let adr_path = repo.adr_path();
@@ -1864,7 +1864,8 @@ impl AdrState {
 
     fn run_doctor_impl(&self) -> Result<String, String> {
         let repo = self.open_repo()?;
-        let report = check_all(&repo).map_err(|e| e.to_string())?;
+        let (report, _suppressed, config_warnings) =
+            check_all_filtered(&repo, &[]).map_err(|e| e.to_string())?;
 
         let error_count = report.count_by_severity(IssueSeverity::Error);
         let warning_count = report.count_by_severity(IssueSeverity::Warning);
@@ -1890,6 +1891,7 @@ impl AdrState {
             warning_count,
             info_count,
             issues,
+            config_warnings,
         };
 
         serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
@@ -3374,11 +3376,85 @@ Confirm via tests.
         let report: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert!(report["healthy"].is_boolean());
         assert!(report["issues"].is_array());
+        assert!(
+            report["config_warnings"].as_array().unwrap().is_empty(),
+            "fresh repo should have no config warnings"
+        );
         assert_eq!(
             report["error_count"].as_u64().unwrap(),
             0,
             "fresh repo should have no errors"
         );
+    }
+
+    #[tokio::test]
+    async fn test_list_and_doctor_toml_file_combinations() {
+        use adrs_core::{CONFIG_FILE, HIDDEN_CONFIG_FILE, LEGACY_CONFIG_FILE, Repository};
+
+        for ng in [false, true] {
+            for (toml, hidden, legacy) in [
+                (false, false, false),
+                (false, false, true),
+                (false, true, false),
+                (false, true, true),
+                (true, false, false),
+                (true, false, true),
+                (true, true, false),
+                (true, true, true),
+            ] {
+                let expect_dup = toml && hidden;
+                let temp = tempfile::tempdir().unwrap();
+                Repository::init(temp.path(), None, ng).unwrap();
+                let _ = std::fs::remove_file(temp.path().join(CONFIG_FILE));
+                let _ = std::fs::remove_file(temp.path().join(HIDDEN_CONFIG_FILE));
+                let _ = std::fs::remove_file(temp.path().join(LEGACY_CONFIG_FILE));
+                if toml {
+                    std::fs::write(temp.path().join(CONFIG_FILE), "adr_dir = \"doc/adr\"\n")
+                        .unwrap();
+                }
+                if hidden {
+                    std::fs::write(
+                        temp.path().join(HIDDEN_CONFIG_FILE),
+                        "adr_dir = \"doc/adr\"\n",
+                    )
+                    .unwrap();
+                }
+                if legacy {
+                    std::fs::write(temp.path().join(LEGACY_CONFIG_FILE), "doc/adr\n").unwrap();
+                }
+
+                let router = build_router(temp.path().to_path_buf());
+                let transport = ChannelTransport::new(router);
+                let client = McpClient::connect(transport).await.unwrap();
+                client.initialize("test-client", "1.0.0").await.unwrap();
+
+                let listed = client.call_tool_text("list_adrs", json!({})).await.unwrap();
+                assert!(
+                    listed.contains("number") || listed.contains("["),
+                    "list_adrs should succeed for toml={toml} hidden={hidden} legacy={legacy} ng={ng}, got {listed}"
+                );
+
+                let result = client
+                    .call_tool_text("run_doctor", json!({}))
+                    .await
+                    .unwrap();
+                let report: serde_json::Value = serde_json::from_str(&result).unwrap();
+                assert!(
+                    report["issues"].is_array(),
+                    "run_doctor should return issues for toml={toml} hidden={hidden} legacy={legacy} ng={ng}"
+                );
+                let warnings = report["config_warnings"].as_array().unwrap();
+                let has_dup = warnings.iter().any(|w| {
+                    w.as_str().is_some_and(|s| {
+                        s.contains("both adrs.toml and .adrs.toml are present; using adrs.toml")
+                    })
+                });
+                assert_eq!(
+                    has_dup, expect_dup,
+                    "run_doctor config_warnings dual-TOML mismatch for toml={toml} hidden={hidden} legacy={legacy} ng={ng}: {warnings:?}"
+                );
+            }
+        }
     }
 
     #[tokio::test]
@@ -3591,7 +3667,7 @@ Confirm via tests.
     }
 
     #[tokio::test]
-    async fn test_init_repository_rejects_repeat() {
+    async fn test_init_repository_repeat_reuses_existing() {
         let (client, temp) = setup_uninitialized_client().await;
 
         client
@@ -3601,36 +3677,126 @@ Confirm via tests.
 
         let config_before = std::fs::read_to_string(temp.path().join(".adr-dir")).unwrap();
 
-        // A second initialization is rejected and changes nothing.
+        // Same as CLI `adrs init`: a second call succeeds and leaves a matching
+        // config in place. `nextgen` does not convert `.adr-dir` into `adrs.toml`.
         let repeat = client
-            .call_tool("init_repository", json!({"nextgen": true}))
+            .call_tool_text("init_repository", json!({"nextgen": true}))
             .await
             .unwrap();
-        assert!(repeat.is_error, "repeated init should be rejected");
+        let init: serde_json::Value = serde_json::from_str(&repeat).unwrap();
+        assert_eq!(
+            std::path::Path::new(init["config_path"].as_str().unwrap())
+                .file_name()
+                .unwrap()
+                .to_string_lossy(),
+            ".adr-dir",
+            "reuse must report the existing config, got {}",
+            init["config_path"]
+        );
 
         assert!(
             !temp.path().join("adrs.toml").exists(),
-            "rejected repeat must not write a new config"
+            "repeat must not write a new config"
         );
         assert_eq!(
             std::fs::read_to_string(temp.path().join(".adr-dir")).unwrap(),
             config_before,
-            "rejected repeat must not modify existing config"
+            "repeat must not modify existing config"
         );
     }
 
     #[tokio::test]
-    async fn test_init_repository_rejects_repeat_on_preinitialized() {
-        // A server bound to an already-initialized repo must refuse init.
+    async fn test_init_repository_reuses_preinitialized() {
         let (client, _tmp) = setup_client(false).await;
         let result = client
-            .call_tool("init_repository", json!({}))
+            .call_tool_text("init_repository", json!({}))
             .await
             .unwrap();
+        let init: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert!(
-            result.is_error,
-            "init on an existing repository should be rejected"
+            init["config_path"].is_string(),
+            "init on an existing repository should reuse it, got {result}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_reuses_existing_toml_files() {
+        // CLI `init` is idempotent (#358); MCP `init_repository` matches that.
+        // A pre-existing `adrs.toml` or `.adrs.toml` is reused with or without
+        // nextgen, and the file is left byte-for-byte unchanged.
+        for (filename, nextgen) in [
+            ("adrs.toml", false),
+            ("adrs.toml", true),
+            (".adrs.toml", false),
+            (".adrs.toml", true),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            std::fs::create_dir_all(temp.path().join("doc/adr")).unwrap();
+            let original = "adr_dir = \"doc/adr\"\n";
+            std::fs::write(temp.path().join(filename), original).unwrap();
+            let router = build_router(temp.path().to_path_buf());
+            let transport = ChannelTransport::new(router);
+            let client = McpClient::connect(transport).await.unwrap();
+            client.initialize("test-client", "1.0.0").await.unwrap();
+
+            let result = client
+                .call_tool_text("init_repository", json!({ "nextgen": nextgen }))
+                .await
+                .unwrap();
+            let init: serde_json::Value = serde_json::from_str(&result).unwrap();
+            let reported = std::path::Path::new(init["config_path"].as_str().unwrap())
+                .file_name()
+                .unwrap()
+                .to_string_lossy();
+            assert_eq!(
+                reported, filename,
+                "{filename} nextgen={nextgen} should report that file, got {}",
+                init["config_path"]
+            );
+            assert_eq!(
+                std::fs::read_to_string(temp.path().join(filename)).unwrap(),
+                original,
+                "{filename} nextgen={nextgen} must not be rewritten"
+            );
+            assert!(
+                !temp.path().join(".adr-dir").exists(),
+                "reuse must not write .adr-dir"
+            );
+            if filename == ".adrs.toml" {
+                assert!(
+                    !temp.path().join("adrs.toml").exists(),
+                    "reuse of .adrs.toml must not write adrs.toml"
+                );
+            }
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(temp.path().join("doc/adr")).unwrap();
+        std::fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+        std::fs::write(temp.path().join(".adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+        let router = build_router(temp.path().to_path_buf());
+        let transport = ChannelTransport::new(router);
+        let client = McpClient::connect(transport).await.unwrap();
+        client.initialize("test-client", "1.0.0").await.unwrap();
+        let result = client
+            .call_tool_text("init_repository", json!({}))
+            .await
+            .unwrap();
+        let init: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let reported = std::path::Path::new(init["config_path"].as_str().unwrap())
+            .file_name()
+            .unwrap()
+            .to_string_lossy();
+        assert_eq!(
+            reported, "adrs.toml",
+            "both TOML files: reuse should report adrs.toml, got {}",
+            init["config_path"]
+        );
+        assert!(
+            temp.path().join(".adrs.toml").exists(),
+            "shadowed .adrs.toml must be left in place"
+        );
+        assert!(!temp.path().join(".adr-dir").exists());
     }
 
     #[tokio::test]

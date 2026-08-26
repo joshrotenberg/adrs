@@ -114,6 +114,9 @@ pub struct Repository {
     /// Configuration for this repository.
     config: Config,
 
+    /// `.adrs.toml` path when it was present alongside `adrs.toml` and ignored.
+    shadowed_toml: Option<PathBuf>,
+
     /// Parser for reading ADRs.
     parser: Parser,
 
@@ -125,12 +128,13 @@ impl Repository {
     /// Open an existing repository at the given root.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
-        let config = Config::load(&root)?;
-        let template_engine = Self::engine_from_config(&config);
+        let loaded = crate::config::load_at(&root)?;
+        let template_engine = Self::engine_from_config(&loaded.config);
 
         Ok(Self {
             root,
-            config,
+            config: loaded.config,
+            shadowed_toml: loaded.shadowed_toml,
             parser: Parser::new(),
             template_engine,
         })
@@ -139,12 +143,16 @@ impl Repository {
     /// Open a repository, or create default config if not found.
     pub fn open_or_default(root: impl Into<PathBuf>) -> Self {
         let root = root.into();
-        let config = Config::load_or_default(&root);
+        let (config, shadowed_toml) = match crate::config::load_at(&root) {
+            Ok(loaded) => (loaded.config, loaded.shadowed_toml),
+            Err(_) => (Config::default(), None),
+        };
         let template_engine = Self::engine_from_config(&config);
 
         Self {
             root,
             config,
+            shadowed_toml,
             parser: Parser::new(),
             template_engine,
         }
@@ -152,8 +160,8 @@ impl Repository {
 
     /// Initialize a new repository at the given root.
     ///
-    /// If a config file (`adrs.toml` or `.adr-dir`) already exists at `root`
-    /// and its configured `adr_dir` already matches the resolved directory,
+    /// If a config file (`adrs.toml`, `.adrs.toml`, or `.adr-dir`) already exists
+    /// at `root` and its configured `adr_dir` already matches the resolved directory,
     /// the file is left untouched -- including settings this function does
     /// not otherwise know about, such as `default_status`, `templates`,
     /// `generate`, `export`, and `doctor`. Otherwise a fresh config is
@@ -164,11 +172,14 @@ impl Repository {
 
         let legacy_path = root.join(crate::config::LEGACY_CONFIG_FILE);
         let toml_path = root.join(crate::config::CONFIG_FILE);
+        let hidden_path = root.join(crate::config::HIDDEN_CONFIG_FILE);
 
         // Reuse an existing config file if it already points at the resolved
         // directory, so we don't silently discard settings it carries.
-        let existing_config = if legacy_path.exists() || toml_path.exists() {
-            Config::load(&root).ok().filter(|c| c.adr_dir == adr_dir)
+        let existing = if legacy_path.exists() || toml_path.exists() || hidden_path.exists() {
+            crate::config::load_at(&root)
+                .ok()
+                .filter(|loaded| loaded.config.adr_dir == adr_dir)
         } else {
             None
         };
@@ -184,8 +195,8 @@ impl Repository {
             0
         };
 
-        let config = match existing_config {
-            Some(existing) => existing,
+        let (config, shadowed_toml) = match existing {
+            Some(loaded) => (loaded.config, loaded.shadowed_toml),
             None => {
                 // Create config
                 let config = Config {
@@ -197,20 +208,27 @@ impl Repository {
                     },
                     ..Default::default()
                 };
-                // Config::load() always prefers adrs.toml over .adr-dir, so
-                // a stale sibling in the other format could silently shadow
-                // the file we're about to write. Remove it so only one
-                // config file is authoritative after init.
-                let stale = if config.is_next_gen() {
-                    &legacy_path
+                // load_at() prefers adrs.toml over .adrs.toml over .adr-dir, so
+                // a stale sibling could silently shadow the file we're about to
+                // write. Remove every other config filename so only one is
+                // authoritative after init.
+                let written = if config.is_next_gen() {
+                    crate::config::CONFIG_FILE
                 } else {
-                    &toml_path
+                    crate::config::LEGACY_CONFIG_FILE
                 };
-                if stale.exists() {
-                    fs::remove_file(stale)?;
+                for name in [
+                    crate::config::CONFIG_FILE,
+                    crate::config::HIDDEN_CONFIG_FILE,
+                    crate::config::LEGACY_CONFIG_FILE,
+                ] {
+                    let path = root.join(name);
+                    if name != written && path.exists() {
+                        fs::remove_file(path)?;
+                    }
                 }
                 config.save(&root)?;
-                config
+                (config, None)
             }
         };
 
@@ -219,6 +237,7 @@ impl Repository {
         let repo = Self {
             root,
             config,
+            shadowed_toml,
             parser: Parser::new(),
             template_engine,
         };
@@ -244,6 +263,11 @@ impl Repository {
     /// Get the configuration.
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// Path to `.adrs.toml` when it was present alongside `adrs.toml` and ignored.
+    pub fn shadowed_toml(&self) -> Option<&Path> {
+        self.shadowed_toml.as_deref()
     }
 
     /// Get the full path to the ADR directory.
@@ -1756,6 +1780,65 @@ mod tests {
 
         assert!(temp.path().join("adrs.toml").exists());
         assert!(repo.config().is_next_gen());
+    }
+
+    #[test]
+    fn test_init_reuses_each_config_filename() {
+        for name in [
+            crate::config::CONFIG_FILE,
+            crate::config::HIDDEN_CONFIG_FILE,
+            crate::config::LEGACY_CONFIG_FILE,
+        ] {
+            let temp = TempDir::new().unwrap();
+            let original = if name == crate::config::LEGACY_CONFIG_FILE {
+                "docs/adr\n".to_string()
+            } else {
+                "adr_dir = \"docs/adr\"\n".to_string()
+            };
+            fs::write(temp.path().join(name), &original).unwrap();
+
+            Repository::init(
+                temp.path(),
+                Some("docs/adr".into()),
+                name != crate::config::LEGACY_CONFIG_FILE,
+            )
+            .unwrap();
+
+            assert_eq!(
+                fs::read_to_string(temp.path().join(name)).unwrap(),
+                original,
+                "{name} must be left byte-for-byte"
+            );
+            assert!(temp.path().join("docs/adr").is_dir());
+            // Reuse must not invent the other TOML name.
+            if name != crate::config::CONFIG_FILE {
+                assert!(!temp.path().join(crate::config::CONFIG_FILE).exists());
+            }
+            if name != crate::config::HIDDEN_CONFIG_FILE {
+                assert!(!temp.path().join(crate::config::HIDDEN_CONFIG_FILE).exists());
+            }
+        }
+    }
+
+    #[test]
+    fn test_init_write_removes_stale_toml_siblings() {
+        let temp = TempDir::new().unwrap();
+        fs::write(
+            temp.path().join(crate::config::HIDDEN_CONFIG_FILE),
+            "adr_dir = \"other\"\n",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join(crate::config::LEGACY_CONFIG_FILE),
+            "other\n",
+        )
+        .unwrap();
+
+        Repository::init(temp.path(), None, true).unwrap();
+
+        assert!(temp.path().join(crate::config::CONFIG_FILE).exists());
+        assert!(!temp.path().join(crate::config::HIDDEN_CONFIG_FILE).exists());
+        assert!(!temp.path().join(crate::config::LEGACY_CONFIG_FILE).exists());
     }
 
     #[test]

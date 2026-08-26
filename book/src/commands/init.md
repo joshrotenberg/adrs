@@ -28,7 +28,9 @@ The `init` command creates:
 
 1. A configuration file in the current directory: `.adr-dir` (containing the
    ADR directory path) in compatible mode, or `adrs.toml` in NextGen mode
-   (`--ng`)
+   (`--ng`). `init` does not write `.adrs.toml`; create that file or rename
+   `adrs.toml` if you want a hidden config. An existing `.adrs.toml` is
+   reused the same way as `adrs.toml`.
 2. The ADR directory (creates parent directories if needed)
 3. An initial ADR: `0001-record-architecture-decisions.md`
 
@@ -75,8 +77,8 @@ Creates the full directory path.
 adrs init --ng
 ```
 
-Writes `adrs.toml` instead of `.adr-dir`, and creates the initial ADR with
-YAML frontmatter:
+Writes `adrs.toml`, not `.adr-dir` or `.adrs.toml`, and creates the initial
+ADR with YAML frontmatter:
 
 ```markdown
 ---
@@ -94,10 +96,17 @@ status: accepted
 ## Re-initialization
 
 `adrs init` is idempotent: running it again in an already-initialized
-repository succeeds. It rewrites the configuration (for example, to change the
-ADR directory or switch modes) and preserves existing ADRs. The initial
-"Record architecture decisions" ADR is only created when the repository has no
-ADRs yet, so re-initializing will not add a duplicate.
+repository succeeds and preserves existing ADRs.
+
+If `adrs.toml`, `.adrs.toml`, or `.adr-dir` is already present and its ADR
+directory matches the directory being initialized, that file is left
+unchanged. `--ng` does not convert `.adr-dir` or `.adrs.toml` into
+`adrs.toml` on that path. Pass a different directory argument when you
+intend to write a new config (that write also removes the other config
+filenames so only one is authoritative).
+
+The initial "Record architecture decisions" ADR is only created when the
+repository has no ADRs yet, so re-initializing will not add a duplicate.
 
 ## Related
 

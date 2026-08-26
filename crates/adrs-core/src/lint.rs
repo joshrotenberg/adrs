@@ -541,16 +541,19 @@ struct CompiledIgnorePath {
 ///
 /// Returns the filtered report, the count of issues that were suppressed
 /// (repository-wide and path-scoped combined, each issue counted once even
-/// if it matched both), and any config warnings: an invalid glob that could
-/// not be compiled, or a `[[doctor.ignore_path]]` entry naming a rule that
-/// only ever produces path-less diagnostics and so can never be suppressed
-/// this way.
+/// if it matched both), and any config warnings: both `adrs.toml` and
+/// `.adrs.toml` present, an invalid glob that could not be compiled, or a
+/// `[[doctor.ignore_path]]` entry naming a rule that only ever produces
+/// path-less diagnostics and so can never be suppressed this way.
 pub fn check_all_filtered(
     repo: &Repository,
     extra_ignore: &[String],
 ) -> Result<(LintReport, usize, Vec<String>)> {
     let mut report = LintReport::new();
     let mut warnings = Vec::new();
+    if repo.shadowed_toml().is_some() {
+        warnings.push(crate::config::DUPLICATE_TOML_CONFIG_MESSAGE.to_string());
+    }
 
     // Use list_with_errors to capture parse failures
     let (adrs, parse_errors) = repo.list_with_errors()?;
@@ -2058,5 +2061,56 @@ Some consequences.
             warnings.iter().any(|w| w.contains("ADR011")),
             "expected a warning naming the rule that can never fire, got: {warnings:?}"
         );
+    }
+
+    #[test]
+    fn test_open_shadowed_toml_for_file_combinations() {
+        use crate::{CONFIG_FILE, HIDDEN_CONFIG_FILE, LEGACY_CONFIG_FILE, Repository};
+
+        for (toml, hidden, legacy, expect_shadow) in [
+            (false, false, false, false),
+            (false, false, true, false),
+            (false, true, false, false),
+            (false, true, true, false),
+            (true, false, false, false),
+            (true, false, true, false),
+            (true, true, false, true),
+            (true, true, true, true),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            Repository::init(temp.path(), None, false).unwrap();
+            let _ = std::fs::remove_file(temp.path().join(CONFIG_FILE));
+            let _ = std::fs::remove_file(temp.path().join(HIDDEN_CONFIG_FILE));
+            let _ = std::fs::remove_file(temp.path().join(LEGACY_CONFIG_FILE));
+            if toml {
+                std::fs::write(temp.path().join(CONFIG_FILE), "adr_dir = \"doc/adr\"\n").unwrap();
+            }
+            if hidden {
+                std::fs::write(
+                    temp.path().join(HIDDEN_CONFIG_FILE),
+                    "adr_dir = \"doc/adr\"\n",
+                )
+                .unwrap();
+            }
+            if legacy {
+                std::fs::write(temp.path().join(LEGACY_CONFIG_FILE), "doc/adr\n").unwrap();
+            }
+
+            let repo = Repository::open(temp.path()).unwrap();
+            assert_eq!(
+                repo.shadowed_toml().is_some(),
+                expect_shadow,
+                "shadowed_toml mismatch for toml={toml} hidden={hidden} legacy={legacy}"
+            );
+
+            let (_, _, warnings) = check_all_filtered(&repo, &[]).unwrap();
+            assert_eq!(
+                warnings
+                    .iter()
+                    .any(|w| w == crate::config::DUPLICATE_TOML_CONFIG_MESSAGE),
+                expect_shadow,
+                "dual-TOML config warning mismatch for toml={toml} hidden={hidden} legacy={legacy}, got {warnings:?}"
+            );
+        }
     }
 }

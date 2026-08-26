@@ -13,6 +13,15 @@ pub const LEGACY_CONFIG_FILE: &str = ".adr-dir";
 /// New configuration file name.
 pub const CONFIG_FILE: &str = "adrs.toml";
 
+/// Hidden project configuration file name, used when [`CONFIG_FILE`] is absent.
+pub const HIDDEN_CONFIG_FILE: &str = ".adrs.toml";
+
+/// Warning when both [`CONFIG_FILE`] and [`HIDDEN_CONFIG_FILE`] exist.
+/// Printed on CLI stderr and included in `check_all_filtered` config warnings
+/// (MCP `run_doctor` JSON `config_warnings`).
+pub const DUPLICATE_TOML_CONFIG_MESSAGE: &str =
+    "both adrs.toml and .adrs.toml are present; using adrs.toml";
+
 /// Global configuration file name.
 pub const GLOBAL_CONFIG_FILE: &str = "config.toml";
 
@@ -89,55 +98,111 @@ fn deserialize_config(content: &str) -> Result<(Config, Vec<String>)> {
     Ok((config, unknown_keys))
 }
 
+/// Chosen TOML config file at a directory, plus a shadowed sibling if both exist.
+struct TomlResolution {
+    path: PathBuf,
+    shadowed: Option<PathBuf>,
+}
+
+/// Prefer `adrs.toml` over `.adrs.toml`. When both exist, `adrs.toml` wins and
+/// the hidden file is recorded as shadowed so callers can warn.
+fn resolve_toml_config(dir: &Path) -> Option<TomlResolution> {
+    let canonical = dir.join(CONFIG_FILE);
+    let hidden = dir.join(HIDDEN_CONFIG_FILE);
+    match (canonical.exists(), hidden.exists()) {
+        (true, shadowed) => Some(TomlResolution {
+            path: canonical,
+            shadowed: shadowed.then_some(hidden),
+        }),
+        (false, true) => Some(TomlResolution {
+            path: hidden,
+            shadowed: None,
+        }),
+        (false, false) => None,
+    }
+}
+
+/// Project-level load result, including which file won and whether a sibling TOML was ignored.
+#[derive(Debug, Clone)]
+pub(crate) struct LoadedConfig {
+    pub config: Config,
+    pub unknown_keys: Vec<String>,
+    pub source: ConfigSource,
+    pub shadowed_toml: Option<PathBuf>,
+}
+
+fn load_toml_from_path(path: &Path) -> Result<(Config, Vec<String>)> {
+    let content = std::fs::read_to_string(path)?;
+    let (config, unknown_keys) = deserialize_config(&content)?;
+    if config.adr_dir.as_os_str().is_empty() {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "config".to_string());
+        return Err(Error::ConfigError(format!(
+            "adr_dir cannot be empty in {name}"
+        )));
+    }
+    Ok((config, unknown_keys))
+}
+
+fn load_legacy_from_path(path: &Path) -> Result<Config> {
+    let adr_dir = std::fs::read_to_string(path)?.trim().to_string();
+    if adr_dir.is_empty() {
+        return Err(Error::ConfigError(
+            "ADR directory path is empty in .adr-dir file".into(),
+        ));
+    }
+    Ok(Config {
+        adr_dir: PathBuf::from(adr_dir),
+        ..Config::default()
+    })
+}
+
+/// Load configuration from `root`, recording the source file and any shadowed `.adrs.toml`.
+pub(crate) fn load_at(root: &Path) -> Result<LoadedConfig> {
+    if let Some(toml) = resolve_toml_config(root) {
+        let (config, unknown_keys) = load_toml_from_path(&toml.path)?;
+        return Ok(LoadedConfig {
+            config,
+            unknown_keys,
+            source: ConfigSource::Project(toml.path),
+            shadowed_toml: toml.shadowed,
+        });
+    }
+
+    let legacy_path = root.join(LEGACY_CONFIG_FILE);
+    if legacy_path.exists() {
+        return Ok(LoadedConfig {
+            config: load_legacy_from_path(&legacy_path)?,
+            unknown_keys: Vec::new(),
+            source: ConfigSource::Project(legacy_path),
+            shadowed_toml: None,
+        });
+    }
+
+    if root.join(DEFAULT_ADR_DIR).exists() {
+        return Ok(LoadedConfig {
+            config: Config::default(),
+            unknown_keys: Vec::new(),
+            source: ConfigSource::Default,
+            shadowed_toml: None,
+        });
+    }
+
+    Err(Error::AdrDirNotFound)
+}
+
 impl Config {
     /// Load configuration from the given directory.
     ///
     /// Searches for configuration in the following order:
-    /// 1. `adrs.toml` (new format)
-    /// 2. `.adr-dir` (legacy adr-tools format)
-    /// 3. Default configuration
+    /// 1. `adrs.toml` (canonical TOML)
+    /// 2. `.adrs.toml` (hidden TOML fallback)
+    /// 3. `.adr-dir` (legacy adr-tools format)
+    /// 4. Default configuration if `doc/adr` exists
     pub fn load(root: &Path) -> Result<Self> {
-        // Try new config first
-        let config_path = root.join(CONFIG_FILE);
-        if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)?;
-            let (config, _unknown_keys) = deserialize_config(&content)?;
-            if config.adr_dir.as_os_str().is_empty() {
-                return Err(Error::ConfigError(
-                    "adr_dir cannot be empty in adrs.toml".into(),
-                ));
-            }
-            return Ok(config);
-        }
-
-        // Try legacy .adr-dir file
-        let legacy_path = root.join(LEGACY_CONFIG_FILE);
-        if legacy_path.exists() {
-            let adr_dir = std::fs::read_to_string(&legacy_path)?.trim().to_string();
-            if adr_dir.is_empty() {
-                return Err(Error::ConfigError(
-                    "ADR directory path is empty in .adr-dir file".into(),
-                ));
-            }
-            return Ok(Self {
-                adr_dir: PathBuf::from(adr_dir),
-                mode: ConfigMode::Compatible,
-                default_status: None,
-                no_edit: false,
-                templates: TemplateConfig::default(),
-                generate: GenerateConfig::default(),
-                export: ExportConfig::default(),
-                doctor: DoctorConfig::default(),
-            });
-        }
-
-        // Check if default directory exists
-        let default_dir = root.join(DEFAULT_ADR_DIR);
-        if default_dir.exists() {
-            return Ok(Self::default());
-        }
-
-        Err(Error::AdrDirNotFound)
+        Ok(load_at(root)?.config)
     }
 
     /// Load configuration, or return default if not found.
@@ -229,6 +294,8 @@ pub struct DiscoveredConfig {
     /// a known field (e.g. `"doctor.path"`). Empty when the config had no
     /// unrecognized keys, or when no config file was read (`ConfigSource::Default`).
     pub unknown_keys: Vec<String>,
+    /// Path to `.adrs.toml` when it was present alongside `adrs.toml` and ignored.
+    pub shadowed_toml: Option<PathBuf>,
 }
 
 /// Where the configuration was loaded from.
@@ -248,7 +315,7 @@ pub enum ConfigSource {
 ///
 /// Search order:
 /// 1. Environment variable `ADRS_CONFIG` (explicit config path)
-/// 2. Search upward from `start_dir` for `.adr-dir` or `adrs.toml`
+/// 2. Search upward from `start_dir` for `adrs.toml`, `.adrs.toml`, or `.adr-dir`
 /// 3. Global config at `~/.config/adrs/config.toml`
 /// 4. Default configuration
 ///
@@ -269,19 +336,21 @@ pub fn discover(start_dir: &Path) -> Result<DiscoveredConfig> {
                     .unwrap_or_else(|| start_dir.to_path_buf()),
                 source: ConfigSource::Environment,
                 unknown_keys,
+                shadowed_toml: None,
             });
         }
     }
 
     // Search upward for project config
-    if let Some((root, config, source, unknown_keys)) = search_upward(start_dir)? {
-        let mut config = config;
+    if let Some((root, loaded)) = search_upward(start_dir)? {
+        let mut config = loaded.config;
         apply_env_overrides(&mut config);
         return Ok(DiscoveredConfig {
             config,
             root,
-            source,
-            unknown_keys,
+            source: loaded.source,
+            unknown_keys: loaded.unknown_keys,
+            shadowed_toml: loaded.shadowed_toml,
         });
     }
 
@@ -294,6 +363,7 @@ pub fn discover(start_dir: &Path) -> Result<DiscoveredConfig> {
             root: start_dir.to_path_buf(),
             source: ConfigSource::Global(path),
             unknown_keys,
+            shadowed_toml: None,
         });
     }
 
@@ -305,59 +375,19 @@ pub fn discover(start_dir: &Path) -> Result<DiscoveredConfig> {
         root: start_dir.to_path_buf(),
         source: ConfigSource::Default,
         unknown_keys: Vec::new(),
+        shadowed_toml: None,
     })
 }
 
 /// Search upward from the given directory for a config file.
-#[allow(clippy::type_complexity)]
-fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSource, Vec<String>)>> {
+fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, LoadedConfig)>> {
     let mut current = start_dir.to_path_buf();
 
     loop {
-        // Check for adrs.toml first
-        let config_path = current.join(CONFIG_FILE);
-        if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)?;
-            let (config, unknown_keys) = deserialize_config(&content)?;
-            return Ok(Some((
-                current,
-                config,
-                ConfigSource::Project(config_path),
-                unknown_keys,
-            )));
-        }
-
-        // Check for .adr-dir
-        let legacy_path = current.join(LEGACY_CONFIG_FILE);
-        if legacy_path.exists() {
-            let adr_dir = std::fs::read_to_string(&legacy_path)?.trim().to_string();
-            let config = Config {
-                adr_dir: PathBuf::from(adr_dir),
-                mode: ConfigMode::Compatible,
-                default_status: None,
-                no_edit: false,
-                templates: TemplateConfig::default(),
-                generate: GenerateConfig::default(),
-                export: ExportConfig::default(),
-                doctor: DoctorConfig::default(),
-            };
-            return Ok(Some((
-                current,
-                config,
-                ConfigSource::Project(legacy_path),
-                Vec::new(),
-            )));
-        }
-
-        // Check for default ADR directory (indicates project root)
-        let default_dir = current.join(DEFAULT_ADR_DIR);
-        if default_dir.exists() {
-            return Ok(Some((
-                current,
-                Config::default(),
-                ConfigSource::Default,
-                Vec::new(),
-            )));
+        match load_at(&current) {
+            Ok(loaded) => return Ok(Some((current, loaded))),
+            Err(Error::AdrDirNotFound) => {}
+            Err(e) => return Err(e),
         }
 
         // Stop at git repository root
@@ -365,7 +395,6 @@ fn search_upward(start_dir: &Path) -> Result<Option<(PathBuf, Config, ConfigSour
             break;
         }
 
-        // Move to parent directory
         match current.parent() {
             Some(parent) => current = parent.to_path_buf(),
             None => break,
@@ -524,6 +553,7 @@ mod tests {
         assert_eq!(DEFAULT_ADR_DIR, "doc/adr");
         assert_eq!(LEGACY_CONFIG_FILE, ".adr-dir");
         assert_eq!(CONFIG_FILE, "adrs.toml");
+        assert_eq!(HIDDEN_CONFIG_FILE, ".adrs.toml");
     }
 
     #[test]
@@ -1047,6 +1077,176 @@ mode = "nextgen"
         let discovered = discover(temp.path()).unwrap();
         assert!(matches!(discovered.source, ConfigSource::Default));
         assert_eq!(discovered.config.adr_dir, PathBuf::from("doc/adr"));
+    }
+
+    // Every combination of {adrs.toml, .adrs.toml, .adr-dir}. Distinct adr_dir
+    // values so the winner is unambiguous. TOML beats .adr-dir; adrs.toml beats
+    // .adrs.toml.
+    #[test]
+    fn test_load_and_discover_toml_file_combinations() {
+        #[derive(Clone, Copy)]
+        struct Case {
+            toml: bool,
+            hidden: bool,
+            legacy: bool,
+            load_ok: bool,
+            adr_dir: Option<&'static str>,
+            source: Option<&'static str>,
+            shadowed: bool,
+        }
+
+        let cases = [
+            Case {
+                toml: false,
+                hidden: false,
+                legacy: false,
+                load_ok: false,
+                adr_dir: None,
+                source: None,
+                shadowed: false,
+            },
+            Case {
+                toml: false,
+                hidden: false,
+                legacy: true,
+                load_ok: true,
+                adr_dir: Some("from-legacy"),
+                source: Some(LEGACY_CONFIG_FILE),
+                shadowed: false,
+            },
+            Case {
+                toml: false,
+                hidden: true,
+                legacy: false,
+                load_ok: true,
+                adr_dir: Some("from-hidden"),
+                source: Some(HIDDEN_CONFIG_FILE),
+                shadowed: false,
+            },
+            Case {
+                toml: false,
+                hidden: true,
+                legacy: true,
+                load_ok: true,
+                adr_dir: Some("from-hidden"),
+                source: Some(HIDDEN_CONFIG_FILE),
+                shadowed: false,
+            },
+            Case {
+                toml: true,
+                hidden: false,
+                legacy: false,
+                load_ok: true,
+                adr_dir: Some("from-toml"),
+                source: Some(CONFIG_FILE),
+                shadowed: false,
+            },
+            Case {
+                toml: true,
+                hidden: false,
+                legacy: true,
+                load_ok: true,
+                adr_dir: Some("from-toml"),
+                source: Some(CONFIG_FILE),
+                shadowed: false,
+            },
+            Case {
+                toml: true,
+                hidden: true,
+                legacy: false,
+                load_ok: true,
+                adr_dir: Some("from-toml"),
+                source: Some(CONFIG_FILE),
+                shadowed: true,
+            },
+            Case {
+                toml: true,
+                hidden: true,
+                legacy: true,
+                load_ok: true,
+                adr_dir: Some("from-toml"),
+                source: Some(CONFIG_FILE),
+                shadowed: true,
+            },
+        ];
+
+        for case in cases {
+            let temp = TempDir::new().unwrap();
+            std::fs::create_dir(temp.path().join(".git")).unwrap();
+            if case.toml {
+                std::fs::write(temp.path().join(CONFIG_FILE), "adr_dir = \"from-toml\"\n").unwrap();
+            }
+            if case.hidden {
+                std::fs::write(
+                    temp.path().join(HIDDEN_CONFIG_FILE),
+                    "adr_dir = \"from-hidden\"\n",
+                )
+                .unwrap();
+            }
+            if case.legacy {
+                std::fs::write(temp.path().join(LEGACY_CONFIG_FILE), "from-legacy\n").unwrap();
+            }
+
+            let loaded = Config::load(temp.path());
+            assert_eq!(
+                loaded.is_ok(),
+                case.load_ok,
+                "load ok mismatch for toml={} hidden={} legacy={}",
+                case.toml,
+                case.hidden,
+                case.legacy
+            );
+            if let Some(dir) = case.adr_dir {
+                assert_eq!(loaded.unwrap().adr_dir, PathBuf::from(dir));
+            }
+
+            let discovered = discover(temp.path()).unwrap();
+            assert_eq!(
+                discovered.config.adr_dir,
+                PathBuf::from(case.adr_dir.unwrap_or(DEFAULT_ADR_DIR)),
+                "discover adr_dir mismatch for toml={} hidden={} legacy={}",
+                case.toml,
+                case.hidden,
+                case.legacy
+            );
+            assert_eq!(discovered.shadowed_toml.is_some(), case.shadowed);
+            if case.shadowed {
+                assert_eq!(
+                    discovered.shadowed_toml.as_ref().unwrap().file_name(),
+                    Some(std::ffi::OsStr::new(HIDDEN_CONFIG_FILE))
+                );
+            }
+            match (case.source, &discovered.source) {
+                (None, ConfigSource::Default) => {}
+                (Some(name), ConfigSource::Project(path)) => {
+                    assert_eq!(path.file_name(), Some(std::ffi::OsStr::new(name)));
+                }
+                (expected, got) => panic!(
+                    "source mismatch for toml={} hidden={} legacy={}: expected {expected:?}, got {got:?}",
+                    case.toml, case.hidden, case.legacy
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_discover_finds_hidden_toml_in_parent_dir() {
+        let temp = TempDir::new().unwrap();
+        let subdir = temp.path().join("src").join("lib");
+        std::fs::create_dir_all(&subdir).unwrap();
+        std::fs::write(
+            temp.path().join(HIDDEN_CONFIG_FILE),
+            r#"adr_dir = "docs/adr""#,
+        )
+        .unwrap();
+
+        let discovered = discover(&subdir).unwrap();
+        assert_eq!(discovered.root, temp.path());
+        assert_eq!(discovered.config.adr_dir, PathBuf::from("docs/adr"));
+        assert!(
+            matches!(discovered.source, ConfigSource::Project(ref p) if p.ends_with(HIDDEN_CONFIG_FILE))
+        );
+        assert!(discovered.shadowed_toml.is_none());
     }
 
     // Serializes tests that mutate the process-global ADR_DIRECTORY env var.
