@@ -66,7 +66,8 @@ initialization:
 Call `init_repository` (optionally with `nextgen: true` and/or a custom
 `adr_dir`) to bootstrap the repository, then use the other tools in the same
 session without restarting the server. Initialization operates only on the
-bound root and refuses to overwrite an existing repository.
+bound root. Like CLI `adrs init`, it is idempotent: an existing matching
+config (`adrs.toml`, `.adrs.toml`, or `.adr-dir`) is left in place.
 
 ## Available Tools
 
@@ -82,7 +83,7 @@ The MCP server provides 18 tools organized by function:
 | `get_adr_sections` | Get ADR with parsed sections (context, decision, consequences) |
 | `get_related_adrs` | Get all ADRs linked to/from a specific ADR |
 | `get_repository_info` | Get repository mode, ADR count, and configuration |
-| `run_doctor` | Check repository health: broken links, parse errors, duplicate numbers |
+| `run_doctor` | Check repository health: broken links, parse errors, duplicate numbers, plus config warnings |
 | `export_adrs` | Export ADRs to JSON-ADR format with optional filtering |
 
 ### Write Operations
@@ -160,18 +161,23 @@ bootstrap a first-run repository without an interactive `adrs init` step. See
 [Empty-state bootstrap](#empty-state-bootstrap) below.
 
 The tool operates only on the bound root. It does not create parent
-directories, does not accept a per-call path, and refuses to overwrite an
-existing configuration or ADR collection.
+directories, does not accept a per-call path, and is idempotent like CLI
+`adrs init`: an existing matching config (`adrs.toml`, `.adrs.toml`, or
+`.adr-dir`) is left in place. `nextgen` does not convert a reused
+`.adr-dir` or `.adrs.toml` into `adrs.toml`.
 
 **Parameters:**
 - `nextgen` (optional): Initialize in NextGen mode (`adrs.toml`, YAML
   frontmatter). Defaults to `false` (compatible mode, `.adr-dir`). Equivalent
-  to `adrs --ng init`.
+  to `adrs --ng init`. When reuse applies, this flag does not choose or
+  convert the existing file.
 - `adr_dir` (optional): ADR directory relative to the root (default `doc/adr`).
   Must be relative and stay within the root.
 
 **Returns:** The `mode`, `root`, `config_path`, `adr_directory`,
-`adr_directory_path`, and `initial_adr_path`.
+`adr_directory_path`, and `initial_adr_path`. `config_path` is the file that
+exists after the call: a reused `adrs.toml`, `.adrs.toml`, or `.adr-dir` if
+one was already present and matched, otherwise the file this init wrote.
 
 ### create_adr
 
@@ -244,7 +250,11 @@ Run health checks on the ADR repository.
 
 **Parameters:** None
 
-**Returns:** Health report with issue counts and details. Each issue includes severity (error/warning/info), rule ID, rule name, message, and location.
+**Returns:** Health report with issue counts, issue details, and
+`config_warnings` (the same non-fatal diagnostics CLI `adrs doctor` prints
+on stderr, such as both `adrs.toml` and `.adrs.toml` being present). Each
+issue includes severity (error/warning/info), rule ID, rule name, message,
+and location.
 
 ### export_adrs
 

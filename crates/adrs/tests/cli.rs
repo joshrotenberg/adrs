@@ -243,6 +243,33 @@ fn test_init_respects_adr_directory_env_var() {
 }
 
 #[test]
+fn test_init_treats_hidden_toml_like_adrs_toml() {
+    // CLI init does not error when adrs.toml already exists (idempotent, #358),
+    // with or without --ng. .adrs.toml must match that, including preserving
+    // the file byte-for-byte.
+    for ng in [false, true] {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let original = "adr_dir = \"docs/adr\"\n";
+        temp.child(".adrs.toml").write_str(original).unwrap();
+
+        let mut cmd = adrs();
+        cmd.current_dir(temp.path());
+        if ng {
+            cmd.arg("--ng");
+        }
+        cmd.arg("init").assert().success();
+
+        temp.child("docs/adr").assert(predicate::path::is_dir());
+        temp.child("adrs.toml")
+            .assert(predicate::path::exists().not());
+        let after = fs::read_to_string(temp.path().join(".adrs.toml")).unwrap();
+        assert_eq!(after, original, "ng={ng}: .adrs.toml must not be rewritten");
+
+        temp.close().unwrap();
+    }
+}
+
+#[test]
 fn test_init_explicit_directory_overrides_config() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("adrs.toml")
@@ -2499,6 +2526,99 @@ fn test_doctor_ignore_path_scopes_suppression_to_matching_record() {
         .stdout(predicate::str::contains("suppressed by ignore rules"));
 
     temp.close().unwrap();
+}
+
+#[test]
+fn test_config_and_doctor_toml_file_combinations() {
+    for (toml, hidden, legacy, expect_dup) in [
+        (false, false, false, false),
+        (false, false, true, false),
+        (false, true, false, false),
+        (false, true, true, false),
+        (true, false, false, false),
+        (true, false, true, false),
+        (true, true, false, true),
+        (true, true, true, true),
+    ] {
+        let expected_source = if toml {
+            "adrs.toml"
+        } else if hidden {
+            ".adrs.toml"
+        } else if legacy {
+            ".adr-dir"
+        } else {
+            "defaults"
+        };
+
+        for ng in [false, true] {
+            let temp = assert_fs::TempDir::new().unwrap();
+            adrs()
+                .current_dir(temp.path())
+                .arg("init")
+                .assert()
+                .success();
+            let _ = fs::remove_file(temp.path().join("adrs.toml"));
+            let _ = fs::remove_file(temp.path().join(".adrs.toml"));
+            let _ = fs::remove_file(temp.path().join(".adr-dir"));
+            if toml {
+                fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+            }
+            if hidden {
+                fs::write(temp.path().join(".adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+            }
+            if legacy {
+                fs::write(temp.path().join(".adr-dir"), "doc/adr\n").unwrap();
+            }
+
+            let mut config_args: Vec<&str> = Vec::new();
+            if ng {
+                config_args.push("--ng");
+            }
+            config_args.push("config");
+            adrs()
+                .current_dir(temp.path())
+                .args(&config_args)
+                .assert()
+                .success()
+                .stdout(predicate::function(move |out: &str| {
+                    let line = out
+                        .lines()
+                        .find(|l| l.starts_with("Config source:"))
+                        .unwrap_or("");
+                    match expected_source {
+                        "defaults" => line.contains("defaults"),
+                        "adrs.toml" => line.ends_with("adrs.toml") && !line.ends_with(".adrs.toml"),
+                        name => line.ends_with(name),
+                    }
+                }))
+                .stderr(if expect_dup {
+                    predicate::str::contains(
+                        "both adrs.toml and .adrs.toml are present; using adrs.toml",
+                    )
+                    .boxed()
+                } else {
+                    predicate::str::contains("both adrs.toml and .adrs.toml")
+                        .not()
+                        .boxed()
+                });
+
+            let mut doctor_cmd = adrs();
+            doctor_cmd.current_dir(temp.path());
+            if ng {
+                doctor_cmd.arg("--ng");
+            }
+            let doctor = doctor_cmd.arg("doctor").assert().success();
+            if expect_dup {
+                doctor.stderr(predicate::str::contains(
+                    "both adrs.toml and .adrs.toml are present; using adrs.toml",
+                ));
+            } else {
+                doctor.stderr(predicate::str::contains("both adrs.toml and .adrs.toml").not());
+            }
+
+            temp.close().unwrap();
+        }
+    }
 }
 
 /// Smoke test for MCP feature availability (default since 0.6.1)

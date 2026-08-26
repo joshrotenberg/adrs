@@ -96,7 +96,7 @@ also fail on warnings. This allows using `doctor` in CI pipelines:
 
 ## Configuration
 
-`doctor` reads a `[doctor]` section from `adrs.toml`:
+`doctor` reads a `[doctor]` section from `adrs.toml` (or `.adrs.toml`):
 
 ```toml
 [doctor]
@@ -136,6 +136,11 @@ Two cases produce a warning on stderr rather than failing:
 - An entry naming `ADR010`, `ADR011`, or `ADR012`. Those rules report on the
   repository as a whole rather than on a file, so there is no path to match and a
   scoped exemption for them can never fire. Use `[doctor].ignore` for those.
+
+If both `adrs.toml` and `.adrs.toml` exist, the same stderr warning convention
+as unrecognized config keys applies: `adrs.toml` is used, and commands (including
+`doctor`) print which file was picked. MCP `run_doctor` returns that same string
+in `config_warnings`. This is not a lint rule.
 
 ## Pre-commit Hook
 

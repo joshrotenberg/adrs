@@ -4,7 +4,7 @@
 
 1. Command-line flags
 2. Environment variables
-3. Project configuration file (`adrs.toml` or `.adr-dir`)
+3. Project configuration file (`adrs.toml`, then `.adrs.toml`, then `.adr-dir`)
 4. Global configuration file (`~/.config/adrs/config.toml`)
 5. Default values
 
@@ -22,7 +22,14 @@ This single-line file specifies the directory where ADRs are stored.
 
 ### TOML Format (adrs.toml)
 
-For more options, use `adrs.toml` in your project root:
+For more options, use `adrs.toml` in your project root. If `adrs.toml` is not
+present, `adrs` also reads `.adrs.toml` (same format). When both files exist,
+`adrs.toml` is used and a `warning:` is printed on stderr naming the file that
+was picked (the same convention as unrecognized keys in the TOML). MCP
+`run_doctor` returns that same string in `config_warnings`.
+
+`adrs init --ng` writes `adrs.toml`. To use the hidden filename, create
+`.adrs.toml` or rename `adrs.toml`; `init` never writes `.adrs.toml`.
 
 ```toml
 # ADR storage directory (relative to project root)
@@ -122,8 +129,10 @@ adrs new "Use Redis for caching"
 
 When you run an `adrs` command, it searches for configuration by:
 
-1. Looking in the current directory for `adrs.toml` or `.adr-dir`
-2. Searching parent directories up to the git root (or filesystem root)
+1. Looking in the current directory for a project config, in this order:
+   `adrs.toml`, then `.adrs.toml`, then `.adr-dir`
+2. Searching parent directories up to the git root (or filesystem root),
+   using that same filename order at each directory
 3. Checking the global config at `~/.config/adrs/config.toml`
 4. Using defaults if nothing is found
 
