@@ -99,11 +99,11 @@ impl Adr {
 
     /// Returns the formatted filename for this ADR.
     ///
-    /// If the title's slug is empty (e.g. a punctuation-only title, or a
-    /// title in a script that transliterates to nothing usable), falls back
-    /// to `untitled` so the filename never ends up with a bare trailing
-    /// dash like `0005-.md`. The `{:04}-` number prefix is always present,
-    /// since `Repository::renumber` parses filenames by stripping it.
+    /// If the title's slug is empty (a punctuation-only or emoji-only
+    /// title), falls back to `untitled` so the filename never ends up with
+    /// a bare trailing dash like `0005-.md`. The `{:04}-` number prefix is
+    /// always present, since `Repository::renumber` parses filenames by
+    /// stripping it.
     pub fn filename(&self) -> String {
         let slug = slug(&self.title);
         let slug = if slug.is_empty() { "untitled" } else { &slug };
@@ -357,23 +357,25 @@ impl LinkKind {
     }
 }
 
-/// Convert a title to a URL-safe slug.
+/// Convert a title to a filename-safe slug.
 ///
-/// Non-ASCII characters are first transliterated to their closest ASCII
-/// equivalent (e.g. "café" -> "cafe", "魚" -> "yu"). ASCII input passes
-/// through the transliteration step unchanged. After that, only ASCII
-/// alphanumeric characters are preserved; everything else becomes a dash.
-/// Consecutive dashes are collapsed, and leading/trailing dashes are removed.
+/// Unicode alphanumeric characters are preserved (with Unicode-aware
+/// lowercasing); everything else becomes a dash. Consecutive dashes are
+/// collapsed, and leading/trailing dashes are removed. The title's own
+/// script is kept (e.g. "café" -> "café", "日本語" -> "日本語") rather
+/// than transliterated to ASCII: one-size-fits-all transliteration
+/// produces unreadable results for Japanese, where kanji romanize via
+/// Chinese pinyin readings (#370). For ASCII titles the result is
+/// identical to what every previous version produced.
 ///
-/// A title that transliterates to nothing usable (e.g. punctuation-only, or
-/// scripts with no ASCII approximation) produces an empty string. Callers
-/// that need a non-empty filename component must apply their own fallback;
-/// see `Adr::filename`.
+/// A title with no alphanumeric content at all (punctuation-only,
+/// emoji-only) produces an empty string. Callers that need a non-empty
+/// filename component must apply their own fallback; see `Adr::filename`.
 fn slug(title: &str) -> String {
-    deunicode::deunicode(title)
+    title
         .to_lowercase()
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
@@ -466,56 +468,37 @@ mod tests {
     #[test_case("Hello, World!" => "hello-world"; "punctuation")]
     #[test_case("C++ vs Rust" => "c-vs-rust"; "special chars")]
     #[test_case("100% Complete" => "100-complete"; "percentage")]
-    #[test_case("Über Design" => "uber-design"; "unicode umlaut is transliterated")]
-    #[test_case("日本語" => "ri-ben-yu"; "japanese characters are transliterated")]
-    #[test_case("café" => "cafe"; "accented characters are transliterated")]
-    #[test_case("魚" => "yu"; "reporter's exact case (issue #367)")]
-    #[test_case("Использовать Redis" => "ispol-zovat-redis"; "cyrillic transliteration")]
-    #[test_case("Café déjà vu" => "cafe-deja-vu"; "accented latin transliteration")]
-    #[test_case("日本語のタイトル" => "ri-ben-yu-notaitoru"; "cjk transliteration")]
-    #[test_case("Redis と 日本語" => "redis-to-ri-ben-yu"; "mixed scripts in one title")]
+    #[test_case("Über Design" => "über-design"; "unicode umlaut is preserved")]
+    #[test_case("日本語" => "日本語"; "japanese characters are preserved (issue #370)")]
+    #[test_case("café" => "café"; "accented characters are preserved")]
+    #[test_case("魚" => "魚"; "issue #367 reporter's case keeps its character")]
+    #[test_case("Использовать Redis" => "использовать-redis"; "cyrillic is preserved and lowercased")]
+    #[test_case("Café déjà vu" => "café-déjà-vu"; "accented latin is preserved and lowercased")]
+    #[test_case("日本語のタイトル" => "日本語のタイトル"; "issue #370 reporter's script stays japanese")]
+    #[test_case("Redis と 日本語" => "redis-と-日本語"; "mixed scripts in one title")]
+    #[test_case("한국어 제목" => "한국어-제목"; "korean hangul is preserved")]
+    #[test_case("Straße" => "straße"; "german sharp s is preserved")]
+    #[test_case("Σύστημα Αρχείων" => "σύστημα-αρχείων"; "greek is preserved and lowercased")]
+    #[test_case("قرار معماري" => "قرار-معماري"; "arabic rtl is preserved")]
+    #[test_case("החלטה אדריכלית" => "החלטה-אדריכלית"; "hebrew rtl is preserved")]
+    #[test_case("ＡＢＣ１２３" => "ａｂｃ１２３"; "fullwidth forms lowercase within their block")]
+    #[test_case("v2.0 の設計" => "v2-0-の設計"; "ascii and japanese mix with punctuation")]
+    #[test_case("İstanbul" => "i-stanbul"; "dotted capital i lowercases to i plus combining mark, which separates")]
+    #[test_case("cafe\u{301}" => "cafe"; "decomposed accent (nfd) is a combining mark and drops; nfc keeps the accent")]
+    #[test_case("a/b\\c:d*e?f\"g<h>i|j" => "a-b-c-d-e-f-g-h-i-j"; "windows-reserved characters all become separators")]
     #[test_case("???" => ""; "punctuation-only title still slugs to nothing")]
+    #[test_case("🚀🚀🚀" => ""; "emoji-only title slugs to nothing")]
+    #[test_case("👨‍👩‍👧" => ""; "zwj emoji sequence slugs to nothing")]
     fn test_slug_cases(input: &str) -> String {
         slug(input)
     }
 
     #[test]
-    fn test_slug_ascii_passthrough_unchanged() {
-        // `deunicode` is documented to pass ASCII through unchanged, but every
-        // existing repository's filenames depend on that being true, so confirm
-        // it directly rather than assuming.
-        let ascii_titles = [
-            "Use Rust",
-            "API v2.0 Design",
-            "  Multiple   Spaces  ",
-            "CamelCase",
-            "kebab-case",
-            "snake_case",
-            "MixedCase-and_stuff",
-            "",
-            "---",
-            "Hello, World!",
-            "C++ vs Rust",
-            "100% Complete",
-        ];
-        for title in ascii_titles {
-            assert_eq!(
-                deunicode::deunicode(title),
-                title,
-                "deunicode altered ASCII input: {title:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_slug_two_stage_composition() {
-        // deunicode transliterates the em dash to a run of ASCII hyphens
-        // (not a single one), which the slug pipeline's dash-collapsing must
-        // then reduce back to a single separator. This confirms the two
-        // stages (transliterate, then lowercase/replace/collapse/trim)
-        // compose correctly rather than leaving artifacts behind.
+    fn test_slug_separator_runs_collapse() {
+        // An em dash flanked by spaces produces a run of dashes that the
+        // pipeline's dash-collapsing must reduce to a single separator.
         let result = slug("Naïve — approach");
-        assert_eq!(result, "naive-approach");
+        assert_eq!(result, "naïve-approach");
         assert!(!result.contains("--"));
     }
 
@@ -540,10 +523,58 @@ mod tests {
             let result = slug(&s);
             for c in result.chars() {
                 prop_assert!(
-                    c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-',
+                    c == '-' || c.is_alphanumeric(),
                     "Invalid character in slug: {} (from {})", c, result
                 );
             }
+            // Lowercasing is exhaustive: re-lowercasing the slug changes
+            // nothing. Uppercase characters with no lowercase mapping
+            // (e.g. mathematical script letters like 𝒥) pass through
+            // unchanged and satisfy this by definition.
+            prop_assert_eq!(
+                result.to_lowercase(), result,
+                "Slug is not a fixed point of to_lowercase()"
+            );
+        }
+
+        #[test]
+        fn test_slug_ascii_input_gives_ascii_slug(s in "[ -~]{1,100}") {
+            // Every existing repository's filenames depend on ASCII titles
+            // producing the same ASCII slugs as previous versions.
+            let result = slug(&s);
+            prop_assert!(result.is_ascii(), "ASCII input produced non-ASCII slug: {}", result);
+        }
+
+        #[test]
+        fn test_slug_idempotent(s in "\\PC{1,100}") {
+            // Slugging a slug changes nothing, so a filename derived from a
+            // slug can itself be safely re-slugged.
+            let once = slug(&s);
+            prop_assert_eq!(slug(&once), once);
+        }
+
+        #[test]
+        fn test_slug_nonempty_when_input_has_alphanumeric(s in "\\PC{1,100}") {
+            // The #367 guarantee, generalized: any title with at least one
+            // alphanumeric character produces a non-empty slug, so the
+            // `untitled` fallback only ever covers punctuation/emoji-only
+            // titles.
+            prop_assume!(s.chars().any(char::is_alphanumeric));
+            let result = slug(&s);
+            prop_assert!(!result.is_empty(), "Slug is empty for input with alphanumerics: {:?}", s);
+        }
+
+        #[test]
+        fn test_filename_shape_for_arbitrary_titles(title in "\\PC{0,80}", n in 1u32..=99999) {
+            // Whatever the title, the filename keeps the parseable
+            // `{:04}-` prefix, the `.md` extension, no path separators,
+            // and no trailing dash before the extension.
+            let filename = Adr::new(n, title.as_str()).filename();
+            prop_assert!(filename.starts_with(&format!("{:04}-", n)), "Bad prefix: {}", filename);
+            prop_assert!(filename.ends_with(".md"), "Bad extension: {}", filename);
+            prop_assert!(!filename.contains('/') && !filename.contains('\\'), "Path separator in filename: {}", filename);
+            let stem = &filename[..filename.len() - 3];
+            prop_assert!(!stem.ends_with('-'), "Trailing dash before extension: {}", filename);
         }
     }
 
@@ -567,12 +598,15 @@ mod tests {
     #[test_case(999, "Last Decision" => "0999-last-decision.md"; "three digits")]
     #[test_case(9999, "Max Normal" => "9999-max-normal.md"; "four digits")]
     #[test_case(10000, "Beyond Four Digits" => "10000-beyond-four-digits.md"; "five digits")]
-    #[test_case(5, "魚" => "0005-yu.md"; "reporter's exact case (issue #367)")]
-    #[test_case(3, "Использовать Redis" => "0003-ispol-zovat-redis.md"; "cyrillic title")]
-    #[test_case(4, "Café déjà vu" => "0004-cafe-deja-vu.md"; "accented latin title")]
-    #[test_case(5, "日本語のタイトル" => "0005-ri-ben-yu-notaitoru.md"; "cjk title")]
+    #[test_case(5, "魚" => "0005-魚.md"; "issue #367 case keeps its character")]
+    #[test_case(3, "Использовать Redis" => "0003-использовать-redis.md"; "cyrillic title")]
+    #[test_case(4, "Café déjà vu" => "0004-café-déjà-vu.md"; "accented latin title")]
+    #[test_case(5, "日本語のタイトル" => "0005-日本語のタイトル.md"; "issue #370 japanese title preserved")]
+    #[test_case(6, "قرار معماري" => "0006-قرار-معماري.md"; "arabic rtl title")]
     #[test_case(1, "???" => "0001-untitled.md"; "punctuation-only title falls back to untitled")]
     #[test_case(2, "!!! ... ---" => "0002-untitled.md"; "another punctuation-only title falls back")]
+    #[test_case(3, "🚀" => "0003-untitled.md"; "emoji-only title falls back to untitled")]
+    #[test_case(4, "👨‍👩‍👧" => "0004-untitled.md"; "zwj emoji sequence falls back to untitled")]
     fn test_adr_filename(number: u32, title: &str) -> String {
         Adr::new(number, title).filename()
     }
