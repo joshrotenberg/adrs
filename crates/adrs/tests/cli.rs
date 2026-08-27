@@ -1708,7 +1708,7 @@ fn test_new_supersedes_honors_default_status_from_config() {
 }
 
 // ============================================================================
-// Unicode Title Slugs (issue #367)
+// Unicode Title Slugs (issues #367, #370)
 // ============================================================================
 
 #[test]
@@ -1721,22 +1721,21 @@ fn test_new_unicode_title_produces_non_empty_slug() {
         .assert()
         .success();
 
-    // Reporter's exact case: a title with no ASCII letters must not collapse
-    // to an empty slug (which used to produce a bare "0002-.md").
+    // #367 reporter's exact case: a title with no ASCII letters must not
+    // collapse to an empty slug (which used to produce a bare "0002-.md").
+    // #370: the filename keeps the title's own character instead of the
+    // pinyin transliteration ("0002-yu.md") that v0.11.0 produced.
     adrs()
         .current_dir(temp.path())
         .args(["new", "--no-edit", "魚"])
         .assert()
         .success();
 
-    let adr_path = temp.child("doc/adr/0002-yu.md");
+    let adr_path = temp.child("doc/adr/0002-魚.md");
     adr_path.assert(predicate::path::exists());
 
-    // The record's title and heading keep the original characters; only the
-    // filename is transliterated.
     let content = fs::read_to_string(adr_path.path()).unwrap();
     assert!(content.contains("魚"));
-    assert!(!content.contains("yu"));
 
     temp.close().unwrap();
 }
@@ -1757,16 +1756,19 @@ fn test_unicode_title_round_trip_list_doctor_renumber() {
         .assert()
         .success();
 
-    temp.child("doc/adr/0002-ri-ben-yu-notaitoru.md")
+    // #370: the Japanese title stays Japanese in the filename, rather than
+    // the unreadable kanji-via-pinyin rendering v0.11.0 wrote
+    // ("0002-ri-ben-yu-notaitoru.md").
+    temp.child("doc/adr/0002-日本語のタイトル.md")
         .assert(predicate::path::exists());
 
-    // `adrs list` should surface the transliterated filename without erroring.
+    // `adrs list` should surface the Unicode filename without erroring.
     adrs()
         .current_dir(temp.path())
         .arg("list")
         .assert()
         .success()
-        .stdout(predicate::str::contains("0002-ri-ben-yu-notaitoru.md"));
+        .stdout(predicate::str::contains("0002-日本語のタイトル.md"));
 
     // `adrs doctor` should treat the record as a normal, healthy ADR.
     adrs()
@@ -1781,16 +1783,121 @@ fn test_unicode_title_round_trip_list_doctor_renumber() {
         .args(["renumber", "2", "5"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("0002-ri-ben-yu-notaitoru.md"))
-        .stdout(predicate::str::contains("0005-ri-ben-yu-notaitoru.md"));
+        .stdout(predicate::str::contains("0002-日本語のタイトル.md"))
+        .stdout(predicate::str::contains("0005-日本語のタイトル.md"));
 
-    temp.child("doc/adr/0002-ri-ben-yu-notaitoru.md")
+    temp.child("doc/adr/0002-日本語のタイトル.md")
         .assert(predicate::path::missing());
-    let renumbered = temp.child("doc/adr/0005-ri-ben-yu-notaitoru.md");
+    let renumbered = temp.child("doc/adr/0005-日本語のタイトル.md");
     renumbered.assert(predicate::path::exists());
 
     let content = fs::read_to_string(renumbered.path()).unwrap();
     assert!(content.contains("日本語のタイトル"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_supersede_unicode_titles_resolve_links_both_ways() {
+    // Cross-file markdown links must carry the Unicode filenames in both
+    // directions when superseding.
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "日本語で決定"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "--supersedes", "2", "新しい決定"])
+        .assert()
+        .success();
+
+    let old_content = fs::read_to_string(temp.path().join("doc/adr/0002-日本語で決定.md")).unwrap();
+    assert!(old_content.contains("Superseded by [3. 新しい決定](0003-新しい決定.md)"));
+
+    let new_content = fs::read_to_string(temp.path().join("doc/adr/0003-新しい決定.md")).unwrap();
+    assert!(new_content.contains("Supersedes [2. 日本語で決定](0002-日本語で決定.md)"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_unicode_title_search_toc_and_status_change() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .arg("init")
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["new", "--no-edit", "日本語のタイトル"])
+        .assert()
+        .success();
+
+    // Search matches the Unicode title.
+    adrs()
+        .current_dir(temp.path())
+        .args(["search", "日本語"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2. 日本語のタイトル"));
+
+    // The generated TOC links to the Unicode filename.
+    adrs()
+        .current_dir(temp.path())
+        .args(["generate", "toc"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "[2. 日本語のタイトル](0002-日本語のタイトル.md)",
+        ));
+
+    // A status change rewrites the file at its Unicode path in place.
+    adrs()
+        .current_dir(temp.path())
+        .args(["status", "2", "accepted"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp.path().join("doc/adr/0002-日本語のタイトル.md")).unwrap();
+    assert!(content.contains("Accepted"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn test_ng_mode_unicode_title_frontmatter() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "init"])
+        .assert()
+        .success();
+
+    adrs()
+        .current_dir(temp.path())
+        .args(["--ng", "new", "--no-edit", "日本語のタイトル"])
+        .assert()
+        .success();
+
+    // YAML frontmatter carries the Unicode title, and the filename keeps it.
+    let content = fs::read_to_string(temp.path().join("doc/adr/0002-日本語のタイトル.md")).unwrap();
+    assert!(content.contains("title: 日本語のタイトル"));
+    assert!(content.contains("status: proposed"));
+    assert!(content.contains("# 2. 日本語のタイトル"));
 
     temp.close().unwrap();
 }
