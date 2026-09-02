@@ -1,5 +1,6 @@
 //! Search ADRs command.
 
+use crate::snippet::extract_snippet;
 use adrs_core::{Adr, AdrStatus, Repository};
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -110,52 +111,6 @@ fn contains_match(text: &str, query: &str, case_sensitive: bool) -> bool {
     }
 }
 
-/// Extract a snippet around the match.
-fn extract_snippet(text: &str, query: &str, case_sensitive: bool) -> String {
-    let text_search = if case_sensitive {
-        text.to_string()
-    } else {
-        text.to_lowercase()
-    };
-
-    if let Some(pos) = text_search.find(query) {
-        // Get some context around the match
-        let start = pos.saturating_sub(40);
-        let end = (pos + query.len() + 40).min(text.len());
-
-        // Find word boundaries
-        let start = text[..start]
-            .rfind(char::is_whitespace)
-            .map(|p| p + 1)
-            .unwrap_or(start);
-        let end = text[end..]
-            .find(char::is_whitespace)
-            .map(|p| end + p)
-            .unwrap_or(end);
-
-        let mut snippet = text[start..end].to_string();
-
-        // Add ellipsis if truncated
-        if start > 0 {
-            snippet = format!("...{}", snippet);
-        }
-        if end < text.len() {
-            snippet = format!("{}...", snippet);
-        }
-
-        // Replace newlines with spaces for cleaner output
-        snippet.replace('\n', " ")
-    } else {
-        // Fallback: first 80 chars
-        let preview: String = text.chars().take(80).collect();
-        if text.len() > 80 {
-            format!("{}...", preview)
-        } else {
-            preview
-        }
-    }
-}
-
 /// Print a search result.
 fn print_result(adr: &Adr, matches: &[SearchMatch], _query: &str) {
     println!("{}. {}", adr.number, adr.title);
@@ -220,67 +175,6 @@ mod tests {
     #[test]
     fn test_contains_match_empty_text() {
         assert!(!contains_match("", "query", false));
-    }
-
-    // ========== extract_snippet tests ==========
-
-    #[test]
-    fn test_extract_snippet_match_in_middle() {
-        let text = "This is some context about the database decision and consequences.";
-        let snippet = extract_snippet(text, "database", false);
-        assert!(
-            snippet.contains("database"),
-            "Snippet should contain the match"
-        );
-    }
-
-    #[test]
-    fn test_extract_snippet_match_at_start() {
-        let text = "database is the topic of this context section.";
-        let snippet = extract_snippet(text, "database", false);
-        assert!(snippet.contains("database"));
-    }
-
-    #[test]
-    fn test_extract_snippet_match_at_end() {
-        let text = "This context is about the database";
-        let snippet = extract_snippet(text, "database", false);
-        assert!(snippet.contains("database"));
-    }
-
-    #[test]
-    fn test_extract_snippet_no_match_returns_first_chars() {
-        // When no match found, returns up to 80 chars of text
-        let text = "This context has no matching term at all.";
-        let snippet = extract_snippet(text, "nonexistent", false);
-        // Fallback returns the original text (it is under 80 chars)
-        assert_eq!(snippet, text);
-    }
-
-    #[test]
-    fn test_extract_snippet_long_text_no_match_truncates() {
-        let text = "a".repeat(100);
-        let snippet = extract_snippet(&text, "nonexistent", false);
-        // Fallback truncates to 80 chars + "..."
-        assert!(snippet.ends_with("..."));
-        assert!(snippet.len() <= 83); // 80 chars + "..."
-    }
-
-    #[test]
-    fn test_extract_snippet_case_insensitive() {
-        let text = "The DATABASE decision was made.";
-        let snippet = extract_snippet(text, "database", false);
-        assert!(snippet.contains("DATABASE"));
-    }
-
-    #[test]
-    fn test_extract_snippet_adds_ellipsis_for_truncated_start() {
-        // Long text with match far from start should add leading ellipsis
-        let prefix = "x ".repeat(25); // 50 chars
-        let suffix = " y".repeat(25); // 50 chars
-        let text = format!("{}match{}", prefix, suffix);
-        let snippet = extract_snippet(&text, "match", false);
-        assert!(snippet.contains("match"));
     }
 
     // ========== status_matches tests ==========

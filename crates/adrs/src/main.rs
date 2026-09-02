@@ -9,6 +9,7 @@ use std::io;
 use std::path::PathBuf;
 
 mod commands;
+mod snippet;
 
 #[cfg(feature = "mcp")]
 mod mcp;

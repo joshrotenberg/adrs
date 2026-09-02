@@ -3,6 +3,7 @@
 //! This module provides an MCP server that allows AI agents to interact with ADRs.
 //! Enable with the `mcp` feature flag.
 
+use crate::snippet::extract_snippet;
 use adrs_core::{
     AdrStatus, IssueSeverity, LinkKind, Repository, TemplateFormat, TemplateVariant, check_all,
     export_repository,
@@ -742,50 +743,6 @@ fn search_section_matches(text: &str, query_normalized: &str, case_sensitive: bo
     }
 }
 
-/// Extract a context snippet around the match location in text.
-/// The query_normalized must already be lowercased if case_sensitive is false.
-fn extract_search_snippet(text: &str, query_normalized: &str, case_sensitive: bool) -> String {
-    let text_search = if case_sensitive {
-        text.to_string()
-    } else {
-        text.to_lowercase()
-    };
-
-    if let Some(pos) = text_search.find(query_normalized) {
-        let start = pos.saturating_sub(40);
-        let end = (pos + query_normalized.len() + 40).min(text.len());
-
-        // Expand to word boundaries
-        let start = text[..start]
-            .rfind(char::is_whitespace)
-            .map(|p| p + 1)
-            .unwrap_or(start);
-        let end = text[end..]
-            .find(char::is_whitespace)
-            .map(|p| end + p)
-            .unwrap_or(end);
-
-        let mut snippet = text[start..end].to_string();
-
-        if start > 0 {
-            snippet = format!("...{}", snippet);
-        }
-        if end < text.len() {
-            snippet = format!("{}...", snippet);
-        }
-
-        snippet.replace('\n', " ")
-    } else {
-        // Fallback: first 80 chars
-        let preview: String = text.chars().take(80).collect();
-        if text.len() > 80 {
-            format!("{}...", preview)
-        } else {
-            preview
-        }
-    }
-}
-
 // Business logic implementations.
 
 impl AdrState {
@@ -939,11 +896,7 @@ impl AdrState {
                 if search_section_matches(&adr.context, &query_normalized, case_sensitive) {
                     snippets.push(MatchSnippet {
                         section: "Context".to_string(),
-                        snippet: extract_search_snippet(
-                            &adr.context,
-                            &query_normalized,
-                            case_sensitive,
-                        ),
+                        snippet: extract_snippet(&adr.context, &query_normalized, case_sensitive),
                     });
                 }
 
@@ -951,11 +904,7 @@ impl AdrState {
                 if search_section_matches(&adr.decision, &query_normalized, case_sensitive) {
                     snippets.push(MatchSnippet {
                         section: "Decision".to_string(),
-                        snippet: extract_search_snippet(
-                            &adr.decision,
-                            &query_normalized,
-                            case_sensitive,
-                        ),
+                        snippet: extract_snippet(&adr.decision, &query_normalized, case_sensitive),
                     });
                 }
 
@@ -963,7 +912,7 @@ impl AdrState {
                 if search_section_matches(&adr.consequences, &query_normalized, case_sensitive) {
                     snippets.push(MatchSnippet {
                         section: "Consequences".to_string(),
-                        snippet: extract_search_snippet(
+                        snippet: extract_snippet(
                             &adr.consequences,
                             &query_normalized,
                             case_sensitive,
