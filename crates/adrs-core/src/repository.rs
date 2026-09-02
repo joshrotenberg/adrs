@@ -1682,13 +1682,50 @@ fn count_existing_adrs(path: &Path) -> usize {
                     path.is_file()
                         && path.extension().is_some_and(|ext| ext == "md")
                         && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
-                            // Match NNNN-*.md pattern (adr-tools style)
-                            n.len() > 5 && n[..4].chars().all(|c| c.is_ascii_digit())
+                            // Match NNNN-*.md pattern (adr-tools style).
+                            // `get` rather than `n[..4]`: the first four bytes
+                            // of a non-ASCII filename need not be a char
+                            // boundary, and slicing one panics.
+                            n.len() > 5
+                                && n.get(..4)
+                                    .is_some_and(|p| p.chars().all(|c| c.is_ascii_digit()))
                         })
                 })
                 .count()
         })
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod unicode_filename_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// A `.md` file whose name has a multi-byte character straddling byte 4
+    /// used to panic the `NNNN-` prefix check with "byte index 4 is not a
+    /// char boundary".
+    #[test]
+    fn init_tolerates_non_ascii_filenames_in_the_adr_dir() {
+        let temp = TempDir::new().unwrap();
+        let adr_dir = temp.path().join("doc/adr");
+        std::fs::create_dir_all(&adr_dir).unwrap();
+        for name in ["ああ.md", "日本語.md", "abcé.md", "ズ.md"] {
+            std::fs::write(adr_dir.join(name), "# note\n").unwrap();
+        }
+
+        Repository::init(temp.path(), None, false).expect("init must not panic");
+    }
+
+    #[test]
+    fn count_existing_adrs_counts_only_numbered_files() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("0001-first.md"), "x").unwrap();
+        std::fs::write(temp.path().join("0002-second.md"), "x").unwrap();
+        std::fs::write(temp.path().join("日本語.md"), "x").unwrap();
+        std::fs::write(temp.path().join("notes.md"), "x").unwrap();
+
+        assert_eq!(count_existing_adrs(temp.path()), 2);
+    }
 }
 
 #[cfg(test)]

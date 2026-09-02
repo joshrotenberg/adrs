@@ -358,8 +358,13 @@ pub fn export_directory_with_warnings(dir: &Path) -> Result<(JsonAdrBulkExport, 
                 path.is_file()
                     && path.extension().is_some_and(|ext| ext == "md")
                     && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
-                        // Match NNNN-*.md pattern (adr-tools style)
-                        n.len() > 5 && n[..4].chars().all(|c| c.is_ascii_digit())
+                        // Match NNNN-*.md pattern (adr-tools style).
+                        // `get` rather than `n[..4]`: the first four bytes of a
+                        // non-ASCII filename need not be a char boundary, and
+                        // slicing one panics.
+                        n.len() > 5
+                            && n.get(..4)
+                                .is_some_and(|p| p.chars().all(|c| c.is_ascii_digit()))
                     })
             })
             .collect();
@@ -566,10 +571,12 @@ fn find_next_number(dir: &Path) -> Result<u32> {
     if dir.is_dir() {
         for entry in std::fs::read_dir(dir)?.filter_map(|e| e.ok()) {
             let path = entry.path();
+            // `get` rather than `name[..4]`: the first four bytes of a
+            // non-ASCII filename need not be a char boundary.
             if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && name.len() > 4
                 && name.ends_with(".md")
-                && let Ok(num) = name[..4].parse::<u32>()
+                && let Some(prefix) = name.get(..4)
+                && let Ok(num) = prefix.parse::<u32>()
             {
                 max_number = max_number.max(num);
             }
@@ -577,6 +584,37 @@ fn find_next_number(dir: &Path) -> Result<u32> {
     }
 
     Ok(max_number + 1)
+}
+
+#[cfg(test)]
+mod unicode_filename_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn export_directory_tolerates_non_ascii_filenames() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join("0001-real.md"),
+            "# 1. Real\n\nDate: 2026-01-01\n\n## Status\n\nAccepted\n\n## Context\n\nc\n\n## Decision\n\nd\n\n## Consequences\n\nq\n",
+        )
+        .unwrap();
+        for name in ["ああ.md", "日本語.md", "abcé.md"] {
+            std::fs::write(temp.path().join(name), "# note\n").unwrap();
+        }
+
+        let export = export_directory(temp.path()).expect("export must not panic");
+        assert_eq!(export.adrs.len(), 1, "only the numbered file is an ADR");
+    }
+
+    #[test]
+    fn find_next_number_tolerates_non_ascii_filenames() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("0007-seventh.md"), "x").unwrap();
+        std::fs::write(temp.path().join("日本語.md"), "x").unwrap();
+
+        assert_eq!(find_next_number(temp.path()).unwrap(), 8);
+    }
 }
 
 #[cfg(test)]
