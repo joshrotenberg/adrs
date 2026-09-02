@@ -245,11 +245,29 @@ impl Parser {
     }
 
     /// Parse the status section for status and links.
+    ///
+    /// The first line that opens with a status keyword wins. Prose under the
+    /// status is common (`Accepted. Amended by ...`), and a later line that
+    /// happens to begin with a keyword must not silently redefine the status
+    /// -- which line that is depends only on where the paragraph wraps.
+    ///
+    /// A `Superseded by` link still forces `Superseded` regardless, because
+    /// adr-tools does not always update the keyword when it adds the link.
     fn parse_status_section(&self, adr: &mut Adr, content: &str) {
+        let mut status_from_keyword = false;
+
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() {
                 continue;
+            }
+
+            // Read the keyword before the link check, so a status sharing a
+            // line with a link (`Accepted. Amended by [1. T](0001-t.md)`) is
+            // still seen.
+            if !status_from_keyword && let Some(status) = leading_status_keyword(line) {
+                adr.status = status;
+                status_from_keyword = true;
             }
 
             // Check for link pattern: "Supersedes [1. Title](0001-title.md)"
@@ -270,23 +288,6 @@ impl Parser {
                     }
 
                     adr.links.push(AdrLink::new(target, kind));
-                }
-            } else if !line.contains('[') && !line.contains(']') {
-                // Plain status text (not a link line)
-                // Only set status if it looks like a simple status word
-                let word = line.split_whitespace().next().unwrap_or("");
-                if matches!(
-                    word.to_lowercase().as_str(),
-                    // Include "superceded" for adr-tools compatibility (common typo)
-                    "proposed"
-                        | "accepted"
-                        | "deprecated"
-                        | "superseded"
-                        | "superceded"
-                        | "draft"
-                        | "rejected"
-                ) {
-                    adr.status = word.parse().unwrap_or(AdrStatus::Proposed);
                 }
             }
         }
@@ -525,6 +526,23 @@ pub fn format_date(date: Date) -> String {
     )
 }
 
+/// The status keyword a line opens with, if any.
+///
+/// Trailing punctuation is tolerated so `Accepted.` and `Accepted,` resolve
+/// the same as `Accepted`. Only the recognised keywords are accepted: anything
+/// else is prose, not a status.
+fn leading_status_keyword(line: &str) -> Option<AdrStatus> {
+    let word = line.split_whitespace().next()?;
+    let word = word.trim_end_matches(|c: char| !c.is_alphanumeric());
+
+    matches!(
+        word.to_lowercase().as_str(),
+        // Include "superceded" for adr-tools compatibility (common typo)
+        "proposed" | "accepted" | "deprecated" | "superseded" | "superceded" | "draft" | "rejected"
+    )
+    .then(|| word.parse().unwrap_or(AdrStatus::Proposed))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -542,6 +560,80 @@ mod tests {
     #[test]
     fn test_parser_default() {
         let _parser = Parser::default();
+    }
+
+    // ========== Status Section Precedence (issue #376) ==========
+
+    /// Parse an ADR whose `## Status` section holds `status`.
+    fn parse_with_status(status: &str) -> Adr {
+        let content = format!(
+            "# 1. Case\n\nDate: 2026-08-21\n\n## Status\n\n{status}\n\n\
+             ## Context\n\nc\n\n## Decision\n\nd\n\n## Consequences\n\nq\n"
+        );
+        Parser::new().parse(&content).unwrap()
+    }
+
+    #[test]
+    fn status_tolerates_trailing_punctuation() {
+        for status in ["Accepted", "Accepted.", "Accepted,", "Accepted!"] {
+            assert_eq!(
+                parse_with_status(status).status,
+                AdrStatus::Accepted,
+                "{status:?} should parse as Accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn status_is_read_from_a_line_that_also_carries_a_link() {
+        let adr = parse_with_status("Accepted. Amended by [ADR-0001](0001-case-1.md).");
+        assert_eq!(adr.status, AdrStatus::Accepted);
+    }
+
+    #[test]
+    fn later_prose_does_not_override_the_status() {
+        // These two differ only in where the paragraph wraps. Before the fix
+        // the first reported Superseded and the second Accepted.
+        let wrapped_before = parse_with_status(
+            "Accepted\n\nAmended by [ADR-0001](0001-case-1.md) - the earlier framing is\n\
+             superseded for this layer.",
+        );
+        let wrapped_after = parse_with_status(
+            "Accepted\n\nAmended by [ADR-0001](0001-case-1.md) - the earlier framing is superseded\n\
+             for this layer.",
+        );
+
+        assert_eq!(wrapped_before.status, AdrStatus::Accepted);
+        assert_eq!(wrapped_after.status, AdrStatus::Accepted);
+        assert_eq!(wrapped_before.status, wrapped_after.status);
+    }
+
+    #[test]
+    fn superseded_by_link_still_wins_over_an_earlier_keyword() {
+        // adr-tools appends the link without always updating the keyword, so
+        // the link has to keep forcing Superseded.
+        let adr = parse_with_status("Accepted\n\nSuperseded by [2. Two](0002-two.md)");
+        assert_eq!(adr.status, AdrStatus::Superseded);
+    }
+
+    #[test]
+    fn supersedes_link_does_not_mark_this_adr_superseded() {
+        // "Supersedes" is this ADR superseding another one.
+        let adr = parse_with_status("Accepted\n\nSupersedes [1. One](0001-one.md)");
+        assert_eq!(adr.status, AdrStatus::Accepted);
+    }
+
+    #[test]
+    fn own_supersede_output_round_trips() {
+        // What `adrs supersede` writes: keyword first, then the link.
+        let adr = parse_with_status("Superseded\n\nSuperseded by [3. Three](0003-three.md)");
+        assert_eq!(adr.status, AdrStatus::Superseded);
+    }
+
+    #[test]
+    fn a_status_section_of_pure_prose_leaves_the_default() {
+        let adr = parse_with_status("This decision is still being discussed.");
+        assert_eq!(adr.status, AdrStatus::Proposed);
     }
 
     // ========== Legacy Format Parsing ==========
