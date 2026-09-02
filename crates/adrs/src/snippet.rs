@@ -11,8 +11,9 @@ const PREVIEW_CHARS: usize = 80;
 
 /// Round `index` down to the nearest UTF-8 character boundary in `text`.
 ///
-/// `str::floor_char_boundary` is still unstable, and the offsets we derive from
-/// byte arithmetic can land inside a multi-byte character.
+/// The offsets we derive from byte arithmetic can land inside a multi-byte
+/// character. `str::floor_char_boundary` does this, but it requires Rust 1.91
+/// and this crate's MSRV is 1.90, so keep the local version until that moves.
 fn floor_char_boundary(text: &str, index: usize) -> usize {
     let mut index = index.min(text.len());
     while !text.is_char_boundary(index) {
@@ -201,17 +202,42 @@ mod tests {
 
     #[test]
     fn multibyte_whitespace_does_not_split_characters() {
-        // U+3000 (ideographic space) is three bytes; stepping over it by one
-        // byte would land mid-character.
+        // U+3000 (ideographic space) is three bytes, so stepping over it with
+        // `pos + 1` lands mid-character. The whitespace must sit far enough
+        // before the match that the backward scan actually reaches it --
+        // otherwise `rfind` returns None and this never tests the step at all.
+        let text = format!("{}\u{3000}{}needle", "あ".repeat(3), "あ".repeat(20));
+        let snippet = extract_snippet(&text, "needle", true);
+        assert!(snippet.contains("needle"));
+
+        // Also exercise it with the whitespace on both sides of the match.
         let text = format!(
             "{}\u{3000}needle\u{3000}{}",
             "あ".repeat(30),
             "い".repeat(30)
         );
-        let snippet = extract_snippet(&text, "needle", true);
-        assert!(snippet.contains("needle"));
+        assert!(extract_snippet(&text, "needle", true).contains("needle"));
     }
 
+    #[test]
+    fn snippet_is_centered_on_the_match_with_context_either_side() {
+        // Long enough that the no-match fallback preview cannot contain the
+        // match, so this fails if the matcher silently stops finding it, and
+        // asserts real context so it fails if the window collapses to zero.
+        let filler = "あ".repeat(120);
+        let text = format!("{filler} needle {filler}");
+        let snippet = extract_snippet(&text, "needle", true);
+
+        let (before, after) = snippet.split_once("needle").expect("match present");
+        assert!(before.contains('あ'), "no leading context: {snippet}");
+        assert!(after.contains('あ'), "no trailing context: {snippet}");
+        assert!(snippet.starts_with("..."), "{snippet}");
+        assert!(snippet.ends_with("..."), "{snippet}");
+        assert!(
+            snippet.chars().count() < text.chars().count() / 2,
+            "window should be bounded, not the whole text: {snippet}"
+        );
+    }
     #[test]
     fn no_match_preview_of_multibyte_text() {
         let text = "あ".repeat(100);
