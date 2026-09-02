@@ -29,15 +29,21 @@ fn floor_char_boundary(text: &str, index: usize) -> usize {
 /// indices into the original text without this translation. The map has one
 /// extra entry so that the end of the lowercased string maps to `text.len()`.
 fn lowercase_with_offsets(text: &str) -> (String, Vec<usize>) {
-    let mut lowered = String::with_capacity(text.len());
-    let mut offsets = Vec::with_capacity(text.len() + 1);
+    // Lowercase with `str::to_lowercase` rather than character by character.
+    // Both callers gate on `text.to_lowercase().contains(query)`, and only the
+    // string form applies context-sensitive rules such as word-final sigma
+    // (`\u{3a3}` becomes `\u{3c2}`, not `\u{3c3}`). Lowering char by char here
+    // would make a section report a match that this function cannot locate.
+    let lowered = text.to_lowercase();
 
+    let mut offsets = Vec::with_capacity(lowered.len() + 1);
     for (offset, ch) in text.char_indices() {
-        for lowered_ch in ch.to_lowercase() {
-            lowered.push(lowered_ch);
-        }
-        offsets.resize(lowered.len(), offset);
+        let end = offsets.len() + ch.to_lowercase().map(char::len_utf8).sum::<usize>();
+        offsets.resize(end.min(lowered.len()), offset);
     }
+    // The two lowercasings agree on byte length for every Unicode scalar
+    // today. Reconcile anyway so indexing stays in bounds if that ever changes.
+    offsets.resize(lowered.len(), text.len());
     offsets.push(text.len());
 
     (lowered, offsets)
@@ -65,7 +71,9 @@ fn find_match_range(text: &str, query: &str, case_sensitive: bool) -> Option<(us
 pub(crate) fn extract_snippet(text: &str, query: &str, case_sensitive: bool) -> String {
     let Some((match_start, match_end)) = find_match_range(text, query, case_sensitive) else {
         let preview: String = text.chars().take(PREVIEW_CHARS).collect();
-        return if preview.len() < text.len() {
+        let truncated = preview.len() < text.len();
+        let preview = preview.replace('\n', " ");
+        return if truncated {
             format!("{}...", preview)
         } else {
             preview
@@ -217,6 +225,40 @@ mod tests {
         // Under 80 characters but over 80 bytes: nothing was truncated.
         let text = "あ".repeat(50);
         assert_eq!(extract_snippet(&text, "nonexistent", false), text);
+    }
+
+    #[test]
+    fn word_final_sigma_agrees_with_the_callers_gate() {
+        // `str::to_lowercase` maps a word-final sigma to U+03C2; lowering char
+        // by char always yields U+03C3. The callers gate the section on the
+        // string form, so extraction must use it too or it reports a match it
+        // cannot then locate, and the user gets a snippet with no match in it.
+        let text = format!(
+            "{} \u{3a3}\u{394}\u{39f}\u{3a3} was chosen",
+            "x".repeat(200)
+        );
+        let query = "\u{3a3}\u{394}\u{39f}\u{3a3}".to_lowercase();
+
+        assert!(
+            text.to_lowercase().contains(&query),
+            "precondition: the callers' gate reports a match"
+        );
+        let snippet = extract_snippet(&text, &query, false);
+        assert!(
+            snippet.contains("\u{3a3}\u{394}\u{39f}\u{3a3}"),
+            "snippet lost the match: {snippet}"
+        );
+    }
+
+    #[test]
+    fn no_match_preview_is_single_line() {
+        // Results print as `{section}: {snippet}`, so a snippet must not wrap.
+        let text = "line one\nline two\nline three";
+        let snippet = extract_snippet(text, "nonexistent", false);
+        assert!(
+            !snippet.contains('\n'),
+            "preview must be one line: {snippet:?}"
+        );
     }
 
     #[test]
