@@ -489,70 +489,98 @@ struct DoctorIssue {
 // Macro to reduce boilerplate for tool registration.
 macro_rules! adr_tool {
     // Read-only tool with params.
-    (ro, $state:expr, $name:expr, $desc:expr, $param:ty, $method:ident) => {
-        ToolBuilder::new($name)
-            .description($desc)
-            .read_only()
-            .handler({
-                let state = $state.clone();
-                move |params: $param| {
-                    let state = state.clone();
-                    async move {
-                        match state.$method(params) {
-                            Ok(json) => Ok(CallToolResult::text(json)),
-                            Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+    (ro, $read_only:expr, $state:expr, $name:expr, $desc:expr, $param:ty, $method:ident) => {{
+        let _ = $read_only;
+        Some(
+            ToolBuilder::new($name)
+                .description($desc)
+                .read_only()
+                .handler({
+                    let state = $state.clone();
+                    move |params: $param| {
+                        let state = state.clone();
+                        async move {
+                            match state.$method(params) {
+                                Ok(json) => Ok(CallToolResult::text(json)),
+                                Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+                            }
                         }
                     }
-                }
-            })
-            .build()
-    };
+                })
+                .build(),
+        )
+    }};
     // Write tool with params.
-    (rw, $state:expr, $name:expr, $desc:expr, $param:ty, $method:ident) => {
-        ToolBuilder::new($name)
-            .description($desc)
-            .handler({
-                let state = $state.clone();
-                move |params: $param| {
-                    let state = state.clone();
-                    async move {
-                        match state.$method(params) {
-                            Ok(json) => Ok(CallToolResult::text(json)),
-                            Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+    (rw, $read_only:expr, $state:expr, $name:expr, $desc:expr, $param:ty, $method:ident) => {{
+        if $read_only {
+            None
+        } else {
+            Some(
+                ToolBuilder::new($name)
+                    .description($desc)
+                    .handler({
+                        let state = $state.clone();
+                        move |params: $param| {
+                            let state = state.clone();
+                            async move {
+                                match state.$method(params) {
+                                    Ok(json) => Ok(CallToolResult::text(json)),
+                                    Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+                                }
+                            }
                         }
-                    }
-                }
-            })
-            .build()
-    };
+                    })
+                    .build(),
+            )
+        }
+    }};
     // Read-only tool without params.
-    (ro, $state:expr, $name:expr, $desc:expr, $method:ident) => {
-        ToolBuilder::new($name)
-            .description($desc)
-            .read_only()
-            .no_params_handler({
-                let state = $state.clone();
-                move || {
-                    let state = state.clone();
-                    async move {
-                        match state.$method() {
-                            Ok(json) => Ok(CallToolResult::text(json)),
-                            Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+    (ro, $read_only:expr, $state:expr, $name:expr, $desc:expr, $method:ident) => {{
+        let _ = $read_only;
+        Some(
+            ToolBuilder::new($name)
+                .description($desc)
+                .read_only()
+                .no_params_handler({
+                    let state = $state.clone();
+                    move || {
+                        let state = state.clone();
+                        async move {
+                            match state.$method() {
+                                Ok(json) => Ok(CallToolResult::text(json)),
+                                Err(e) => Ok(CallToolResult::error(format!("Error: {e}"))),
+                            }
                         }
                     }
-                }
-            })
-            .build()
-    };
+                })
+                .build(),
+        )
+    }};
 }
 
 /// Build the MCP router with all ADR tools registered.
+///
+/// Only the tests construct a router directly; the servers go through
+/// [`build_router_with_access`] so they can honor `--read-only`.
+#[cfg(test)]
 fn build_router(root: PathBuf) -> McpRouter {
+    build_router_with_access(root, false)
+}
+
+/// Build the MCP router, omitting every write tool when `read_only` is set.
+///
+/// The `ro`/`rw` token that builds each tool is also what decides whether it
+/// is registered, so the classification cannot drift from a second list: a
+/// write tool simply yields `None` here and never reaches the router. An
+/// omitted tool does not exist for the session, so calling it returns the
+/// usual "method not found" rather than a refusal from a registered tool.
+fn build_router_with_access(root: PathBuf, read_only: bool) -> McpRouter {
     let state = Arc::new(AdrState::new(root));
 
     // Read-only tools
     let list_adrs = adr_tool!(
         ro,
+        read_only,
         state,
         "list_adrs",
         "List all Architecture Decision Records. Returns summary information for each ADR including number, title, status, and date. Optionally filter by status or tag.",
@@ -562,6 +590,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let get_adr = adr_tool!(
         ro,
+        read_only,
         state,
         "get_adr",
         "Get the full content of an Architecture Decision Record by its number. Returns the complete ADR including title, status, content, and links.",
@@ -571,6 +600,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let search_adrs = adr_tool!(
         ro,
+        read_only,
         state,
         "search_adrs",
         "Search Architecture Decision Records for matching text. Searches both titles and content by default. Use title_only=true to search only titles.",
@@ -580,6 +610,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let get_repository_info = adr_tool!(
         ro,
+        read_only,
         state,
         "get_repository_info",
         "Get information about the ADR repository including mode (compatible/nextgen), ADR count, and configuration.",
@@ -588,6 +619,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let get_related_adrs = adr_tool!(
         ro,
+        read_only,
         state,
         "get_related_adrs",
         "Get all ADRs that are linked to or from a specific ADR. Returns both incoming and outgoing links with their types.",
@@ -597,6 +629,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let validate_adr = adr_tool!(
         ro,
+        read_only,
         state,
         "validate_adr",
         "Validate a single ADR's structure and content. Checks for required sections (Context, Decision, Consequences), validates status, and reports any issues. Returns validation results with severity levels (error/warning).",
@@ -606,6 +639,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let get_adr_sections = adr_tool!(
         ro,
+        read_only,
         state,
         "get_adr_sections",
         "Get an ADR with its content parsed into separate sections (context, decision, consequences). Returns structured data instead of raw markdown, making it easier to analyze specific sections independently.",
@@ -615,6 +649,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let compare_adrs = adr_tool!(
         ro,
+        read_only,
         state,
         "compare_adrs",
         "Compare two ADRs and show the differences between them. Useful for understanding how decisions evolved, especially when one ADR supersedes another. Returns structural comparison of title, status, and content sections.",
@@ -624,6 +659,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let suggest_tags = adr_tool!(
         ro,
+        read_only,
         state,
         "suggest_tags",
         "Analyze an ADR's content and suggest relevant tags based on keywords and common architectural categories. Returns suggested tags with confidence scores and reasons. Requires NextGen mode for tags to be applied.",
@@ -633,6 +669,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let run_doctor = adr_tool!(
         ro,
+        read_only,
         state,
         "run_doctor",
         "Run health checks on the ADR repository. Returns broken links, parse errors, duplicate numbers, and other issues, plus config warnings (the same non-fatal diagnostics CLI doctor prints on stderr, such as both adrs.toml and .adrs.toml being present). Read-only; does not modify any files.",
@@ -641,6 +678,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let export_adrs = adr_tool!(
         ro,
+        read_only,
         state,
         "export_adrs",
         "Export ADRs to JSON-ADR format (machine-readable interchange format). Optionally filter to specific ADR numbers and/or export metadata only without content sections.",
@@ -651,6 +689,7 @@ fn build_router(root: PathBuf) -> McpRouter {
     // Write tools
     let init_repository = adr_tool!(
         rw,
+        read_only,
         state,
         "init_repository",
         "Initialize an ADR repository at the directory the server is bound to (its current working directory or -C path). Use this when repository tools report the repository is not initialized. Set nextgen=true for NextGen mode (adrs.toml, YAML frontmatter); omit or false for compatible mode (.adr-dir). Optionally set adr_dir (relative to the root, default doc/adr). Operates only on the bound root, does not create parent directories, and is idempotent like CLI `adrs init`: an existing matching config (adrs.toml, .adrs.toml, or .adr-dir) is left in place. Returns the mode, config path, ADR directory, and initial ADR path.",
@@ -660,6 +699,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let create_adr = adr_tool!(
         rw,
+        read_only,
         state,
         "create_adr",
         "Create a new Architecture Decision Record. The ADR will use the repository's configured default status (proposed if not configured) and requires human review before acceptance. Returns the created ADR details including its number and file path.",
@@ -669,6 +709,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let update_status = adr_tool!(
         rw,
+        read_only,
         state,
         "update_status",
         "Update the status of an existing ADR. Valid statuses: proposed, accepted, deprecated, superseded, rejected. For 'superseded', provide the superseded_by number. Note: Status changes should be reviewed by humans.",
@@ -678,6 +719,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let link_adrs = adr_tool!(
         rw,
+        read_only,
         state,
         "link_adrs",
         "Create a bidirectional link between two ADRs. Link types: 'Supersedes', 'Amends', or 'Relates to'. The reverse link is automatically created on the target ADR.",
@@ -687,6 +729,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let update_content = adr_tool!(
         rw,
+        read_only,
         state,
         "update_content",
         "Update the content sections (context, decision, consequences) of an existing ADR. At least one of context, decision, or consequences must be provided; omitted fields among those three are preserved. Changes should be reviewed by humans.",
@@ -696,6 +739,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let update_tags = adr_tool!(
         rw,
+        read_only,
         state,
         "update_tags",
         "Add or replace tags on an ADR. Requires NextGen mode (YAML frontmatter). Use replace=true to replace all tags, or false/omit to append.",
@@ -705,6 +749,7 @@ fn build_router(root: PathBuf) -> McpRouter {
 
     let bulk_update_status = adr_tool!(
         rw,
+        read_only,
         state,
         "bulk_update_status",
         "Update the status of multiple ADRs in a single operation. Useful for batch accepting related ADRs or deprecating multiple outdated decisions. Returns detailed results for each ADR including any failures.",
@@ -712,29 +757,39 @@ fn build_router(root: PathBuf) -> McpRouter {
         bulk_update_status_impl
     );
 
-    McpRouter::new()
+    let mut router = McpRouter::new()
         .server_info("adrs", env!("CARGO_PKG_VERSION"))
-        .auto_instructions()
+        .auto_instructions();
+
+    for tool in [
         // Read tools
-        .tool(list_adrs)
-        .tool(get_adr)
-        .tool(search_adrs)
-        .tool(get_repository_info)
-        .tool(get_related_adrs)
-        .tool(validate_adr)
-        .tool(get_adr_sections)
-        .tool(compare_adrs)
-        .tool(suggest_tags)
-        .tool(run_doctor)
-        .tool(export_adrs)
-        // Write tools
-        .tool(init_repository)
-        .tool(create_adr)
-        .tool(update_status)
-        .tool(link_adrs)
-        .tool(update_content)
-        .tool(update_tags)
-        .tool(bulk_update_status)
+        list_adrs,
+        get_adr,
+        search_adrs,
+        get_repository_info,
+        get_related_adrs,
+        validate_adr,
+        get_adr_sections,
+        compare_adrs,
+        suggest_tags,
+        run_doctor,
+        export_adrs,
+        // Write tools, absent in read-only mode
+        init_repository,
+        create_adr,
+        update_status,
+        link_adrs,
+        update_content,
+        update_tags,
+        bulk_update_status,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        router = router.tool(tool);
+    }
+
+    router
 }
 
 /// Check if a section's text contains the (already-normalized) query.
@@ -1936,10 +1991,10 @@ impl AdrState {
 }
 
 /// Run the MCP server on stdio.
-pub async fn serve_stdio(root: PathBuf) -> Result<()> {
+pub async fn serve_stdio(root: PathBuf, read_only: bool) -> Result<()> {
     use tower_mcp::StdioTransport;
 
-    let router = build_router(root);
+    let router = build_router_with_access(root, read_only);
     let mut transport = StdioTransport::new(router);
     transport.run().await?;
     Ok(())
@@ -1947,10 +2002,10 @@ pub async fn serve_stdio(root: PathBuf) -> Result<()> {
 
 /// Run the MCP server over HTTP.
 #[cfg(feature = "mcp-http")]
-pub async fn serve_http(root: PathBuf, addr: std::net::SocketAddr) -> Result<()> {
+pub async fn serve_http(root: PathBuf, addr: std::net::SocketAddr, read_only: bool) -> Result<()> {
     use tower_mcp::HttpTransport;
 
-    let router = build_router(root);
+    let router = build_router_with_access(root, read_only);
 
     eprintln!("MCP server listening on http://{}/mcp", addr);
 
@@ -3809,6 +3864,106 @@ Confirm via tests.
             "shadowed .adrs.toml must be left in place"
         );
         assert!(!temp.path().join(".adr-dir").exists());
+    }
+
+    /// A client whose router registers only the read tools.
+    async fn setup_read_only_client() -> (McpClient, tempfile::TempDir) {
+        let temp = tempfile::tempdir().unwrap();
+        adrs_core::Repository::init(temp.path(), None, false).unwrap();
+        let router = build_router_with_access(temp.path().to_path_buf(), true);
+        let transport = ChannelTransport::new(router);
+        let client = McpClient::connect(transport).await.unwrap();
+        client.initialize("test-client", "1.0.0").await.unwrap();
+        (client, temp)
+    }
+
+    #[tokio::test]
+    async fn test_read_only_mode_registers_exactly_the_read_tools() {
+        let (client, _tmp) = setup_read_only_client().await;
+        let tools = client.list_all_tools().await.unwrap();
+        let mut names: Vec<_> = tools.iter().map(|tool| tool.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            [
+                "compare_adrs",
+                "export_adrs",
+                "get_adr",
+                "get_adr_sections",
+                "get_related_adrs",
+                "get_repository_info",
+                "list_adrs",
+                "run_doctor",
+                "search_adrs",
+                "suggest_tags",
+                "validate_adr",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_default_mode_still_registers_every_tool() {
+        let (client, _tmp) = setup_client(false).await;
+        let tools = client.list_all_tools().await.unwrap();
+        assert_eq!(
+            tools.len(),
+            18,
+            "read-only mode must not change the default"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_read_only_mode_write_tools_do_not_exist() {
+        // Omitted rather than registered-and-refused, so a client that cannot
+        // deny tools locally never sees them at all.
+        let (client, _tmp) = setup_read_only_client().await;
+        for (tool, args) in [
+            ("create_adr", json!({"title": "Must not be created"})),
+            ("init_repository", json!({})),
+            ("update_status", json!({"number": 1, "status": "accepted"})),
+            (
+                "bulk_update_status",
+                json!({"numbers": [1], "status": "accepted"}),
+            ),
+        ] {
+            let error = client
+                .call_tool_text(tool, args)
+                .await
+                .expect_err("{tool} must not be registered in read-only mode");
+            assert!(
+                error.to_string().to_lowercase().contains("not found"),
+                "{tool}: expected a not-found error, got: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_read_only_mode_leaves_the_repository_untouched() {
+        let (client, temp) = setup_read_only_client().await;
+        let before = std::fs::read_dir(temp.path().join("doc/adr"))
+            .unwrap()
+            .count();
+        let _ = client
+            .call_tool_text("create_adr", json!({"title": "Must not be created"}))
+            .await;
+        let after = std::fs::read_dir(temp.path().join("doc/adr"))
+            .unwrap()
+            .count();
+        assert_eq!(before, after, "read-only mode must not write any ADR");
+    }
+
+    #[tokio::test]
+    async fn test_read_tools_all_carry_the_read_only_hint() {
+        // The `ro` token sets the annotation and decides registration, so a
+        // tool surviving read-only mode without the hint means they drifted.
+        let (client, _tmp) = setup_read_only_client().await;
+        for tool in client.list_all_tools().await.unwrap() {
+            assert!(
+                tool.annotations.as_ref().is_some_and(|a| a.read_only_hint),
+                "{} survived read-only mode without readOnlyHint",
+                tool.name
+            );
+        }
     }
 
     #[tokio::test]

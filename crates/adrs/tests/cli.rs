@@ -2739,6 +2739,12 @@ fn test_smoke_mcp_available() {
         .success()
         .stdout(predicate::str::contains("MCP server"))
         .stdout(predicate::str::contains("serve"));
+
+    adrs()
+        .args(["mcp", "serve", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--read-only"));
 }
 
 /// Smoke test for template system
