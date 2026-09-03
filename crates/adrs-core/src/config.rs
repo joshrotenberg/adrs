@@ -282,7 +282,15 @@ impl Config {
 }
 
 /// Result of discovering configuration.
+///
+/// `#[non_exhaustive]`: this type is returned by [`discover`], never
+/// constructed by callers, and it has gained a field in each of the last two
+/// releases (`unknown_keys` in 0.11.0, `shadowed_toml` in 0.11.1). Each of
+/// those was a breaking change for anyone building one with a struct literal.
+/// Marking it non-exhaustive makes future additions non-breaking; read the
+/// fields or match with `..` instead.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct DiscoveredConfig {
     /// The resolved configuration.
     pub config: Config,
