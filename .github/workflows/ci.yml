@@ -52,6 +52,29 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets --all-features
 
+  # Compare adrs-core's public API against the version published on crates.io.
+  #
+  # 0.11.1 shipped a breaking change as a patch release: `DiscoveredConfig`
+  # gained a public field, so downstream struct-literal construction stopped
+  # compiling. release-plz has `semver_check = true`, but that check runs only
+  # when the release PR is generated and its failure is not visible on the PR
+  # that introduces the break. Running it here puts the signal on the pull
+  # request, where it can still be acted on.
+  #
+  # A failure here does not mean "don't do this". It means the change is
+  # breaking and needs a minor bump under 0.x -- land it with a `!` or a
+  # `BREAKING CHANGE:` footer so release-plz proposes the right version.
+  semver:
+    name: Semver (adrs-core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # The action installs its own toolchain and manages its own cache.
+      - name: Check adrs-core against the published baseline
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: adrs-core
+
   # Verify each crate still builds on its declared rust-version (MSRV), so a
   # newer-toolchain feature can't silently raise it. Keep these versions in sync
   # with the `rust-version` field in each crate's Cargo.toml.
