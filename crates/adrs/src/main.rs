@@ -801,7 +801,13 @@ fn main() -> Result<()> {
             warnings_as_errors,
         } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;
-            commands::doctor(&discovered.root, cli.ng, ignore, warnings_as_errors)
+            commands::doctor(
+                &discovered.root,
+                cli.ng,
+                ignore,
+                warnings_as_errors,
+                discovered.shadowed_toml.is_some(),
+            )
         }
         Commands::Generate { command } => {
             let discovered = discover_or_error(&start_dir, cli.working_dir.is_some())?;

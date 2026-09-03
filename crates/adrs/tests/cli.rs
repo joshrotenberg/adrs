@@ -3135,3 +3135,51 @@ fn test_generate_book_relative_output_without_cwd_flag() {
 
     temp.close().unwrap();
 }
+
+/// The both-TOML warning must survive discovery through `ADRS_CONFIG`, and
+/// must not be printed twice when discovery went through the project config.
+#[test]
+fn test_dual_toml_warning_printed_exactly_once_in_both_discovery_modes() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(temp.path().join("doc/adr")).unwrap();
+    std::fs::write(temp.path().join("adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+    std::fs::write(temp.path().join(".adrs.toml"), "adr_dir = \"doc/adr\"\n").unwrap();
+
+    let count_warnings = |out: &str| {
+        out.lines()
+            .filter(|l| l.contains("both adrs.toml and .adrs.toml"))
+            .count()
+    };
+
+    // Project discovery: main.rs prints it, doctor must not repeat it.
+    let assert = adrs()
+        .current_dir(temp.path())
+        .arg("doctor")
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert_eq!(
+        count_warnings(&stderr),
+        1,
+        "project discovery should warn exactly once, got: {stderr}"
+    );
+
+    // ADRS_CONFIG discovery: main.rs prints nothing because the environment
+    // branch reports no shadowed file, so doctor has to say it.
+    let assert = adrs()
+        .current_dir(temp.path())
+        .env("ADRS_CONFIG", temp.path().join("adrs.toml"))
+        .arg("doctor")
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert_eq!(
+        count_warnings(&stderr),
+        1,
+        "ADRS_CONFIG discovery should still warn exactly once, got: {stderr}"
+    );
+
+    // Never on stdout: `adrs config`/`doctor` output is piped in scripts.
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+    assert_eq!(count_warnings(&stdout), 0, "warning must stay on stderr");
+}

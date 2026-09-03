@@ -16,7 +16,16 @@ use std::path::Path;
 /// `ignore` is merged with `[doctor].ignore` from `adrs.toml` (see
 /// `check_all_filtered`). `warnings_as_errors` is OR'd with
 /// `[doctor].warnings_as_errors` from config (issue #316).
-pub fn doctor(root: &Path, ng: bool, ignore: Vec<String>, warnings_as_errors: bool) -> Result<()> {
+///
+/// `dual_toml_reported` says whether the caller already printed the
+/// both-TOML-files warning, so this command does not repeat it.
+pub fn doctor(
+    root: &Path,
+    ng: bool,
+    ignore: Vec<String>,
+    warnings_as_errors: bool,
+    dual_toml_reported: bool,
+) -> Result<()> {
     if ng {
         eprintln!(
             "note: --ng has no effect on 'doctor'; lint rules detect each ADR's format automatically"
@@ -29,9 +38,12 @@ pub fn doctor(root: &Path, ng: bool, ignore: Vec<String>, warnings_as_errors: bo
     let (report, suppressed_count, config_warnings) =
         check_all_filtered(&repo, &ignore).context("Failed to run health checks")?;
     for warning in &config_warnings {
-        // Dual-TOML is already printed for every command via
-        // `warn_unknown_config_keys`; skip the duplicate line here.
-        if warning == adrs_core::DUPLICATE_TOML_CONFIG_MESSAGE {
+        // `warn_unknown_config_keys` prints this for most commands, but only
+        // when discovery resolved a project config: the ADRS_CONFIG and global
+        // branches report no shadowed file, so nothing was printed upstream and
+        // doctor has to say it. Skipping unconditionally lost the warning in
+        // exactly the single-static-config setup the feature was asked for.
+        if dual_toml_reported && warning == adrs_core::DUPLICATE_TOML_CONFIG_MESSAGE {
             continue;
         }
         eprintln!("warning: {warning}");
