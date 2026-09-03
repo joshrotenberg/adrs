@@ -1451,6 +1451,35 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
     }
 
     #[test]
+    fn test_custom_template_tojson_quotes_titles_for_yaml_frontmatter() {
+        // In NextGen mode the title goes into YAML frontmatter. A bare
+        // `title: {{ title }}` breaks as soon as the title carries a colon, a
+        // leading quote, or a `#`. `tojson` emits a JSON string, which is
+        // valid YAML and round-trips exactly. This requires minijinja's
+        // `json` feature.
+        for title in [
+            "ADR: 'single' and \"double\"",
+            "\u{8a2d}\u{8a08}: \u{300c}\u{65e5}\u{672c}\u{8a9e}\u{300d}\u{306e}\u{6c7a}\u{5b9a} # not a comment",
+            "trailing backslash \\\\",
+            "plain title",
+        ] {
+            let template = Template::from_string("test", "title: {{ title | tojson }}");
+            let adr = Adr::new(1, title);
+            let output = template
+                .render(&adr, &Config::default(), &HashMap::new())
+                .unwrap();
+
+            let parsed: serde_yaml_neo::Value = serde_yaml_neo::from_str(&output)
+                .unwrap_or_else(|e| panic!("{title:?} rendered unparseable YAML {output:?}: {e}"));
+            assert_eq!(
+                parsed.get("title").and_then(|t| t.as_str()),
+                Some(title),
+                "{title:?} must round-trip through YAML unchanged, got {output:?}"
+            );
+        }
+    }
+
+    #[test]
     fn test_custom_template_is_ng_flag() {
         let custom = Template::from_string(
             "ng-check",
