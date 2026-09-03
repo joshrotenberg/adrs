@@ -2022,6 +2022,22 @@ mod tests {
     use tower_mcp::client::{ChannelTransport, McpClient};
 
     /// Helper: create an initialized MCP client connected to a temp ADR repo.
+    /// Like [`setup_client`], but the repository is configured with a
+    /// non-default, nested ADR directory.
+    ///
+    /// Every other fixture in this file runs against `doc/adr`. That
+    /// monoculture is why `init_repository` could delete a repository's config
+    /// and re-point it at the default without a single test noticing.
+    async fn setup_client_with_adr_dir(adr_dir: &str, ng: bool) -> (McpClient, tempfile::TempDir) {
+        let temp = tempfile::tempdir().unwrap();
+        adrs_core::Repository::init(temp.path(), Some(adr_dir.into()), ng).unwrap();
+        let router = build_router(temp.path().to_path_buf());
+        let transport = ChannelTransport::new(router);
+        let client = McpClient::connect(transport).await.unwrap();
+        client.initialize("test-client", "1.0.0").await.unwrap();
+        (client, temp)
+    }
+
     async fn setup_client(ng: bool) -> (McpClient, tempfile::TempDir) {
         let temp = tempfile::tempdir().unwrap();
         adrs_core::Repository::init(temp.path(), None, ng).unwrap();
@@ -3964,6 +3980,136 @@ Confirm via tests.
                 tool.name
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_tool_surface_works_in_a_non_default_adr_dir() {
+        // Drives the read and write tools against a nested, non-default
+        // directory. All 56 other tool tests run through `setup_client`, which
+        // hardcodes `doc/adr`, so nothing here was ever exercised outside the
+        // default layout -- the gap that hid the init_repository data loss.
+        let adr_dir = "docs/architecture/decisions";
+        let (client, temp) = setup_client_with_adr_dir(adr_dir, true).await;
+        let dir = temp.path().join(adr_dir);
+
+        let created = client
+            .call_tool_text("create_adr", json!({"title": "Use Redis"}))
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_str(&created).unwrap();
+        let number = created["number"].as_u64().expect("created ADR number") as u32;
+
+        // The file must land in the configured directory, not the default.
+        assert!(
+            created["path"]
+                .as_str()
+                .expect("path")
+                .contains("docs/architecture/decisions")
+                || created["path"]
+                    .as_str()
+                    .expect("path")
+                    .contains("docs\\architecture\\decisions"),
+            "created ADR should live in the configured directory, got {}",
+            created["path"]
+        );
+        assert!(
+            !temp.path().join("doc/adr").exists(),
+            "nothing should create the default directory"
+        );
+
+        let before = std::fs::read_dir(&dir).unwrap().count();
+
+        client
+            .call_tool_text("create_adr", json!({"title": "Use Postgres"}))
+            .await
+            .unwrap();
+        client
+            .call_tool_text(
+                "update_status",
+                json!({"number": number, "status": "accepted"}),
+            )
+            .await
+            .unwrap();
+        client
+            .call_tool_text(
+                "update_content",
+                json!({"number": number, "context": "Traffic grew."}),
+            )
+            .await
+            .unwrap();
+        client
+            .call_tool_text("update_tags", json!({"number": number, "tags": ["cache"]}))
+            .await
+            .unwrap();
+        client
+            .call_tool_text(
+                "link_adrs",
+                json!({"source": number, "target": number + 1, "link_type": "Relates to"}),
+            )
+            .await
+            .unwrap();
+
+        // Reads must see the writes, in the configured directory.
+        let listed = client.call_tool_text("list_adrs", json!({})).await.unwrap();
+        let listed: serde_json::Value = serde_json::from_str(&listed).unwrap();
+        assert_eq!(
+            listed.as_array().map(Vec::len),
+            Some(before + 1),
+            "list_adrs should see both created ADRs: {listed}"
+        );
+
+        let got = client
+            .call_tool_text("get_adr", json!({"number": number}))
+            .await
+            .unwrap();
+        assert!(got.contains("Traffic grew."), "update_content not visible");
+
+        let searched = client
+            .call_tool_text("search_adrs", json!({"query": "Traffic"}))
+            .await
+            .unwrap();
+        assert!(
+            searched.contains(&number.to_string()),
+            "search should find the updated ADR: {searched}"
+        );
+
+        let related = client
+            .call_tool_text("get_related_adrs", json!({"number": number}))
+            .await
+            .unwrap();
+        assert!(
+            related.contains(&(number + 1).to_string()),
+            "link should be visible: {related}"
+        );
+
+        let exported = client
+            .call_tool_text("export_adrs", json!({}))
+            .await
+            .unwrap();
+        assert!(exported.contains("Use Redis"), "export missed the ADR");
+
+        let doctor = client
+            .call_tool_text("run_doctor", json!({}))
+            .await
+            .unwrap();
+        let doctor: serde_json::Value = serde_json::from_str(&doctor).unwrap();
+        assert_eq!(
+            doctor["issues"].as_array().map(Vec::len),
+            Some(0),
+            "a repository in a non-default directory should be healthy: {doctor}"
+        );
+
+        let info = client
+            .call_tool_text("get_repository_info", json!({}))
+            .await
+            .unwrap();
+        assert!(
+            info.contains("decisions"),
+            "repository info should report the configured directory: {info}"
+        );
+
+        // Still nothing at the default location, after every tool has run.
+        assert!(!temp.path().join("doc/adr").exists());
     }
 
     #[tokio::test]
