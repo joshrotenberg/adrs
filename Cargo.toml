@@ -21,7 +21,7 @@ toml = "0.8"
 pulldown-cmark = "0.13"
 
 # Templates
-minijinja = { version = "2", features = ["loader"] }
+minijinja = { version = "2", features = ["json", "loader"] }
 
 # File system
 walkdir = "2.5"
