@@ -790,7 +790,20 @@ fn main() -> Result<()> {
             commands::renumber(&discovered.root, from, to, file.as_deref(), dry_run)
         }
         Commands::Config => {
-            let discovered = discover(&start_dir).ok();
+            let discovered = match discover(&start_dir) {
+                Ok(discovered) => Some(discovered),
+                Err(e) => {
+                    // `config` is the command you run to find out which file is
+                    // in effect, so a config that exists but fails to load has
+                    // to say so and name itself. Dropping the error left it
+                    // reporting no repository at all, which is misleading when
+                    // the file is sitting right there. Not fatal: the command
+                    // still reports the effective defaults, and the exit code
+                    // is unchanged for scripts.
+                    eprintln!("warning: {e}");
+                    None
+                }
+            };
             if let Some(ref discovered) = discovered {
                 warn_unknown_config_keys(discovered);
             }

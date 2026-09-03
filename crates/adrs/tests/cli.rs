@@ -3183,3 +3183,34 @@ fn test_dual_toml_warning_printed_exactly_once_in_both_discovery_modes() {
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
     assert_eq!(count_warnings(&stdout), 0, "warning must stay on stderr");
 }
+
+/// `adrs config` exists to say which config file is in effect. A file that is
+/// present but fails to load must name itself rather than being reported as no
+/// repository at all.
+#[test]
+fn test_config_reports_a_config_file_that_fails_to_load() {
+    for (filename, contents, expected) in [
+        (
+            "adrs.toml",
+            "adr_dir = \"\"\n",
+            "adr_dir cannot be empty in adrs.toml",
+        ),
+        (
+            ".adr-dir",
+            "",
+            "ADR directory path is empty in .adr-dir file",
+        ),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join(filename), contents).unwrap();
+
+        adrs()
+            .current_dir(temp.path())
+            .arg("config")
+            .assert()
+            // Exit code deliberately unchanged: this is a diagnostic, and
+            // scripts calling `adrs config` should not start failing.
+            .success()
+            .stderr(predicate::str::contains(expected));
+    }
+}
