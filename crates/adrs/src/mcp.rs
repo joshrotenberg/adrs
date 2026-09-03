@@ -5,7 +5,7 @@
 
 use crate::snippet::extract_snippet;
 use adrs_core::{
-    AdrStatus, IssueSeverity, LinkKind, Repository, TemplateFormat, TemplateVariant,
+    AdrStatus, Config, IssueSeverity, LinkKind, Repository, TemplateFormat, TemplateVariant,
     check_all_filtered, export_repository,
 };
 use anyhow::Result;
@@ -984,7 +984,19 @@ impl AdrState {
                 }
                 Some(path)
             }
-            None => None,
+            // Resolve an omitted `adr_dir` from the config already at the root,
+            // the way the CLI's `resolve_init_target` does. Without this the
+            // value falls through as `None`, `Repository::init` substitutes the
+            // `doc/adr` default, that fails its reuse check against a repository
+            // configured elsewhere, and init takes the branch that deletes the
+            // existing config and writes a fresh one pointing at `doc/adr` --
+            // orphaning the ADRs and discarding every setting the file carried.
+            //
+            // `Config::load` reads only the bound root (no upward walk), so a
+            // config in a parent directory cannot pull initialization outside it.
+            // An unreadable or absent config still yields `None`, which is the
+            // correct "fresh repository" behavior.
+            None => Config::load(root).ok().map(|config| config.adr_dir),
         };
 
         let repo = Repository::init(root, adr_dir, params.nextgen).map_err(|e| e.to_string())?;
@@ -3797,6 +3809,105 @@ Confirm via tests.
             "shadowed .adrs.toml must be left in place"
         );
         assert!(!temp.path().join(".adr-dir").exists());
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_preserves_a_non_default_adr_dir() {
+        // With `adr_dir` omitted, init must resolve it from the config already
+        // present rather than substituting the `doc/adr` default. Substituting
+        // it fails `Repository::init`'s reuse check, and init then deletes the
+        // config and re-points the repository at `doc/adr`, orphaning the ADRs.
+        //
+        // Every other fixture in this file uses the default directory, which is
+        // why this path went uncovered.
+        for nextgen in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let original = "adr_dir = \"docs/decisions\"\ndefault_status = \"accepted\"\n";
+            std::fs::write(temp.path().join("adrs.toml"), original).unwrap();
+            std::fs::create_dir_all(temp.path().join("docs/decisions")).unwrap();
+            std::fs::write(
+                temp.path().join("docs/decisions/0001-real.md"),
+                "# 1. Real\n",
+            )
+            .unwrap();
+
+            let router = build_router(temp.path().to_path_buf());
+            let transport = ChannelTransport::new(router);
+            let client = McpClient::connect(transport).await.unwrap();
+            client.initialize("test-client", "1.0.0").await.unwrap();
+            client
+                .call_tool_text("init_repository", json!({ "nextgen": nextgen }))
+                .await
+                .unwrap();
+
+            assert_eq!(
+                std::fs::read_to_string(temp.path().join("adrs.toml")).ok(),
+                Some(original.to_string()),
+                "nextgen={nextgen}: adrs.toml must survive init untouched"
+            );
+            assert!(
+                !temp.path().join(".adr-dir").exists(),
+                "nextgen={nextgen}: init must not re-point the repository at doc/adr"
+            );
+            assert!(
+                !temp.path().join("doc/adr").exists(),
+                "nextgen={nextgen}: init must not create the default directory"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_preserves_a_legacy_adr_dir_file() {
+        // The plain adr-tools layout: `.adr-dir` naming a non-default directory.
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join(".adr-dir"), "docs/adr").unwrap();
+        std::fs::create_dir_all(temp.path().join("docs/adr")).unwrap();
+        std::fs::write(temp.path().join("docs/adr/0001-real.md"), "# 1. Real\n").unwrap();
+
+        let router = build_router(temp.path().to_path_buf());
+        let transport = ChannelTransport::new(router);
+        let client = McpClient::connect(transport).await.unwrap();
+        client.initialize("test-client", "1.0.0").await.unwrap();
+        client
+            .call_tool_text("init_repository", json!({}))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join(".adr-dir")).unwrap(),
+            "docs/adr",
+            ".adr-dir must still name the configured directory"
+        );
+        assert!(
+            !temp.path().join("doc/adr").exists(),
+            "init must not create the default directory alongside it"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_init_repository_preserves_a_non_default_hidden_toml() {
+        // Same guarantee for the `.adrs.toml` name this PR introduced.
+        let temp = tempfile::tempdir().unwrap();
+        let original = "adr_dir = \"docs/decisions\"\n";
+        std::fs::write(temp.path().join(".adrs.toml"), original).unwrap();
+        std::fs::create_dir_all(temp.path().join("docs/decisions")).unwrap();
+
+        let router = build_router(temp.path().to_path_buf());
+        let transport = ChannelTransport::new(router);
+        let client = McpClient::connect(transport).await.unwrap();
+        client.initialize("test-client", "1.0.0").await.unwrap();
+        client
+            .call_tool_text("init_repository", json!({}))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join(".adrs.toml")).ok(),
+            Some(original.to_string()),
+            ".adrs.toml must survive init untouched"
+        );
+        assert!(!temp.path().join(".adr-dir").exists());
+        assert!(!temp.path().join("doc/adr").exists());
     }
 
     #[tokio::test]
