@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.1] - 2026-09-03
+
+### Bug Fixes
+
+- Honor --status and default_status when superseding (closes #371)
+- Use on-disk filenames for generate toc/graph/book links
+- Preserve Unicode in filename slugs instead of transliterating (closes #370)
+- Keep search snippets on UTF-8 boundaries (closes #379)
+- Lowercase snippet text the same way the callers match on it
+- Resolve MCP init_repository's adr_dir from the existing config
+- Don't swallow the dual-TOML warning when ADRS_CONFIG is set
+- Have adrs config name a config file that fails to load
+
+### Features
+
+- Accept .adrs.toml as a hidden fallback for adrs.toml
+- **mcp:** Add a --read-only serve mode that registers only the read tools
+
+### Testing
+
+- Make the whitespace and centering tests catch what they claim
+
+
 ## [0.11.0] - 2026-08-05
 
 ### Bug Fixes
