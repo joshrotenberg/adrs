@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1] - 2026-09-03
+
+### Testing
+
+- **mcp:** Exercise the tool surface in a non-default adr_dir
+
+
 ## [0.12.0] - 2026-09-03
 
 
