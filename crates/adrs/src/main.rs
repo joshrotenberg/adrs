@@ -439,14 +439,16 @@ FISH:
     #[command(after_long_help = "\
 Starts an MCP (Model Context Protocol) server on stdio for AI agent integration.
 
-TOOLS PROVIDED (17):
-  Read-only:
+TOOLS PROVIDED (18):
+  Read-only (11):
     list_adrs, get_adr, search_adrs, get_repository_info, get_related_adrs,
     validate_adr, get_adr_sections, compare_adrs, suggest_tags, run_doctor,
     export_adrs
-  Write:
-    create_adr, update_status, update_content, update_tags, link_adrs,
-    bulk_update_status
+  Write (7):
+    init_repository, create_adr, update_status, update_content, update_tags,
+    link_adrs, bulk_update_status
+
+  Use `serve --read-only` to register only the 11 read tools.
 
 USAGE WITH CLAUDE:
   Add to your Claude Desktop config (claude_desktop_config.json):
@@ -478,6 +480,7 @@ enum McpCommands {
     #[command(after_long_help = "\
 EXAMPLES:
   adrs mcp serve                         Start on stdio (for Claude Desktop)
+  adrs mcp serve --read-only             Register only the 11 read tools
   adrs mcp serve --http 127.0.0.1:3000   Start HTTP server (requires mcp-http feature)
 
 STDIO MODE (default):
@@ -490,6 +493,10 @@ HTTP MODE (--http):
 Build with HTTP support:
   cargo build --release --features mcp-http")]
     Serve {
+        /// Register only the read tools; write tools are not exposed at all
+        #[arg(long)]
+        read_only: bool,
+
         /// Run HTTP server on this address instead of stdio
         #[cfg(feature = "mcp-http")]
         #[arg(long, value_name = "ADDR")]
@@ -924,28 +931,28 @@ fn main() -> Result<()> {
         }
         #[cfg(all(feature = "mcp", not(feature = "mcp-http")))]
         Commands::Mcp { command } => match command {
-            McpCommands::Serve {} => {
+            McpCommands::Serve { read_only } => {
                 let root = resolve_mcp_root(&start_dir);
                 tokio::runtime::Runtime::new()
                     .context("Failed to create tokio runtime")?
-                    .block_on(mcp::serve_stdio(root))
+                    .block_on(mcp::serve_stdio(root, read_only))
                     .context("MCP server error")
             }
         },
         #[cfg(feature = "mcp-http")]
         Commands::Mcp { command } => match command {
-            McpCommands::Serve { http } => {
+            McpCommands::Serve { http, read_only } => {
                 let root = resolve_mcp_root(&start_dir);
                 let runtime =
                     tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
 
                 if let Some(addr) = http {
                     runtime
-                        .block_on(mcp::serve_http(root, addr))
+                        .block_on(mcp::serve_http(root, addr, read_only))
                         .context("MCP HTTP server error")
                 } else {
                     runtime
-                        .block_on(mcp::serve_stdio(root))
+                        .block_on(mcp::serve_stdio(root, read_only))
                         .context("MCP server error")
                 }
             }
