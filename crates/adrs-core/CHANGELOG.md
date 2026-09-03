@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.1] - 2026-09-03
+
+### Bug Fixes
+
+- Honor --status and default_status when superseding (closes #371)
+- Use on-disk filenames for generate toc/graph/book links
+- Preserve Unicode in filename slugs instead of transliterating (closes #370)
+- Take ADR status from the first keyword line, not the last (closes #376)
+- Don't slice ADR filenames on a non-char boundary
+
+### Features
+
+- Accept .adrs.toml as a hidden fallback for adrs.toml
+- **template:** Enable minijinja's json feature for the tojson filter
+
+
 ## [0.11.0] - 2026-08-05
 
 ### Bug Fixes
