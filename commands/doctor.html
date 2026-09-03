@@ -249,7 +249,7 @@ also fail on warnings. This allows using <code>doctor</code> in CI pipelines:</p
   run: adrs doctor
 </code></pre>
 <h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
-<p><code>doctor</code> reads a <code>[doctor]</code> section from <code>adrs.toml</code>:</p>
+<p><code>doctor</code> reads a <code>[doctor]</code> section from <code>adrs.toml</code> (or <code>.adrs.toml</code>):</p>
 <pre><code class="language-toml">[doctor]
 # Rule IDs or rule names to suppress (matched case-insensitively)
 ignore = ["ADR011"]
@@ -281,6 +281,10 @@ entry does not, so you are told instead of assuming the exemption is live.</li>
 repository as a whole rather than on a file, so there is no path to match and a
 scoped exemption for them can never fire. Use <code>[doctor].ignore</code> for those.</li>
 </ul>
+<p>If both <code>adrs.toml</code> and <code>.adrs.toml</code> exist, the same stderr warning convention
+as unrecognized config keys applies: <code>adrs.toml</code> is used, and commands (including
+<code>doctor</code>) print which file was picked. MCP <code>run_doctor</code> returns that same string
+in <code>config_warnings</code>. This is not a lint rule.</p>
 <h2 id="pre-commit-hook"><a class="header" href="#pre-commit-hook">Pre-commit Hook</a></h2>
 <p><code>adrs</code> ships a <a href="https://pre-commit.com">pre-commit</a> hook (also compatible
 with <a href="https://prek.j178.dev">prek</a>) that runs <code>doctor</code> whenever a markdown

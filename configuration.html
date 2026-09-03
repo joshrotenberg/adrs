@@ -186,7 +186,7 @@
 <ol>
 <li>Command-line flags</li>
 <li>Environment variables</li>
-<li>Project configuration file (<code>adrs.toml</code> or <code>.adr-dir</code>)</li>
+<li>Project configuration file (<code>adrs.toml</code>, then <code>.adrs.toml</code>, then <code>.adr-dir</code>)</li>
 <li>Global configuration file (<code>~/.config/adrs/config.toml</code>)</li>
 <li>Default values</li>
 </ol>
@@ -197,7 +197,13 @@
 </code></pre>
 <p>This single-line file specifies the directory where ADRs are stored.</p>
 <h3 id="toml-format-adrstoml"><a class="header" href="#toml-format-adrstoml">TOML Format (adrs.toml)</a></h3>
-<p>For more options, use <code>adrs.toml</code> in your project root:</p>
+<p>For more options, use <code>adrs.toml</code> in your project root. If <code>adrs.toml</code> is not
+present, <code>adrs</code> also reads <code>.adrs.toml</code> (same format). When both files exist,
+<code>adrs.toml</code> is used and a <code>warning:</code> is printed on stderr naming the file that
+was picked (the same convention as unrecognized keys in the TOML). MCP
+<code>run_doctor</code> returns that same string in <code>config_warnings</code>.</p>
+<p><code>adrs init --ng</code> writes <code>adrs.toml</code>. To use the hidden filename, create
+<code>.adrs.toml</code> or rename <code>adrs.toml</code>; <code>init</code> never writes <code>.adrs.toml</code>.</p>
 <pre><code class="language-toml"># ADR storage directory (relative to project root)
 adr_dir = "doc/adr"
 
@@ -284,8 +290,10 @@ adrs new "Use Redis for caching"
 <h2 id="configuration-discovery"><a class="header" href="#configuration-discovery">Configuration Discovery</a></h2>
 <p>When you run an <code>adrs</code> command, it searches for configuration by:</p>
 <ol>
-<li>Looking in the current directory for <code>adrs.toml</code> or <code>.adr-dir</code></li>
-<li>Searching parent directories up to the git root (or filesystem root)</li>
+<li>Looking in the current directory for a project config, in this order:
+<code>adrs.toml</code>, then <code>.adrs.toml</code>, then <code>.adr-dir</code></li>
+<li>Searching parent directories up to the git root (or filesystem root),
+using that same filename order at each directory</li>
 <li>Checking the global config at <code>~/.config/adrs/config.toml</code></li>
 <li>Using defaults if nothing is found</li>
 </ol>

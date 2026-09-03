@@ -228,7 +228,8 @@ error and the server stays alive; and</li>
 <p>Call <code>init_repository</code> (optionally with <code>nextgen: true</code> and/or a custom
 <code>adr_dir</code>) to bootstrap the repository, then use the other tools in the same
 session without restarting the server. Initialization operates only on the
-bound root and refuses to overwrite an existing repository.</p>
+bound root. Like CLI <code>adrs init</code>, it is idempotent: an existing matching
+config (<code>adrs.toml</code>, <code>.adrs.toml</code>, or <code>.adr-dir</code>) is left in place.</p>
 <h2 id="available-tools"><a class="header" href="#available-tools">Available Tools</a></h2>
 <p>The MCP server provides 18 tools organized by function:</p>
 <h3 id="read-operations"><a class="header" href="#read-operations">Read Operations</a></h3>
@@ -239,7 +240,7 @@ bound root and refuses to overwrite an existing repository.</p>
 <tr><td><code>get_adr_sections</code></td><td>Get ADR with parsed sections (context, decision, consequences)</td></tr>
 <tr><td><code>get_related_adrs</code></td><td>Get all ADRs linked to/from a specific ADR</td></tr>
 <tr><td><code>get_repository_info</code></td><td>Get repository mode, ADR count, and configuration</td></tr>
-<tr><td><code>run_doctor</code></td><td>Check repository health: broken links, parse errors, duplicate numbers</td></tr>
+<tr><td><code>run_doctor</code></td><td>Check repository health: broken links, parse errors, duplicate numbers, plus config warnings</td></tr>
 <tr><td><code>export_adrs</code></td><td>Export ADRs to JSON-ADR format with optional filtering</td></tr>
 </tbody></table>
 </div>
@@ -306,18 +307,23 @@ current working directory, or the path given with <code>-C</code>). This lets a 
 bootstrap a first-run repository without an interactive <code>adrs init</code> step. See
 <a href="#empty-state-bootstrap">Empty-state bootstrap</a> below.</p>
 <p>The tool operates only on the bound root. It does not create parent
-directories, does not accept a per-call path, and refuses to overwrite an
-existing configuration or ADR collection.</p>
+directories, does not accept a per-call path, and is idempotent like CLI
+<code>adrs init</code>: an existing matching config (<code>adrs.toml</code>, <code>.adrs.toml</code>, or
+<code>.adr-dir</code>) is left in place. <code>nextgen</code> does not convert a reused
+<code>.adr-dir</code> or <code>.adrs.toml</code> into <code>adrs.toml</code>.</p>
 <p><strong>Parameters:</strong></p>
 <ul>
 <li><code>nextgen</code> (optional): Initialize in NextGen mode (<code>adrs.toml</code>, YAML
 frontmatter). Defaults to <code>false</code> (compatible mode, <code>.adr-dir</code>). Equivalent
-to <code>adrs --ng init</code>.</li>
+to <code>adrs --ng init</code>. When reuse applies, this flag does not choose or
+convert the existing file.</li>
 <li><code>adr_dir</code> (optional): ADR directory relative to the root (default <code>doc/adr</code>).
 Must be relative and stay within the root.</li>
 </ul>
 <p><strong>Returns:</strong> The <code>mode</code>, <code>root</code>, <code>config_path</code>, <code>adr_directory</code>,
-<code>adr_directory_path</code>, and <code>initial_adr_path</code>.</p>
+<code>adr_directory_path</code>, and <code>initial_adr_path</code>. <code>config_path</code> is the file that
+exists after the call: a reused <code>adrs.toml</code>, <code>.adrs.toml</code>, or <code>.adr-dir</code> if
+one was already present and matched, otherwise the file this init wrote.</p>
 <h3 id="create_adr"><a class="header" href="#create_adr">create_adr</a></h3>
 <p>Create a new ADR. Uses the repository's configured default status (proposed
 if not configured); the created ADR still requires human review before
@@ -377,7 +383,11 @@ acceptance.</p>
 <h3 id="run_doctor"><a class="header" href="#run_doctor">run_doctor</a></h3>
 <p>Run health checks on the ADR repository.</p>
 <p><strong>Parameters:</strong> None</p>
-<p><strong>Returns:</strong> Health report with issue counts and details. Each issue includes severity (error/warning/info), rule ID, rule name, message, and location.</p>
+<p><strong>Returns:</strong> Health report with issue counts, issue details, and
+<code>config_warnings</code> (the same non-fatal diagnostics CLI <code>adrs doctor</code> prints
+on stderr, such as both <code>adrs.toml</code> and <code>.adrs.toml</code> being present). Each
+issue includes severity (error/warning/info), rule ID, rule name, message,
+and location.</p>
 <h3 id="export_adrs"><a class="header" href="#export_adrs">export_adrs</a></h3>
 <p>Export ADRs to JSON-ADR format.</p>
 <p><strong>Parameters:</strong></p>

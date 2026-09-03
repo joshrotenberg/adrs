@@ -300,7 +300,7 @@ adrs completions powershell &gt; $PROFILE.CurrentUserAllHosts
 <ol>
 <li>Command-line flags</li>
 <li>Environment variables</li>
-<li>Project configuration file (<code>adrs.toml</code> or <code>.adr-dir</code>)</li>
+<li>Project configuration file (<code>adrs.toml</code>, then <code>.adrs.toml</code>, then <code>.adr-dir</code>)</li>
 <li>Global configuration file (<code>~/.config/adrs/config.toml</code>)</li>
 <li>Default values</li>
 </ol>
@@ -311,7 +311,13 @@ adrs completions powershell &gt; $PROFILE.CurrentUserAllHosts
 </code></pre>
 <p>This single-line file specifies the directory where ADRs are stored.</p>
 <h3 id="toml-format-adrstoml"><a class="header" href="#toml-format-adrstoml">TOML Format (adrs.toml)</a></h3>
-<p>For more options, use <code>adrs.toml</code> in your project root:</p>
+<p>For more options, use <code>adrs.toml</code> in your project root. If <code>adrs.toml</code> is not
+present, <code>adrs</code> also reads <code>.adrs.toml</code> (same format). When both files exist,
+<code>adrs.toml</code> is used and a <code>warning:</code> is printed on stderr naming the file that
+was picked (the same convention as unrecognized keys in the TOML). MCP
+<code>run_doctor</code> returns that same string in <code>config_warnings</code>.</p>
+<p><code>adrs init --ng</code> writes <code>adrs.toml</code>. To use the hidden filename, create
+<code>.adrs.toml</code> or rename <code>adrs.toml</code>; <code>init</code> never writes <code>.adrs.toml</code>.</p>
 <pre><code class="language-toml"># ADR storage directory (relative to project root)
 adr_dir = "doc/adr"
 
@@ -398,8 +404,10 @@ adrs new "Use Redis for caching"
 <h2 id="configuration-discovery"><a class="header" href="#configuration-discovery">Configuration Discovery</a></h2>
 <p>When you run an <code>adrs</code> command, it searches for configuration by:</p>
 <ol>
-<li>Looking in the current directory for <code>adrs.toml</code> or <code>.adr-dir</code></li>
-<li>Searching parent directories up to the git root (or filesystem root)</li>
+<li>Looking in the current directory for a project config, in this order:
+<code>adrs.toml</code>, then <code>.adrs.toml</code>, then <code>.adr-dir</code></li>
+<li>Searching parent directories up to the git root (or filesystem root),
+using that same filename order at each directory</li>
 <li>Checking the global config at <code>~/.config/adrs/config.toml</code></li>
 <li>Using defaults if nothing is found</li>
 </ol>
@@ -586,7 +594,7 @@ format = "madr"
 <p>This page explains the differences between compatible mode (default) and NextGen mode (<code>--ng</code>), including what breaks adr-tools compatibility.</p>
 <h2 id="mode-comparison"><a class="header" href="#mode-comparison">Mode Comparison</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Aspect</th><th>Compatible (default)</th><th>NextGen (--ng)</th><th>Breaks adr-tools?</th></tr></thead><tbody>
-<tr><td><strong>Config file</strong></td><td><code>.adr-dir</code></td><td><code>adrs.toml</code></td><td>Yes</td></tr>
+<tr><td><strong>Config file</strong></td><td><code>.adr-dir</code></td><td><code>adrs.toml</code> (or <code>.adrs.toml</code>)</td><td>Yes</td></tr>
 <tr><td><strong>File format</strong></td><td>Plain markdown</td><td>YAML frontmatter</td><td>Yes</td></tr>
 <tr><td><strong>Status storage</strong></td><td><code>## Status</code> section</td><td><code>status:</code> in YAML</td><td>Yes</td></tr>
 <tr><td><strong>Link storage</strong></td><td>Markdown links in Status</td><td><code>links:</code> YAML array</td><td>Yes</td></tr>
@@ -970,7 +978,9 @@ Options:
 <ol>
 <li>A configuration file in the current directory: <code>.adr-dir</code> (containing the
 ADR directory path) in compatible mode, or <code>adrs.toml</code> in NextGen mode
-(<code>--ng</code>)</li>
+(<code>--ng</code>). <code>init</code> does not write <code>.adrs.toml</code>; create that file or rename
+<code>adrs.toml</code> if you want a hidden config. An existing <code>.adrs.toml</code> is
+reused the same way as <code>adrs.toml</code>.</li>
 <li>The ADR directory (creates parent directories if needed)</li>
 <li>An initial ADR: <code>0001-record-architecture-decisions.md</code></li>
 </ol>
@@ -999,8 +1009,8 @@ decisions/
 <h3 id="nextgen-mode-2"><a class="header" href="#nextgen-mode-2">NextGen Mode</a></h3>
 <pre><code class="language-sh">adrs init --ng
 </code></pre>
-<p>Writes <code>adrs.toml</code> instead of <code>.adr-dir</code>, and creates the initial ADR with
-YAML frontmatter:</p>
+<p>Writes <code>adrs.toml</code>, not <code>.adr-dir</code> or <code>.adrs.toml</code>, and creates the initial
+ADR with YAML frontmatter:</p>
 <pre><code class="language-markdown">---
 number: 1
 title: Record architecture decisions
@@ -1014,10 +1024,15 @@ status: accepted
 </code></pre>
 <h2 id="re-initialization"><a class="header" href="#re-initialization">Re-initialization</a></h2>
 <p><code>adrs init</code> is idempotent: running it again in an already-initialized
-repository succeeds. It rewrites the configuration (for example, to change the
-ADR directory or switch modes) and preserves existing ADRs. The initial
-"Record architecture decisions" ADR is only created when the repository has no
-ADRs yet, so re-initializing will not add a duplicate.</p>
+repository succeeds and preserves existing ADRs.</p>
+<p>If <code>adrs.toml</code>, <code>.adrs.toml</code>, or <code>.adr-dir</code> is already present and its ADR
+directory matches the directory being initialized, that file is left
+unchanged. <code>--ng</code> does not convert <code>.adr-dir</code> or <code>.adrs.toml</code> into
+<code>adrs.toml</code> on that path. Pass a different directory argument when you
+intend to write a new config (that write also removes the other config
+filenames so only one is authoritative).</p>
+<p>The initial "Record architecture decisions" ADR is only created when the
+repository has no ADRs yet, so re-initializing will not add a duplicate.</p>
 <h2 id="related"><a class="header" href="#related">Related</a></h2>
 <ul>
 <li><a href="commands/./config.html">config</a> - Show current configuration</li>
@@ -1897,7 +1912,8 @@ Mode: Compatible
 </code></pre>
 <h2 id="config-sources"><a class="header" href="#config-sources">Config Sources</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Source</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>adrs.toml</code></td><td>TOML configuration file</td></tr>
+<tr><td><code>adrs.toml</code></td><td>TOML configuration file (preferred if both TOML files exist)</td></tr>
+<tr><td><code>.adrs.toml</code></td><td>Hidden TOML fallback when <code>adrs.toml</code> is absent</td></tr>
 <tr><td><code>.adr-dir</code></td><td>Legacy adr-tools configuration</td></tr>
 <tr><td><code>global (~/.config/adrs/config.toml)</code></td><td>User-wide configuration</td></tr>
 <tr><td><code>environment</code></td><td>Environment variable override</td></tr>
@@ -1977,7 +1993,7 @@ also fail on warnings. This allows using <code>doctor</code> in CI pipelines:</p
   run: adrs doctor
 </code></pre>
 <h2 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h2>
-<p><code>doctor</code> reads a <code>[doctor]</code> section from <code>adrs.toml</code>:</p>
+<p><code>doctor</code> reads a <code>[doctor]</code> section from <code>adrs.toml</code> (or <code>.adrs.toml</code>):</p>
 <pre><code class="language-toml">[doctor]
 # Rule IDs or rule names to suppress (matched case-insensitively)
 ignore = ["ADR011"]
@@ -2009,6 +2025,10 @@ entry does not, so you are told instead of assuming the exemption is live.</li>
 repository as a whole rather than on a file, so there is no path to match and a
 scoped exemption for them can never fire. Use <code>[doctor].ignore</code> for those.</li>
 </ul>
+<p>If both <code>adrs.toml</code> and <code>.adrs.toml</code> exist, the same stderr warning convention
+as unrecognized config keys applies: <code>adrs.toml</code> is used, and commands (including
+<code>doctor</code>) print which file was picked. MCP <code>run_doctor</code> returns that same string
+in <code>config_warnings</code>. This is not a lint rule.</p>
 <h2 id="pre-commit-hook"><a class="header" href="#pre-commit-hook">Pre-commit Hook</a></h2>
 <p><code>adrs</code> ships a <a href="https://pre-commit.com">pre-commit</a> hook (also compatible
 with <a href="https://prek.j178.dev">prek</a>) that runs <code>doctor</code> whenever a markdown
@@ -2225,7 +2245,8 @@ error and the server stays alive; and</li>
 <p>Call <code>init_repository</code> (optionally with <code>nextgen: true</code> and/or a custom
 <code>adr_dir</code>) to bootstrap the repository, then use the other tools in the same
 session without restarting the server. Initialization operates only on the
-bound root and refuses to overwrite an existing repository.</p>
+bound root. Like CLI <code>adrs init</code>, it is idempotent: an existing matching
+config (<code>adrs.toml</code>, <code>.adrs.toml</code>, or <code>.adr-dir</code>) is left in place.</p>
 <h2 id="available-tools"><a class="header" href="#available-tools">Available Tools</a></h2>
 <p>The MCP server provides 18 tools organized by function:</p>
 <h3 id="read-operations"><a class="header" href="#read-operations">Read Operations</a></h3>
@@ -2236,7 +2257,7 @@ bound root and refuses to overwrite an existing repository.</p>
 <tr><td><code>get_adr_sections</code></td><td>Get ADR with parsed sections (context, decision, consequences)</td></tr>
 <tr><td><code>get_related_adrs</code></td><td>Get all ADRs linked to/from a specific ADR</td></tr>
 <tr><td><code>get_repository_info</code></td><td>Get repository mode, ADR count, and configuration</td></tr>
-<tr><td><code>run_doctor</code></td><td>Check repository health: broken links, parse errors, duplicate numbers</td></tr>
+<tr><td><code>run_doctor</code></td><td>Check repository health: broken links, parse errors, duplicate numbers, plus config warnings</td></tr>
 <tr><td><code>export_adrs</code></td><td>Export ADRs to JSON-ADR format with optional filtering</td></tr>
 </tbody></table>
 </div>
@@ -2303,18 +2324,23 @@ current working directory, or the path given with <code>-C</code>). This lets a 
 bootstrap a first-run repository without an interactive <code>adrs init</code> step. See
 <a href="mcp.html#empty-state-bootstrap">Empty-state bootstrap</a> below.</p>
 <p>The tool operates only on the bound root. It does not create parent
-directories, does not accept a per-call path, and refuses to overwrite an
-existing configuration or ADR collection.</p>
+directories, does not accept a per-call path, and is idempotent like CLI
+<code>adrs init</code>: an existing matching config (<code>adrs.toml</code>, <code>.adrs.toml</code>, or
+<code>.adr-dir</code>) is left in place. <code>nextgen</code> does not convert a reused
+<code>.adr-dir</code> or <code>.adrs.toml</code> into <code>adrs.toml</code>.</p>
 <p><strong>Parameters:</strong></p>
 <ul>
 <li><code>nextgen</code> (optional): Initialize in NextGen mode (<code>adrs.toml</code>, YAML
 frontmatter). Defaults to <code>false</code> (compatible mode, <code>.adr-dir</code>). Equivalent
-to <code>adrs --ng init</code>.</li>
+to <code>adrs --ng init</code>. When reuse applies, this flag does not choose or
+convert the existing file.</li>
 <li><code>adr_dir</code> (optional): ADR directory relative to the root (default <code>doc/adr</code>).
 Must be relative and stay within the root.</li>
 </ul>
 <p><strong>Returns:</strong> The <code>mode</code>, <code>root</code>, <code>config_path</code>, <code>adr_directory</code>,
-<code>adr_directory_path</code>, and <code>initial_adr_path</code>.</p>
+<code>adr_directory_path</code>, and <code>initial_adr_path</code>. <code>config_path</code> is the file that
+exists after the call: a reused <code>adrs.toml</code>, <code>.adrs.toml</code>, or <code>.adr-dir</code> if
+one was already present and matched, otherwise the file this init wrote.</p>
 <h3 id="create_adr"><a class="header" href="#create_adr">create_adr</a></h3>
 <p>Create a new ADR. Uses the repository's configured default status (proposed
 if not configured); the created ADR still requires human review before
@@ -2374,7 +2400,11 @@ acceptance.</p>
 <h3 id="run_doctor"><a class="header" href="#run_doctor">run_doctor</a></h3>
 <p>Run health checks on the ADR repository.</p>
 <p><strong>Parameters:</strong> None</p>
-<p><strong>Returns:</strong> Health report with issue counts and details. Each issue includes severity (error/warning/info), rule ID, rule name, message, and location.</p>
+<p><strong>Returns:</strong> Health report with issue counts, issue details, and
+<code>config_warnings</code> (the same non-fatal diagnostics CLI <code>adrs doctor</code> prints
+on stderr, such as both <code>adrs.toml</code> and <code>.adrs.toml</code> being present). Each
+issue includes severity (error/warning/info), rule ID, rule name, message,
+and location.</p>
 <h3 id="export_adrs"><a class="header" href="#export_adrs">export_adrs</a></h3>
 <p>Export ADRs to JSON-ADR format.</p>
 <p><strong>Parameters:</strong></p>

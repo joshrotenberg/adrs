@@ -219,7 +219,8 @@ Mode: Compatible
 </code></pre>
 <h2 id="config-sources"><a class="header" href="#config-sources">Config Sources</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Source</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>adrs.toml</code></td><td>TOML configuration file</td></tr>
+<tr><td><code>adrs.toml</code></td><td>TOML configuration file (preferred if both TOML files exist)</td></tr>
+<tr><td><code>.adrs.toml</code></td><td>Hidden TOML fallback when <code>adrs.toml</code> is absent</td></tr>
 <tr><td><code>.adr-dir</code></td><td>Legacy adr-tools configuration</td></tr>
 <tr><td><code>global (~/.config/adrs/config.toml)</code></td><td>User-wide configuration</td></tr>
 <tr><td><code>environment</code></td><td>Environment variable override</td></tr>

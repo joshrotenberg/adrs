@@ -203,7 +203,9 @@
 <ol>
 <li>A configuration file in the current directory: <code>.adr-dir</code> (containing the
 ADR directory path) in compatible mode, or <code>adrs.toml</code> in NextGen mode
-(<code>--ng</code>)</li>
+(<code>--ng</code>). <code>init</code> does not write <code>.adrs.toml</code>; create that file or rename
+<code>adrs.toml</code> if you want a hidden config. An existing <code>.adrs.toml</code> is
+reused the same way as <code>adrs.toml</code>.</li>
 <li>The ADR directory (creates parent directories if needed)</li>
 <li>An initial ADR: <code>0001-record-architecture-decisions.md</code></li>
 </ol>
@@ -232,8 +234,8 @@ decisions/
 <h3 id="nextgen-mode"><a class="header" href="#nextgen-mode">NextGen Mode</a></h3>
 <pre><code class="language-sh">adrs init --ng
 </code></pre>
-<p>Writes <code>adrs.toml</code> instead of <code>.adr-dir</code>, and creates the initial ADR with
-YAML frontmatter:</p>
+<p>Writes <code>adrs.toml</code>, not <code>.adr-dir</code> or <code>.adrs.toml</code>, and creates the initial
+ADR with YAML frontmatter:</p>
 <pre><code class="language-markdown">---
 number: 1
 title: Record architecture decisions
@@ -247,10 +249,15 @@ status: accepted
 </code></pre>
 <h2 id="re-initialization"><a class="header" href="#re-initialization">Re-initialization</a></h2>
 <p><code>adrs init</code> is idempotent: running it again in an already-initialized
-repository succeeds. It rewrites the configuration (for example, to change the
-ADR directory or switch modes) and preserves existing ADRs. The initial
-"Record architecture decisions" ADR is only created when the repository has no
-ADRs yet, so re-initializing will not add a duplicate.</p>
+repository succeeds and preserves existing ADRs.</p>
+<p>If <code>adrs.toml</code>, <code>.adrs.toml</code>, or <code>.adr-dir</code> is already present and its ADR
+directory matches the directory being initialized, that file is left
+unchanged. <code>--ng</code> does not convert <code>.adr-dir</code> or <code>.adrs.toml</code> into
+<code>adrs.toml</code> on that path. Pass a different directory argument when you
+intend to write a new config (that write also removes the other config
+filenames so only one is authoritative).</p>
+<p>The initial "Record architecture decisions" ADR is only created when the
+repository has no ADRs yet, so re-initializing will not add a duplicate.</p>
 <h2 id="related"><a class="header" href="#related">Related</a></h2>
 <ul>
 <li><a href="./config.html">config</a> - Show current configuration</li>
