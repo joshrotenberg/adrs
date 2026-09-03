@@ -502,9 +502,21 @@ mod tests {
         assert!(!result.contains("--"));
     }
 
+    /// Alphabet for the property tests below.
+    ///
+    /// ASCII plus the character classes that have actually produced bugs in
+    /// this crate: three-byte CJK (#370, #379), characters whose lowercase
+    /// changes byte length (`\u{0130}`, `\u{00df}`, `\u{fb00}`, `\u{212a}`),
+    /// combining marks, multi-byte whitespace, sigma (whose lowercase is
+    /// context-sensitive), and a four-byte astral character.
+    ///
+    /// Generators restricted to `[a-zA-Z]` cannot produce any of the panics
+    /// this crate has shipped, so they are worth almost nothing here.
+    pub(super) const PROP_ALPHABET: &str = "[a-zA-Z0-9 あい日本語İßﬀḰ̈　 Σς🦀]{1,50}";
+
     proptest! {
         #[test]
-        fn test_slug_never_starts_or_ends_with_dash(s in "[a-zA-Z0-9 ]{1,50}") {
+        fn test_slug_never_starts_or_ends_with_dash(s in PROP_ALPHABET) {
             let result = slug(&s);
             if !result.is_empty() {
                 prop_assert!(!result.starts_with('-'), "Slug starts with dash: {}", result);
@@ -655,13 +667,13 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_adr_filename_always_ends_with_md(number in 1u32..100000, title in "[a-zA-Z ]{1,50}") {
+        fn test_adr_filename_always_ends_with_md(number in 1u32..100000, title in PROP_ALPHABET) {
             let adr = Adr::new(number, &title);
             prop_assert!(adr.filename().ends_with(".md"));
         }
 
         #[test]
-        fn test_adr_filename_starts_with_padded_number(number in 1u32..10000, title in "[a-zA-Z]{1,10}") {
+        fn test_adr_filename_starts_with_padded_number(number in 1u32..10000, title in PROP_ALPHABET) {
             let adr = Adr::new(number, &title);
             let filename = adr.filename();
             let prefix: String = filename.chars().take(4).collect();
@@ -1063,5 +1075,29 @@ tags:
         assert!(adr.consulted.is_empty());
         assert!(adr.informed.is_empty());
         assert!(adr.tags.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod prop_alphabet_guard {
+    use super::tests::PROP_ALPHABET;
+
+    /// Guards the guard: if someone narrows `PROP_ALPHABET` back to ASCII, the
+    /// property tests above keep passing while testing nothing that matters.
+    #[test]
+    fn generator_actually_emits_non_ascii() {
+        use proptest::strategy::{Strategy, ValueTree};
+        use proptest::test_runner::TestRunner;
+
+        let mut runner = TestRunner::deterministic();
+        let strategy = proptest::string::string_regex(PROP_ALPHABET).unwrap();
+        let non_ascii = (0..300)
+            .filter(|_| !strategy.new_tree(&mut runner).unwrap().current().is_ascii())
+            .count();
+
+        assert!(
+            non_ascii > 150,
+            "PROP_ALPHABET should mostly produce non-ASCII, got {non_ascii}/300"
+        );
     }
 }
