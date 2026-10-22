@@ -262,7 +262,7 @@ pub fn lint_adr(adr: &Adr) -> Result<LintReport> {
         Box::new(Adr007::default()),
         Box::new(Adr008::default()),
         Box::new(Adr009::default()),
-        Box::new(Adr014::default()),
+        Box::new(Adr014::with_format(format)),
         Box::new(Adr015::default()),
         Box::new(Adr016::default()),
         Box::new(Adr017::with_format(format)),
@@ -912,6 +912,28 @@ Some consequences.
                 .iter()
                 .any(|i| i.rule_id == "ADR004" || i.rule_id == "ADR005"),
             "frontmatter+Nygard ADR must not trip MADR section rules, got: {:?}",
+            report.issues
+        );
+    }
+
+    #[test]
+    fn test_frontmatter_nygard_adr_placeholder_context_flagged() {
+        let content = "---\nnumber: 1\ntitle: Record architecture decisions\ndate: 2024-03-04\nstatus: accepted\n---\n\n## Context\n\nTODO\n\n## Decision\n\nSome decision.\n\n## Consequences\n\nSome consequences.\n";
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir
+            .path()
+            .join("adr")
+            .join("0001-record-architecture-decisions.md");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, content).unwrap();
+
+        let mut adr = Adr::new(1, "Record architecture decisions");
+        adr.path = Some(path);
+
+        let report = lint_adr(&adr).unwrap();
+        assert!(
+            report.issues.iter().any(|i| i.rule_id == "ADR014"),
+            "frontmatter+Nygard ADR with a placeholder '## Context' must trip ADR014, got: {:?}",
             report.issues
         );
     }
