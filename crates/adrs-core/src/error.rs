@@ -116,7 +116,7 @@ pub enum Error {
 
     /// YAML parsing error.
     #[error("YAML error: {0}")]
-    Yaml(#[from] serde_yaml_neo::Error),
+    Yaml(#[from] serde_norway::Error),
 
     /// TOML parsing error.
     #[error("TOML error: {0}")]
