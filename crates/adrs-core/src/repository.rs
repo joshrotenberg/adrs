@@ -7,7 +7,7 @@ use crate::{
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use regex::Regex;
-use serde_yaml_neo::{Mapping, Value};
+use serde_norway::{Mapping, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -1105,7 +1105,7 @@ impl Repository {
         let yaml_block = &rest[..end_idx + 1]; // include trailing \n
         let after_yaml = &rest[end_idx..]; // starts with \n---\n...
 
-        let parsed: Value = serde_yaml_neo::from_str(yaml_block)?;
+        let parsed: Value = serde_norway::from_str(yaml_block)?;
         let Value::Mapping(mut map) = parsed else {
             return Err(Error::InvalidFormat {
                 path: Default::default(),
@@ -1116,7 +1116,7 @@ impl Repository {
         let mut dirty = false;
 
         // 1. number (see #356 renumber support)
-        let number_val = serde_yaml_neo::to_value(adr.number)?;
+        let number_val = serde_norway::to_value(adr.number)?;
         if map.get(Self::yaml_str_key("number")) != Some(&number_val) {
             map.insert(Self::yaml_str_key("number"), number_val);
             dirty = true;
@@ -1163,7 +1163,7 @@ impl Repository {
             return Ok(content.to_string());
         }
 
-        let new_yaml = serde_yaml_neo::to_string(&Value::Mapping(map))?;
+        let new_yaml = serde_norway::to_string(&Value::Mapping(map))?;
         let new_yaml = new_yaml.trim_end_matches('\n');
         let result = format!("---\n{new_yaml}{after_yaml}");
         if crlf {
@@ -1660,7 +1660,7 @@ impl Repository {
         if values.is_empty() {
             return Ok(map.remove(&key).is_some());
         }
-        let desired = serde_yaml_neo::to_value(values)?;
+        let desired = serde_norway::to_value(values)?;
         if map.get(&key) == Some(&desired) {
             return Ok(false);
         }

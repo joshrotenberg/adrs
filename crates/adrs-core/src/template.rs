@@ -1469,7 +1469,7 @@ Links: {% for link in links %}{{ link.kind }} {{ link.target }}{% endfor %}"#,
                 .render(&adr, &Config::default(), &HashMap::new())
                 .unwrap();
 
-            let parsed: serde_yaml_neo::Value = serde_yaml_neo::from_str(&output)
+            let parsed: serde_norway::Value = serde_norway::from_str(&output)
                 .unwrap_or_else(|e| panic!("{title:?} rendered unparseable YAML {output:?}: {e}"));
             assert_eq!(
                 parsed.get("title").and_then(|t| t.as_str()),
