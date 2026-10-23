@@ -778,8 +778,8 @@ mod tests {
         adr.date = time::Date::from_calendar_date(2024, Month::March, 15).unwrap();
         adr.add_link(AdrLink::new(2, LinkKind::Supersedes));
 
-        let yaml = serde_yaml_neo::to_string(&adr).unwrap();
-        let parsed: Adr = serde_yaml_neo::from_str(&yaml).unwrap();
+        let yaml = serde_norway::to_string(&adr).unwrap();
+        let parsed: Adr = serde_norway::from_str(&yaml).unwrap();
 
         assert_eq!(parsed.number, adr.number);
         assert_eq!(parsed.title, adr.title);
@@ -791,13 +791,13 @@ mod tests {
     #[test]
     fn test_status_yaml_serialization() {
         assert_eq!(
-            serde_yaml_neo::to_string(&AdrStatus::Accepted)
+            serde_norway::to_string(&AdrStatus::Accepted)
                 .unwrap()
                 .trim(),
             "accepted"
         );
         assert_eq!(
-            serde_yaml_neo::to_string(&AdrStatus::Proposed)
+            serde_norway::to_string(&AdrStatus::Proposed)
                 .unwrap()
                 .trim(),
             "proposed"
@@ -807,13 +807,13 @@ mod tests {
     #[test]
     fn test_link_kind_yaml_serialization() {
         assert_eq!(
-            serde_yaml_neo::to_string(&LinkKind::Supersedes)
+            serde_norway::to_string(&LinkKind::Supersedes)
                 .unwrap()
                 .trim(),
             "supersedes"
         );
         assert_eq!(
-            serde_yaml_neo::to_string(&LinkKind::SupersededBy)
+            serde_norway::to_string(&LinkKind::SupersededBy)
                 .unwrap()
                 .trim(),
             "supersededby"
@@ -903,8 +903,8 @@ mod tests {
         adr.set_consulted(vec!["Carol".into()]);
         adr.set_informed(vec!["Dave".into(), "Eve".into()]);
 
-        let yaml = serde_yaml_neo::to_string(&adr).unwrap();
-        let parsed: Adr = serde_yaml_neo::from_str(&yaml).unwrap();
+        let yaml = serde_norway::to_string(&adr).unwrap();
+        let parsed: Adr = serde_norway::from_str(&yaml).unwrap();
 
         assert_eq!(parsed.decision_makers, vec!["Alice", "Bob"]);
         assert_eq!(parsed.consulted, vec!["Carol"]);
@@ -916,7 +916,7 @@ mod tests {
         let mut adr = Adr::new(1, "Test");
         adr.set_decision_makers(vec!["Alice".into()]);
 
-        let yaml = serde_yaml_neo::to_string(&adr).unwrap();
+        let yaml = serde_norway::to_string(&adr).unwrap();
         // Verify hyphenated field name in YAML
         assert!(
             yaml.contains("decision-makers:"),
@@ -927,7 +927,7 @@ mod tests {
     #[test]
     fn test_madr_empty_fields_not_serialized() {
         let adr = Adr::new(1, "Test");
-        let yaml = serde_yaml_neo::to_string(&adr).unwrap();
+        let yaml = serde_norway::to_string(&adr).unwrap();
 
         // Empty MADR fields should not appear in YAML
         assert!(
@@ -959,7 +959,7 @@ consulted:
 informed:
   - Dave
 "#;
-        let adr: Adr = serde_yaml_neo::from_str(yaml).unwrap();
+        let adr: Adr = serde_norway::from_str(yaml).unwrap();
 
         assert_eq!(adr.number, 1);
         assert_eq!(adr.title, "Use MADR Format");
@@ -979,7 +979,7 @@ date: 2024-09-15
 status: accepted
 decision-makers: alice
 "#;
-        let adr: Adr = serde_yaml_neo::from_str(yaml).unwrap();
+        let adr: Adr = serde_norway::from_str(yaml).unwrap();
         assert_eq!(adr.decision_makers, vec!["alice"]);
     }
 
@@ -992,7 +992,7 @@ date: 2024-09-15
 status: accepted
 consulted: bob
 "#;
-        let adr: Adr = serde_yaml_neo::from_str(yaml).unwrap();
+        let adr: Adr = serde_norway::from_str(yaml).unwrap();
         assert_eq!(adr.consulted, vec!["bob"]);
     }
 
@@ -1005,7 +1005,7 @@ date: 2024-09-15
 status: accepted
 informed: carol
 "#;
-        let adr: Adr = serde_yaml_neo::from_str(yaml).unwrap();
+        let adr: Adr = serde_norway::from_str(yaml).unwrap();
         assert_eq!(adr.informed, vec!["carol"]);
     }
 
@@ -1018,7 +1018,7 @@ date: 2024-09-15
 status: accepted
 tags: architecture
 "#;
-        let adr: Adr = serde_yaml_neo::from_str(yaml).unwrap();
+        let adr: Adr = serde_norway::from_str(yaml).unwrap();
         assert_eq!(adr.tags, vec!["architecture"]);
     }
 
@@ -1036,7 +1036,7 @@ tags:
   - arch
   - security
 "#;
-        let adr: Adr = serde_yaml_neo::from_str(yaml).unwrap();
+        let adr: Adr = serde_norway::from_str(yaml).unwrap();
         assert_eq!(adr.decision_makers, vec!["alice", "bob"]);
         assert_eq!(adr.tags, vec!["arch", "security"]);
     }
@@ -1049,7 +1049,7 @@ title: Test
 date: 2024-09-15
 status: accepted
 "#;
-        let adr: Adr = serde_yaml_neo::from_str(yaml).unwrap();
+        let adr: Adr = serde_norway::from_str(yaml).unwrap();
         assert!(adr.decision_makers.is_empty());
         assert!(adr.consulted.is_empty());
         assert!(adr.informed.is_empty());
@@ -1070,7 +1070,7 @@ consulted:
 informed:
 tags:
 "#;
-        let adr: Adr = serde_yaml_neo::from_str(yaml).unwrap();
+        let adr: Adr = serde_norway::from_str(yaml).unwrap();
         assert!(adr.decision_makers.is_empty());
         assert!(adr.consulted.is_empty());
         assert!(adr.informed.is_empty());
