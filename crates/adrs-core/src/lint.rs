@@ -456,6 +456,28 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
         }
     }
 
+    // Track the message prefix the upstream ADR010 rule would emit for each
+    // ADR that already records its replacement as a `SupersededBy` link
+    // (#398). The upstream rule only searches the document text for `ADR-N`
+    // references or markdown links to ADR files, so a link carried only in
+    // nextgen frontmatter (`kind: supersededby`) is invisible to it. This is
+    // the frontmatter counterpart of #197, which fixed body links.
+    //
+    // Not gated to nextgen mode: in compatible mode `adr.links` comes from
+    // the body's `Superseded by [...]` link, which the upstream rule already
+    // accepts, so suppressing here changes nothing there. A `SupersededBy`
+    // link to a missing ADR is still reported, as ADR013.
+    let superseded_by_fragments: Vec<String> = adrs
+        .iter()
+        .filter(|adr| {
+            adr.links
+                .iter()
+                .any(|link| link.kind == crate::LinkKind::SupersededBy)
+        })
+        .filter_map(|adr| adr.path.as_ref())
+        .map(|path| format!("{}: ", path.display()))
+        .collect();
+
     // Run collection rules
     let collection_rules: Vec<Box<dyn CollectionRule>> = vec![
         Box::new(Adr010),
@@ -475,6 +497,16 @@ pub fn check_repository(repo: &Repository) -> Result<LintReport> {
                         && broken_link_fragments
                             .iter()
                             .any(|fragment| violation.message.contains(fragment.as_str()))
+                    {
+                        continue;
+                    }
+
+                    // Suppress ADR010 for ADRs whose links already name the
+                    // replacing ADR (see comment above).
+                    if violation.rule_id == "ADR010"
+                        && superseded_by_fragments
+                            .iter()
+                            .any(|fragment| violation.message.starts_with(fragment.as_str()))
                     {
                         continue;
                     }
@@ -1144,6 +1176,75 @@ Some consequences.
             "link to an existing ADR should not produce ADR013, got: {:?}",
             report.issues.iter().map(|i| &i.message).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_check_repository_frontmatter_superseded_by_no_adr010() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        // nextgen mode: the replacement is named only in frontmatter (#398)
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        std::fs::write(
+            adr_dir.join("0002-old.md"),
+            make_frontmatter_adr(
+                2,
+                "Old",
+                "superseded",
+                "links:\n  - target: 3\n    kind: supersededby\n",
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            adr_dir.join("0003-new.md"),
+            make_frontmatter_adr(
+                3,
+                "New",
+                "accepted",
+                "links:\n  - target: 2\n    kind: supersedes\n",
+            ),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        assert!(
+            !report.issues.iter().any(|i| i.rule_id == "ADR010"),
+            "frontmatter supersededby link should satisfy ADR010, got: {:?}",
+            report.issues.iter().map(|i| &i.message).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_check_repository_superseded_without_link_adr010() {
+        use crate::Repository;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp.path(), None, true).unwrap();
+        let adr_dir = repo.adr_path();
+
+        std::fs::write(
+            adr_dir.join("0002-old.md"),
+            make_frontmatter_adr(2, "Old", "superseded", ""),
+        )
+        .unwrap();
+
+        let report = check_repository(&repo).unwrap();
+
+        let adr010: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.rule_id == "ADR010")
+            .collect();
+        assert_eq!(
+            adr010.len(),
+            1,
+            "superseded ADR with no replacement link should get ADR010, got: {:?}",
+            report.issues.iter().map(|i| &i.message).collect::<Vec<_>>()
+        );
+        assert!(adr010[0].message.contains("0002-old.md"));
     }
 
     #[test]
