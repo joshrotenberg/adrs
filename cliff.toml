@@ -17,7 +17,8 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group | striptags | trim | upper_first }}
     {% for commit in commits %}
-        - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+        - {% if commit.breaking %}**BREAKING:** {% endif %}\
+            {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
             {{ commit.message | upper_first }}\
     {% endfor %}
 {% endfor %}
@@ -30,6 +31,10 @@ conventional_commits = true
 filter_unconventional = true
 split_commits = false
 commit_parsers = [
+    { field = "breaking", pattern = "true", group = "Breaking Changes" },
+    # Security fixes must be classified before generic fixes and dependency skips.
+    { message = "(?i)\\b(security\\b|RUSTSEC-|CVE-|GHSA-)", group = "Security" },
+    { body = "(?i)\\b(security\\b|RUSTSEC-|CVE-|GHSA-)", group = "Security" },
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Bug Fixes" },
     { message = "^doc", group = "Documentation" },
@@ -40,9 +45,8 @@ commit_parsers = [
     { message = "^chore\\(release\\)", skip = true },
     { message = "^chore\\(deps.*\\)", skip = true },
     { message = "^chore|^ci", group = "Miscellaneous" },
-    { body = ".*security", group = "Security" },
 ]
-protect_breaking_commits = false
+protect_breaking_commits = true
 filter_commits = false
 topo_order = false
 sort_commits = "oldest"
