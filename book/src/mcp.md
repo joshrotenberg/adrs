@@ -193,7 +193,7 @@ acceptance.
 - `supersedes` (optional): ADR number this supersedes
 - `format` (optional): Template format -- `nygard` or `madr` for MADR 4.0.0 format. Defaults to `[templates].format`, then `nygard`.
 - `variant` (optional): Template variant -- `full`, `minimal`, `bare`, or `bare-minimal`. Defaults to `[templates].variant`, then `full`.
-- `template` (optional): Path to a custom Jinja2 template file, absolute or relative to the server's repository root. Overrides format, variant, and configuration.
+- `template` (optional): Path to a custom Jinja2 template file within the repository root, absolute or relative. Paths escaping the root, including through symlinks, are rejected. Overrides format, variant, and configuration.
 - `decision_makers` (optional): List of people who made the decision (most useful with MADR format)
 - `consulted` (optional): List of people consulted for input (most useful with MADR format)
 - `informed` (optional): List of people kept informed (most useful with MADR format)
@@ -203,7 +203,15 @@ Template selection follows the CLI: an explicit `template` takes precedence.
 Otherwise, `[templates].custom` is used when neither `format` nor `variant`
 is explicitly supplied. Supplying either selects a built-in template, with
 the other setting falling back to configuration. Missing or unreadable template
-files return an error before creating an ADR.
+files return an error before creating an ADR. Configured custom paths are trusted
+and may refer to files outside the repository.
+
+With a custom template, content parameters are passed to `{{ context }}`,
+`{{ decision }}`, and `{{ consequences }}` before rendering. Include these
+variables where content should appear, regardless of the heading language.
+Templates without these variables retain their static text. Metadata and tags
+are also available during rendering. Template rendering failures leave no new
+ADR and do not mark an existing ADR superseded.
 
 For example, create an ADR with a [custom template](templates.md#custom-templates)
 containing French headings:
@@ -211,7 +219,10 @@ containing French headings:
 ```json
 {
   "title": "Utiliser PostgreSQL",
-  "template": "templates/adr-fr.md"
+  "template": "templates/adr-fr.md",
+  "context": "Nous avons besoin de persistance.",
+  "decision": "Utiliser PostgreSQL.",
+  "consequences": "Former l’équipe."
 }
 ```
 
