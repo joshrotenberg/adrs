@@ -5,8 +5,8 @@
 
 use crate::snippet::extract_snippet;
 use adrs_core::{
-    AdrStatus, Config, IssueSeverity, LinkKind, Repository, TemplateFormat, TemplateVariant,
-    check_all_filtered, export_repository,
+    AdrStatus, Config, IssueSeverity, LinkKind, Repository, Template, TemplateFormat,
+    TemplateVariant, check_all_filtered, export_repository,
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -127,15 +127,23 @@ pub struct CreateAdrParams {
     #[schemars(description = "If this ADR supersedes another, provide its number (optional)")]
     pub supersedes: Option<u32>,
 
-    /// Template format: "nygard" (default) or "madr"
+    /// Template format, falling back to config, then "nygard"
     #[schemars(
-        description = "Template format: 'nygard' (default) or 'madr' for MADR 4.0.0 format"
+        description = "Template format: 'nygard' or 'madr' for MADR 4.0.0. Defaults to config, then 'nygard'. Overrides the configured custom template."
     )]
     pub format: Option<String>,
 
-    /// Template variant: "full" (default), "minimal", or "bare"
-    #[schemars(description = "Template variant: 'full' (default), 'minimal', or 'bare'")]
+    /// Template variant, falling back to config, then "full"
+    #[schemars(
+        description = "Template variant: 'full', 'minimal', 'bare', or 'bare-minimal'. Defaults to config, then 'full'. Overrides the configured custom template."
+    )]
     pub variant: Option<String>,
+
+    /// Custom template file, overriding format, variant, and config
+    #[schemars(
+        description = "Path to a custom Jinja2 template file, absolute or relative to the server's repository root. Overrides format, variant, and config. If omitted, uses templates.custom from config unless format or variant is explicitly set."
+    )]
+    pub template: Option<PathBuf>,
 
     /// Decision makers for MADR format
     #[schemars(
@@ -1104,15 +1112,18 @@ impl AdrState {
     }
 
     fn create_adr_impl(&self, params: CreateAdrParams) -> Result<String, String> {
-        // Parse format/variant before opening repo so we fail fast on invalid input.
-        let template_format = match &params.format {
+        let repo = self.open_repo()?;
+        let templates = &repo.config().templates;
+
+        // Resolve format/variant from tool parameters, then config, then defaults.
+        let template_format = match params.format.as_ref().or(templates.format.as_ref()) {
             Some(f) => f
                 .parse::<TemplateFormat>()
                 .map_err(|_| format!("Invalid format '{}'. Use 'nygard' or 'madr'.", f))?,
             None => TemplateFormat::default(),
         };
 
-        let template_variant = match &params.variant {
+        let template_variant = match params.variant.as_ref().or(templates.variant.as_ref()) {
             Some(v) => v.parse::<TemplateVariant>().map_err(|_| {
                 format!(
                     "Invalid variant '{}'. Use 'full', 'minimal', 'bare', or 'bare-minimal'.",
@@ -1122,10 +1133,30 @@ impl AdrState {
             None => TemplateVariant::default(),
         };
 
-        let repo = self
-            .open_repo()?
+        let mut repo = repo
             .with_template_format(template_format)
             .with_template_variant(template_variant);
+
+        // Match CLI precedence: explicit template, then config custom unless
+        // format/variant was explicitly selected, then the built-in template.
+        let custom_path = params.template.as_ref().or_else(|| {
+            if params.format.is_none() && params.variant.is_none() {
+                repo.config().templates.custom.as_ref()
+            } else {
+                None
+            }
+        });
+        if let Some(custom_path) = custom_path {
+            let full_path = repo.root().join(custom_path);
+            let template = Template::from_file(&full_path).map_err(|e| {
+                format!(
+                    "Failed to load custom template from {}: {}",
+                    full_path.display(),
+                    e
+                )
+            })?;
+            repo = repo.with_custom_template(template);
+        }
 
         let mut warnings: Vec<String> = Vec::new();
 
@@ -3052,7 +3083,168 @@ Confirm via tests.
         client.ping().await.unwrap();
     }
 
-    // ========== New tests for #230 and #234 ==========
+    // A localized template exercises content that built-in templates cannot produce.
+    const FRENCH_TEMPLATE: &str = r#"{% if is_ng %}---
+number: {{ number }}
+title: {{ title | tojson }}
+status: {{ status | lower }}
+date: {{ date }}
+---
+{% endif %}# {{ number }}. {{ title }}
+
+## Contexte
+
+Pourquoi cette décision ?
+
+## Décision
+
+À compléter.
+
+## Conséquences
+
+À évaluer.
+"#;
+
+    #[tokio::test]
+    async fn test_create_adr_explicit_custom_template() {
+        for ng in [false, true] {
+            for absolute in [false, true] {
+                let (client, temp) = setup_client(ng).await;
+                let path = temp.path().join("français.md");
+                std::fs::write(&path, FRENCH_TEMPLATE).unwrap();
+                let config_path = temp
+                    .path()
+                    .join(if ng { "adrs.toml" } else { ".adrs.toml" });
+                std::fs::write(
+                    config_path,
+                    format!(
+                        "mode = \"{}\"\n[templates]\ncustom = \"missing.md\"\n",
+                        if ng { "nextgen" } else { "compatible" }
+                    ),
+                )
+                .unwrap();
+
+                let result = client
+                    .call_tool_text(
+                        "create_adr",
+                        json!({
+                            "title": "Utiliser PostgreSQL",
+                            "template": if absolute { path } else { PathBuf::from("français.md") },
+                            "format": "madr",
+                            "variant": "bare"
+                        }),
+                    )
+                    .await
+                    .unwrap();
+                let created: serde_json::Value = serde_json::from_str(&result).unwrap();
+                let content = std::fs::read_to_string(created["path"].as_str().unwrap()).unwrap();
+                assert!(content.contains("# 2. Utiliser PostgreSQL"));
+                assert!(content.contains("## Décision\n\nÀ compléter."));
+                assert!(!content.contains("## Decision Outcome"));
+                assert_eq!(content.starts_with("---\n"), ng);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_configured_custom_template() {
+        for ng in [false, true] {
+            let (client, temp) = setup_client(ng).await;
+            std::fs::create_dir(temp.path().join("templates")).unwrap();
+            std::fs::write(temp.path().join("templates/fr.md"), FRENCH_TEMPLATE).unwrap();
+            let config_path = temp
+                .path()
+                .join(if ng { "adrs.toml" } else { ".adrs.toml" });
+            std::fs::write(
+                config_path,
+                format!(
+                    "mode = \"{}\"\n[templates]\ncustom = \"templates/fr.md\"\n",
+                    if ng { "nextgen" } else { "compatible" }
+                ),
+            )
+            .unwrap();
+
+            // Superseding must select the same template as ordinary creation.
+            for supersedes in [None, Some(1)] {
+                let result = client
+                    .call_tool_text(
+                        "create_adr",
+                        json!({"title": "Décision française", "supersedes": supersedes}),
+                    )
+                    .await
+                    .unwrap();
+                let created: serde_json::Value = serde_json::from_str(&result).unwrap();
+                let content = std::fs::read_to_string(created["path"].as_str().unwrap()).unwrap();
+                assert!(content.contains("## Contexte"));
+                assert!(content.contains("## Conséquences"));
+                assert_eq!(content.starts_with("---\n"), ng);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_builtin_overrides_configured_custom_template() {
+        let (client, temp) = setup_client(true).await;
+        std::fs::write(
+            temp.path().join("adrs.toml"),
+            "[templates]\nformat = \"madr\"\nvariant = \"bare-minimal\"\ncustom = \"missing.md\"\n",
+        )
+        .unwrap();
+        for params in [
+            json!({"title": "Format override", "format": "nygard"}),
+            json!({"title": "Variant override", "variant": "minimal"}),
+        ] {
+            let nygard = params.get("format").is_some();
+            let result = client.call_tool_text("create_adr", params).await.unwrap();
+            let created: serde_json::Value = serde_json::from_str(&result).unwrap();
+            let content = std::fs::read_to_string(created["path"].as_str().unwrap()).unwrap();
+            if nygard {
+                assert!(content.contains("## Context\n\n\n"));
+                assert!(!content.contains("What is the issue"));
+            } else {
+                assert!(content.contains("## Context and Problem Statement"));
+                assert!(!content.contains("## Decision Drivers"));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_adr_custom_template_errors_do_not_write() {
+        for configured in [false, true] {
+            for invalid_syntax in [false, true] {
+                let (client, temp) = setup_client(false).await;
+                if invalid_syntax {
+                    std::fs::write(temp.path().join("broken.md"), "{% if %}").unwrap();
+                }
+                let mut params = json!({"title": "Must not be created", "supersedes": 1});
+                if configured {
+                    std::fs::write(
+                        temp.path().join(".adrs.toml"),
+                        "[templates]\ncustom = \"broken.md\"\n",
+                    )
+                    .unwrap();
+                } else {
+                    params["template"] = json!("broken.md");
+                }
+                let initial_path = temp
+                    .path()
+                    .join("doc/adr/0001-record-architecture-decisions.md");
+                let original = std::fs::read(&initial_path).unwrap();
+                let result = client.call_tool("create_adr", params).await.unwrap();
+                assert!(result.is_error, "{}", result.all_text());
+                if !invalid_syntax {
+                    assert!(result.all_text().contains("broken.md"));
+                }
+                assert_eq!(
+                    std::fs::read_dir(temp.path().join("doc/adr"))
+                        .unwrap()
+                        .count(),
+                    1
+                );
+                assert_eq!(std::fs::read(initial_path).unwrap(), original);
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_create_adr_madr_format() {
