@@ -191,12 +191,29 @@ acceptance.
 - `decision` (optional): Decision section content
 - `consequences` (optional): Consequences section content
 - `supersedes` (optional): ADR number this supersedes
-- `format` (optional): Template format -- `nygard` (default) or `madr` for MADR 4.0.0 format
-- `variant` (optional): Template variant -- `full` (default), `minimal`, `bare`, or `bare-minimal`
+- `format` (optional): Template format -- `nygard` or `madr` for MADR 4.0.0 format. Defaults to `[templates].format`, then `nygard`.
+- `variant` (optional): Template variant -- `full`, `minimal`, `bare`, or `bare-minimal`. Defaults to `[templates].variant`, then `full`.
+- `template` (optional): Path to a custom Jinja2 template file, absolute or relative to the server's repository root. Overrides format, variant, and configuration.
 - `decision_makers` (optional): List of people who made the decision (most useful with MADR format)
 - `consulted` (optional): List of people consulted for input (most useful with MADR format)
 - `informed` (optional): List of people kept informed (most useful with MADR format)
 - `tags` (optional): Tags for categorization. Applied at creation in NextGen mode. In compatible mode a warning is returned in the response instead of an error.
+
+Template selection follows the CLI: an explicit `template` takes precedence.
+Otherwise, `[templates].custom` is used when neither `format` nor `variant`
+is explicitly supplied. Supplying either selects a built-in template, with
+the other setting falling back to configuration. Missing or unreadable template
+files return an error before creating an ADR.
+
+For example, create an ADR with a [custom template](templates.md#custom-templates)
+containing French headings:
+
+```json
+{
+  "title": "Utiliser PostgreSQL",
+  "template": "templates/adr-fr.md"
+}
+```
 
 ### update_status
 
