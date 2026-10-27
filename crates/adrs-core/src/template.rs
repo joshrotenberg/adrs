@@ -364,7 +364,10 @@ number: {{ number }}
 title: {{ title }}
 status: {{ status | lower }}
 date: {{ date }}
-{% if decision_makers %}decision-makers:
+{% if links %}links:
+{% for link in links %}  - target: {{ link.target }}
+    kind: {{ link.kind | lower | replace(" ", "") }}
+{% endfor %}{% endif %}{% if decision_makers %}decision-makers:
 {% for dm in decision_makers %}  - {{ dm }}
 {% endfor %}{% endif %}{% if consulted %}consulted:
 {% for c in consulted %}  - {{ c }}
@@ -549,7 +552,10 @@ number: {{ number }}
 title: {{ title }}
 status: {{ status | lower }}
 date: {{ date }}
-{% if decision_makers %}decision-makers:
+{% if links %}links:
+{% for link in links %}  - target: {{ link.target }}
+    kind: {{ link.kind | lower | replace(" ", "") }}
+{% endfor %}{% endif %}{% if decision_makers %}decision-makers:
 {% for dm in decision_makers %}  - {{ dm }}
 {% endfor %}{% endif %}{% if consulted %}consulted:
 {% for c in consulted %}  - {{ c }}
@@ -1068,6 +1074,50 @@ mod tests {
     }
 
     // ========== Template Rendering - MADR 4.0.0 ==========
+
+    #[test_case(TemplateVariant::Full; "full")]
+    #[test_case(TemplateVariant::Bare; "bare")]
+    fn test_render_madr_ng_links_roundtrip(variant: TemplateVariant) {
+        let template = Template::builtin_with_variant(TemplateFormat::Madr, variant);
+        let mut adr = Adr::new(6, "Linked decision");
+        adr.links = vec![
+            AdrLink::new(1, LinkKind::Supersedes),
+            AdrLink::new(2, LinkKind::SupersededBy),
+            AdrLink::new(3, LinkKind::Amends),
+            AdrLink::new(4, LinkKind::AmendedBy),
+            AdrLink::new(5, LinkKind::RelatesTo),
+        ];
+        adr.tags = vec!["architecture".into()];
+        adr.decision_makers = vec!["Alice".into()];
+        let config = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
+        let parsed = crate::Parser::new().parse(&output).unwrap();
+
+        assert_eq!(parsed.links, adr.links);
+        assert_eq!(parsed.tags, adr.tags);
+        assert_eq!(parsed.decision_makers, adr.decision_makers);
+    }
+
+    #[test_case(TemplateVariant::Full; "full")]
+    #[test_case(TemplateVariant::Bare; "bare")]
+    fn test_render_madr_ng_without_links(variant: TemplateVariant) {
+        let template = Template::builtin_with_variant(TemplateFormat::Madr, variant);
+        let adr = Adr::new(1, "Unlinked decision");
+        let config = Config {
+            mode: ConfigMode::NextGen,
+            ..Default::default()
+        };
+
+        let output = template.render(&adr, &config, &no_link_titles()).unwrap();
+        let parsed = crate::Parser::new().parse(&output).unwrap();
+
+        assert!(!output.contains("links:"));
+        assert!(parsed.links.is_empty());
+    }
 
     #[test]
     fn test_render_madr_basic() {
