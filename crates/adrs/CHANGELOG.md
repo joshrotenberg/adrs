@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Bug Fixes
+
+- MCP `create_adr` supports explicit and configured custom templates, rendering
+  content parameters directly so localized headings work without partial writes.
+- MCP `create_adr` now honors configured template format and variant defaults
+  instead of always using Nygard/full. Explicit format or variant parameters
+  override the configured custom template, matching the CLI.
+- Explicit MCP template paths must remain within the repository root, including
+  after symlink resolution. Configured custom paths remain unrestricted.
+
 ## [0.12.1] - 2026-09-03
 
 ### Testing
