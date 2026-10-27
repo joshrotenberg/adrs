@@ -1641,6 +1641,82 @@ fn test_new_no_edit_flag() {
 // ============================================================================
 
 #[test]
+fn test_new_madr_ng_supersedes_preserves_reciprocal_links() {
+    for variant in ["full", "bare"] {
+        let temp = assert_fs::TempDir::new().unwrap();
+
+        adrs()
+            .current_dir(temp.path())
+            .args(["--ng", "init"])
+            .assert()
+            .success();
+
+        adrs()
+            .current_dir(temp.path())
+            .args([
+                "--ng",
+                "new",
+                "--no-edit",
+                "--format",
+                "madr",
+                "--variant",
+                variant,
+                "Old",
+            ])
+            .assert()
+            .success();
+
+        adrs()
+            .current_dir(temp.path())
+            .args([
+                "--ng",
+                "new",
+                "--no-edit",
+                "--format",
+                "madr",
+                "--variant",
+                variant,
+                "--supersedes",
+                "2",
+                "New",
+            ])
+            .assert()
+            .success();
+
+        let parser = adrs_core::Parser::new();
+        let old_adr = parser
+            .parse_file(&temp.path().join("doc/adr/0002-old.md"))
+            .unwrap();
+        let new_adr = parser
+            .parse_file(&temp.path().join("doc/adr/0003-new.md"))
+            .unwrap();
+        assert_eq!(old_adr.status, adrs_core::AdrStatus::Superseded);
+        assert_eq!(
+            old_adr.links,
+            vec![adrs_core::AdrLink::new(
+                3,
+                adrs_core::LinkKind::SupersededBy
+            )],
+            "{variant} must retain the old ADR's reverse link"
+        );
+        assert_eq!(
+            new_adr.links,
+            vec![adrs_core::AdrLink::new(2, adrs_core::LinkKind::Supersedes)],
+            "{variant} must retain the new ADR's supersedes link"
+        );
+
+        adrs()
+            .current_dir(temp.path())
+            .arg("doctor")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("asymmetric-link").not());
+
+        temp.close().unwrap();
+    }
+}
+
+#[test]
 fn test_new_supersedes_honors_explicit_status() {
     let temp = assert_fs::TempDir::new().unwrap();
 
