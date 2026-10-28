@@ -91,12 +91,54 @@ git cliff adrs-core-v0.12.1..HEAD --tag adrs-core-v0.13.0 --include-path 'crates
 Check that breaking commits are marked and that dependency security fixes
 appear by name. release-plz regenerates its release PR after the corrected
 configuration reaches `main`. Review the regenerated per-crate changelogs
-before merging that PR. For root-only security fixes, manually add a Security
-entry naming the advisory and fix to each affected crate's `CHANGELOG.md` on
-the release PR branch, then confirm it remains after any regeneration.
-For 0.13.0, the Tokio fix in joshrotenberg/adrs#402 (RUSTSEC-2026-0386)
-is root-only and needs this check in joshrotenberg/adrs#400. Automatic
-coverage of root-only fixes is tracked in joshrotenberg/adrs#409.
+before merging that PR.
+
+### Root-only security fixes
+
+A security fix that changes only the workspace-root `Cargo.toml` or
+`Cargo.lock` needs a hand-written entry in each crate that ships the changed
+dependency. Add it on `main`, not on the release PR branch:
+
+1. In each affected crate's `CHANGELOG.md`, add a `### Security` entry under
+   `## [Unreleased]` that names the advisory ID and the fix. Create the
+   `## [Unreleased]` heading below the file header if it is missing.
+2. Commit the entry as `docs(changelog): ...`. `cliff.toml` skips those
+   commits, so the entry is not listed a second time.
+
+release-plz keeps the `## [Unreleased]` heading and inserts each new release
+section after it, so the hand-written entries end up in the next release
+section and survive every regeneration of the release PR. Commits pushed to
+the release PR branch do not survive: when the branch has a commit from
+someone other than the release-plz bot, release-plz closes that PR on the next
+push to `main` and opens a new one without the commit.
+
+The `Changelog (root-only security fixes)` CI job runs
+`.github/scripts/check-root-security-changelog.py`. For each crate it checks
+the commits since the crate's last release tag that name an advisory
+(`RUSTSEC-`, `CVE-`, `GHSA-`) or use the `security` scope, touch no crate
+directory, and change a locked version or `[workspace.dependencies]` entry the
+crate depends on outside dev-dependencies. It fails when the crate's
+`CHANGELOG.md` does not contain each advisory ID the commit names (or, for a
+commit that names none, its subject). Routine dependency bumps name no
+advisory, so they need no entry and stay out of the changelogs. Run it locally
+with:
+
+```bash
+python3 .github/scripts/check-root-security-changelog.py
+```
+
+A security fix that touches a crate directory is listed in that crate's
+changelog by `cliff.toml`. The check does not require another crate that
+depends on it to repeat the entry.
+
+To preview the release PR's changelogs, including `## [Unreleased]` entries,
+run `release-plz update` in a scratch clone and read the crate changelogs:
+
+```bash
+git clone --quiet . /tmp/adrs-preview && cd /tmp/adrs-preview
+release-plz update
+git diff -- crates/*/CHANGELOG.md
+```
 
 ## Verifying a complete release
 
