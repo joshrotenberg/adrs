@@ -33,8 +33,8 @@ split_commits = false
 commit_parsers = [
     { field = "breaking", pattern = "true", group = "Breaking Changes" },
     # Security fixes must be classified before generic fixes and dependency skips.
-    { message = "(?i)\\b(security\\b|RUSTSEC-|CVE-|GHSA-)", group = "Security" },
-    { body = "(?i)\\b(security\\b|RUSTSEC-|CVE-|GHSA-)", group = "Security" },
+    { message = "^[^\\n]*(?i)\\b(security\\b|RUSTSEC-|CVE-|GHSA-)", group = "Security" },
+    { body = "\\b(RUSTSEC|CVE|GHSA)-", group = "Security" },
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Bug Fixes" },
     { message = "^doc", group = "Documentation" },

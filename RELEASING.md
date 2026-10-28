@@ -62,15 +62,16 @@ cargo-dist builds for five targets (configured in `dist-workspace.toml`):
 ## Changelog classification
 
 `cliff.toml` puts commits with a conventional-commit `!` marker or a
-`BREAKING CHANGE:` footer under Breaking Changes and prefixes each entry with `**BREAKING:**`. Breaking
-commits are protected from skip rules, including dependency bumps.
+`BREAKING CHANGE:` footer under Breaking Changes and prefixes each entry
+with `**BREAKING:**`. Breaking commits are protected from skip rules,
+including dependency bumps.
 
-Non-breaking commits whose subject or body contains `security` (case
-insensitive) or an advisory identifier starting with `RUSTSEC-`, `CVE-`, or
-`GHSA-` appear under Security. These rules run before generic fix rules and
-dependency skip rules. Routine `chore(deps)` and `chore(deps-dev)` bumps
-remain omitted. Security fixes that also break the API appear under
-Breaking Changes.
+Non-breaking commits whose subject contains `security` (case insensitive),
+or whose subject or body contains an advisory identifier starting with
+`RUSTSEC-`, `CVE-`, or `GHSA-`, appear under Security. These rules run before
+generic fix rules and dependency skip rules. Routine `chore(deps)` and
+`chore(deps-dev)` bumps remain omitted. Security fixes that also break the
+API appear under Breaking Changes.
 
 Before merging a changelog configuration change, preview the unreleased
 entries with git-cliff 2.x:
@@ -84,7 +85,6 @@ git cliff v0.12.1..HEAD --tag v0.13.0
 Check that breaking commits are marked and that dependency security fixes
 appear by name. release-plz regenerates its release PR after the corrected
 configuration reaches `main`; per-crate changelogs need no manual edits.
-
 
 ## Verifying a complete release
 
