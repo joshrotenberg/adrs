@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- Require Tokio 1.53.3 to resolve RUSTSEC-2026-0386 (#402). Tokio is a
+  dependency of the MCP server, which the default `mcp` feature enables.
+
 ### Bug Fixes
 
 - MCP `create_adr` supports explicit and configured custom templates, rendering
