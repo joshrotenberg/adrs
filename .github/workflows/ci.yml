@@ -97,3 +97,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check ${{ matrix.crate }} on ${{ matrix.rust }}
         run: cargo check -p ${{ matrix.crate }} --all-features --locked
+
+  # release-plz builds each crate's changelog only from commits under that
+  # crate's directory, so a security fix that changes only the workspace-root
+  # Cargo.toml or Cargo.lock never reaches a crate changelog (#409). Require a
+  # hand-written entry for each crate that ships the changed dependency. See
+  # "Root-only security fixes" in RELEASING.md.
+  changelog:
+    name: Changelog (root-only security fixes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Release tags bound the range of commits to check.
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check crate changelogs name root-only security fixes
+        run: python3 .github/scripts/check-root-security-changelog.py
