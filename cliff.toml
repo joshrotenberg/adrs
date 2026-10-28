@@ -32,6 +32,9 @@ filter_unconventional = true
 split_commits = false
 commit_parsers = [
     { field = "breaking", pattern = "true", group = "Breaking Changes" },
+    # Hand-written changelog entries are already in the changelog. Skip the
+    # commit that adds them, even when its body names an advisory.
+    { message = "^docs\\(changelog\\)", skip = true },
     # Security fixes must be classified before generic fixes and dependency skips.
     { message = "(?i)^[a-z]+\\(security\\)!?:", group = "Security" },
     { message = "^[^\\n]*(?i)\\b(RUSTSEC-|CVE-|GHSA-)", group = "Security" },
