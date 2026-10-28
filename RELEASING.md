@@ -66,25 +66,37 @@ cargo-dist builds for five targets (configured in `dist-workspace.toml`):
 with `**BREAKING:**`. Breaking commits are protected from skip rules,
 including dependency bumps.
 
-Non-breaking commits whose subject contains `security` (case insensitive),
-or whose subject or body contains an advisory identifier starting with
+Non-breaking commits with an explicit `(security)` scope, such as
+`fix(security): reject unsafe paths` (case insensitive), or whose subject
+or body contains an advisory identifier starting with
 `RUSTSEC-`, `CVE-`, or `GHSA-`, appear under Security. These rules run before
 generic fix rules and dependency skip rules. Routine `chore(deps)` and
 `chore(deps-dev)` bumps remain omitted. Security fixes that also break the
 API appear under Breaking Changes.
 
-Before merging a changelog configuration change, preview the unreleased
-entries with git-cliff 2.x:
+release-plz builds each crate's changelog from commits that touch that crate's
+directory. Commits that only change the workspace-root `Cargo.toml` and
+`Cargo.lock` are absent from both crate changelogs, even when the Security
+parser matches. A repository-wide preview does not reveal this omission.
+
+Before merging a changelog configuration change, preview each crate with
+git-cliff 2.x. Use each crate's published tag as the range baseline:
 
 ```bash
-git cliff --unreleased
 # Preview a specific release range without changing the changelog files:
-git cliff v0.12.1..HEAD --tag v0.13.0
+git cliff v0.12.1..HEAD --tag v0.13.0 --include-path 'crates/adrs/**'
+git cliff adrs-core-v0.12.1..HEAD --tag adrs-core-v0.13.0 --include-path 'crates/adrs-core/**'
 ```
 
 Check that breaking commits are marked and that dependency security fixes
 appear by name. release-plz regenerates its release PR after the corrected
-configuration reaches `main`; per-crate changelogs need no manual edits.
+configuration reaches `main`. Review the regenerated per-crate changelogs
+before merging that PR. For root-only security fixes, manually add a Security
+entry naming the advisory and fix to each affected crate's `CHANGELOG.md` on
+the release PR branch, then confirm it remains after any regeneration.
+For 0.13.0, the Tokio fix in joshrotenberg/adrs#402 (RUSTSEC-2026-0386)
+is root-only and needs this check in joshrotenberg/adrs#400. Automatic
+coverage of root-only fixes is tracked in joshrotenberg/adrs#409.
 
 ## Verifying a complete release
 
