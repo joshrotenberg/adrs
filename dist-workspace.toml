@@ -19,3 +19,9 @@ allow-dirty = ["ci"]
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
+
+# dist 0.32.0's default runner for aarch64-apple-darwin is macos-14, retired
+# by GitHub on 2026-11-02 (actions/runner-images#13518). Its x86_64 default
+# already moved to macos-15-intel.
+[dist.github-custom-runners]
+aarch64-apple-darwin = "macos-latest"
