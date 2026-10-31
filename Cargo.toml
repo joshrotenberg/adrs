@@ -18,7 +18,7 @@ serde_norway = "0.9"
 toml = "0.8"
 
 # Markdown
-pulldown-cmark = "0.13"
+pulldown-cmark = "0.13.5"
 
 # Templates
 minijinja = { version = "2", features = ["json", "loader"] }
