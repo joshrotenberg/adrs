@@ -2352,13 +2352,36 @@ acceptance.</p>
 <li><code>decision</code> (optional): Decision section content</li>
 <li><code>consequences</code> (optional): Consequences section content</li>
 <li><code>supersedes</code> (optional): ADR number this supersedes</li>
-<li><code>format</code> (optional): Template format -- <code>nygard</code> (default) or <code>madr</code> for MADR 4.0.0 format</li>
-<li><code>variant</code> (optional): Template variant -- <code>full</code> (default), <code>minimal</code>, <code>bare</code>, or <code>bare-minimal</code></li>
+<li><code>format</code> (optional): Template format -- <code>nygard</code> or <code>madr</code> for MADR 4.0.0 format. Defaults to <code>[templates].format</code>, then <code>nygard</code>.</li>
+<li><code>variant</code> (optional): Template variant -- <code>full</code>, <code>minimal</code>, <code>bare</code>, or <code>bare-minimal</code>. Defaults to <code>[templates].variant</code>, then <code>full</code>.</li>
+<li><code>template</code> (optional): Path to a custom Jinja2 template file within the repository root, absolute or relative. Paths escaping the root, including through symlinks, are rejected. Overrides format, variant, and configuration.</li>
 <li><code>decision_makers</code> (optional): List of people who made the decision (most useful with MADR format)</li>
 <li><code>consulted</code> (optional): List of people consulted for input (most useful with MADR format)</li>
 <li><code>informed</code> (optional): List of people kept informed (most useful with MADR format)</li>
 <li><code>tags</code> (optional): Tags for categorization. Applied at creation in NextGen mode. In compatible mode a warning is returned in the response instead of an error.</li>
 </ul>
+<p>Template selection follows the CLI: an explicit <code>template</code> takes precedence.
+Otherwise, <code>[templates].custom</code> is used when neither <code>format</code> nor <code>variant</code>
+is explicitly supplied. Supplying either selects a built-in template, with
+the other setting falling back to configuration. Missing or unreadable template
+files return an error before creating an ADR. Configured custom paths are trusted
+and may refer to files outside the repository.</p>
+<p>With a custom template, content parameters are passed to <code>{{ context }}</code>,
+<code>{{ decision }}</code>, and <code>{{ consequences }}</code> before rendering. Include these
+variables where content should appear, regardless of the heading language.
+Templates without these variables retain their static text. Metadata and tags
+are also available during rendering. Template rendering failures leave no new
+ADR and do not mark an existing ADR superseded.</p>
+<p>For example, create an ADR with a <a href="templates.html#custom-templates">custom template</a>
+containing French headings:</p>
+<pre><code class="language-json">{
+  "title": "Utiliser PostgreSQL",
+  "template": "templates/adr-fr.md",
+  "context": "Nous avons besoin de persistance.",
+  "decision": "Utiliser PostgreSQL.",
+  "consequences": "Former l’équipe."
+}
+</code></pre>
 <h3 id="update_status"><a class="header" href="#update_status">update_status</a></h3>
 <p>Change an ADR's status.</p>
 <p><strong>Parameters:</strong></p>
