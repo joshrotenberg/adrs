@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-31
+
+### Bug Fixes
+
+- Preserve links in MADR frontmatter
+- Support custom templates in MCP create_adr
+- Render MCP content before creating custom-template ADRs
+
+
 ### Security
 
 - Require Tokio 1.53.3 to resolve RUSTSEC-2026-0386 (#402). Tokio is a
