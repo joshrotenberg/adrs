@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 - Require Tokio 1.53.3 to resolve RUSTSEC-2026-0386 (#402). Tokio is a
   dependency of the MCP server, which the default `mcp` feature enables.
+- Require pulldown-cmark 0.13.5 to resolve RUSTSEC-2026-0414 (#411). The
+  advisory needs the wikilinks option, which adrs does not enable; markdown
+  parsing uses default options.
 
 ### Bug Fixes
 

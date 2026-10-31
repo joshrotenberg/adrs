@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+
+- Require pulldown-cmark 0.13.5 to resolve RUSTSEC-2026-0414 (#411). The
+  advisory needs the wikilinks option, which adrs-core does not enable;
+  markdown parsing uses default options.
+
 ## [0.12.1] - 2026-09-03
 
 ### Testing
