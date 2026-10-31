@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0] - 2026-10-31
+
+### Breaking Changes
+
+- **BREAKING:** Replace serde_yaml_neo with serde_norway to drop unsafe-libyaml
+
+### Bug Fixes
+
+- Run ADR014 with the detected format so placeholder Nygard sections are flagged
+- **lint:** Recognize frontmatter superseded-by links in ADR010
+- Preserve links in MADR frontmatter
+
+
 ## [0.12.1] - 2026-09-03
 
 ### Testing
