@@ -38,10 +38,18 @@ release.yml jobs:
   host          -- uploads artifacts and creates the GitHub Release ONCE, with all
                    artifacts attached. Sole release creator. Idempotent: a re-run
                    uploads to the existing release instead of failing (#283).
-  verify-release -- confirms the published release has its full asset set + a valid
-                   checksum; re-drafts and fails if incomplete (#285)
+  packslip      -- downloads the published files, attests their build provenance,
+                   and signs packslip.sigstore.json for the archives
+                   (https://packslip.dev). Has read-only contents access.
+  publish-packslip -- uploads packslip.sigstore.json to the release
+  verify-release -- confirms the published release has its full asset set, the
+                   packslip bundle, a valid checksum and a valid attestation;
+                   re-drafts and fails if incomplete (#285)
   announce      -- no-op placeholder; runs only after verify-release succeeds
-  cleanup-on-failure -- drafts the release if any build OR host job fails (#242, #281)
+  cleanup-on-failure -- drafts the release if any build OR host job fails
+                   (#242, #281). A packslip failure leaves the release public
+                   without a bundle and skips verify-release and announce;
+                   re-run the failed jobs.
 ```
 
 Note: a CI/workflow-only change merged to `main` does NOT trigger a release
@@ -173,9 +181,18 @@ gh api 'repos/Homebrew/homebrew-core/commits?path=Formula/a/adrs.rb&per_page=1' 
 ```
 
 `verify-release` (`.github/workflows/release.yml`) fails the release if there
-are fewer than 14 assets (5 archives + 5 checksums + 2 installers +
-`sha256.sum` + `dist-manifest.json`). A typical release has 16 assets, once
-the source archive and its checksum are included. (Releases up to v0.9.0 also
+are fewer than 15 assets (5 archives + 5 checksums + 2 installers +
+`sha256.sum` + `dist-manifest.json` + `packslip.sigstore.json`), if
+`packslip.sigstore.json` is missing, or if the linux x86_64 archive has no
+valid attestation. A typical release has 17 assets, once the source archive
+and its checksum are included.
+
+To check provenance and the packslip by hand:
+
+```bash
+gh attestation verify adrs-x86_64-unknown-linux-gnu.tar.xz --repo joshrotenberg/adrs
+packslip verify packslip.sigstore.json --artifact adrs-x86_64-unknown-linux-gnu.tar.xz
+``` (Releases up to v0.9.0 also
 attached `adrs.rb`, for 17; the formula moved to homebrew-core.)
 
 ## Required secrets
