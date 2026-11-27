@@ -38,18 +38,21 @@ release.yml jobs:
   host          -- uploads artifacts and creates the GitHub Release ONCE, with all
                    artifacts attached. Sole release creator. Idempotent: a re-run
                    uploads to the existing release instead of failing (#283).
-  packslip      -- downloads the published files, attests their build provenance,
-                   and signs packslip.sigstore.json for the archives
+  verify-release -- confirms the published release has its full asset set + a valid
+                   checksum; re-drafts and fails if incomplete (#285)
+  attest-and-sign -- runs after verify-release. Attests the files this run built
+                   (the same bytes host uploaded) and signs
+                   packslip.sigstore.json for the archives
                    (https://packslip.dev). Has read-only contents access.
   publish-packslip -- uploads packslip.sigstore.json to the release
-  verify-release -- confirms the published release has its full asset set, the
-                   packslip bundle, a valid checksum and a valid attestation;
-                   re-drafts and fails if incomplete (#285)
-  announce      -- no-op placeholder; runs only after verify-release succeeds
+  verify-attestations -- confirms the bundle is on the release and all five archives
+                   carry this workflow's attestation for the tag; fails
+                   without drafting
+  announce      -- no-op placeholder; runs only after verify-release and
+                   verify-attestations succeed
   cleanup-on-failure -- drafts the release if any build OR host job fails
                    (#242, #281). A packslip failure leaves the release public
-                   without a bundle and skips verify-release and announce;
-                   re-run the failed jobs.
+                   without a bundle and skips announce; re-run the failed jobs.
 ```
 
 Note: a CI/workflow-only change merged to `main` does NOT trigger a release
@@ -181,19 +184,24 @@ gh api 'repos/Homebrew/homebrew-core/commits?path=Formula/a/adrs.rb&per_page=1' 
 ```
 
 `verify-release` (`.github/workflows/release.yml`) fails the release if there
-are fewer than 15 assets (5 archives + 5 checksums + 2 installers +
-`sha256.sum` + `dist-manifest.json` + `packslip.sigstore.json`), if
-`packslip.sigstore.json` is missing, or if the linux x86_64 archive has no
-valid attestation. A typical release has 17 assets, once the source archive
-and its checksum are included.
+are fewer than 14 assets (5 archives + 5 checksums + 2 installers +
+`sha256.sum` + `dist-manifest.json`). A typical release has 17 assets, once
+the source archive, its checksum and `packslip.sigstore.json` are included.
+(Releases up to v0.9.0 also attached `adrs.rb`; the formula moved to
+homebrew-core.)
+
+`verify-attestations` fails if `packslip.sigstore.json` is missing, if the release
+does not have exactly five archives, or if any archive lacks an attestation
+from `release.yml` for that tag. It does not re-check the bundle's signature;
+the packslip action does that before upload. It never drafts the release, because
+the release is complete without the bundle and attestations. Re-run it after a Sigstore or API outage.
 
 To check provenance and the packslip by hand:
 
 ```bash
 gh attestation verify adrs-x86_64-unknown-linux-gnu.tar.xz --repo joshrotenberg/adrs
 packslip verify packslip.sigstore.json --artifact adrs-x86_64-unknown-linux-gnu.tar.xz
-``` (Releases up to v0.9.0 also
-attached `adrs.rb`, for 17; the formula moved to homebrew-core.)
+```
 
 ## Required secrets
 
@@ -221,7 +229,12 @@ To recover:
    "Create GitHub Release" step is idempotent (#283): a re-run uploads artifacts
    to the existing/drafted release and un-drafts it, instead of failing with
    "a release with the same tag name already exists".
-4. Once all jobs pass (including `verify-release`), confirm the release artifacts.
+4. Once all jobs pass (including `verify-release` and `verify-attestations`),
+   confirm the release artifacts. `verify-attestations` reads the release with a
+   read-only token, which cannot see a draft, so it only passes once the
+   release is published. A release attached by hand
+   (below) gets no attestations or bundle; re-run the `attest-and-sign`,
+   `publish-packslip` and `verify-attestations` jobs after publishing it.
 
 If a re-run fails with `HTTP 403: Resource not accessible by integration`, the
 re-run got a restricted `GITHUB_TOKEN` (a known GitHub re-run quirk). Recover

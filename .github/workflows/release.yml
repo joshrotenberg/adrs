@@ -305,29 +305,32 @@ jobs:
   # is `brew bump-formula-pr adrs`. The tap redirects via tap_migrations.json.
 
   # Custom job (manual addition; ci is in dist allow-dirty; not dist's own
-  # github-attestations option, which needs `dist generate`): attest every
-  # published release file and sign a packslip (https://packslip.dev) for the
-  # archives. Read-only contents, so the signing action cannot alter the release.
-  packslip:
+  # github-attestations option, which needs `dist generate`): attest this run's
+  # build outputs (the bytes `host` uploaded) and sign a packslip
+  # (https://packslip.dev) for the archives. Waits for verify-release so a
+  # rejected release is never signed. Read-only contents, so the signing action
+  # cannot alter the release. Skipped on PR runs because verify-release is.
+  # Actions in the three attest/packslip jobs are SHA-pinned: they hold
+  # id-token or release write access.
+  attest-and-sign:
     needs:
       - plan
-      - host
-    if: ${{ always() && needs.host.result == 'success' && needs.plan.outputs.publishing == 'true' }}
+      - verify-release
     runs-on: "ubuntu-latest"
     permissions:
       contents: read
       id-token: write
       attestations: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Download release files
-        env:
-          TAG: ${{ needs.plan.outputs.tag }}
-        run: |
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release --clobber
-          # A re-run must not attest or sign the previous run's bundle.
-          rm -f release/packslip*.sigstore.json
+      - name: Fetch this run's release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: artifacts-*
+          path: release
+          merge-multiple: true
+      # Must mirror host's Cleanup step, so the attested set equals what host uploaded.
+      - name: Drop files host does not publish
+        run: rm -f release/*-dist-manifest.json
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -351,8 +354,7 @@ jobs:
   publish-packslip:
     needs:
       - plan
-      - packslip
-    if: ${{ always() && needs.packslip.result == 'success' }}
+      - attest-and-sign
     runs-on: "ubuntu-latest"
     permissions:
       contents: write
@@ -372,8 +374,9 @@ jobs:
   # artifact build OR the host (upload/release) job fails, draft the release so
   # an incomplete one is never left public. See #242 (root cause of #217) and
   # #281 (host-failure gap that left v0.7.5's release empty).
-  # packslip failures are excluded: its contents:read token cannot see a draft,
-  # so drafting would make "Re-run failed jobs" fail forever.
+  # The attest/packslip jobs are excluded: verify-attestations reads the release
+  # with a contents:read token, which cannot see a draft, so drafting would make
+  # "Re-run failed jobs" fail forever.
   cleanup-on-failure:
     needs:
       - plan
@@ -410,12 +413,8 @@ jobs:
     needs:
       - plan
       - host
-      - publish-packslip
-    if: ${{ always() && needs.host.result == 'success' && needs.publish-packslip.result == 'success' && needs.plan.outputs.publishing == 'true' }}
+    if: ${{ needs.host.result == 'success' && needs.plan.outputs.publishing == 'true' }}
     runs-on: "ubuntu-22.04"
-    permissions:
-      contents: write
-      attestations: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -425,14 +424,9 @@ jobs:
           COUNT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')
           echo "Release $TAG has $COUNT assets:"
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort | sed 's/^/  /'
-          # Expect >= 15: 5 tarballs + 5 .sha256 + 2 installers + sha256.sum + dist-manifest.json + packslip.sigstore.json
-          if [ "$COUNT" -lt 15 ]; then
-            echo "::error::Incomplete release: $COUNT assets (expected >= 15). Re-drafting so it is not public."
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft
-            exit 1
-          fi
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx 'packslip.sigstore.json'; then
-            echo "::error::Release $TAG has no packslip.sigstore.json. Re-drafting."
+          # Expect >= 14: 5 tarballs + 5 .sha256 + 2 installers + sha256.sum + dist-manifest.json
+          if [ "$COUNT" -lt 14 ]; then
+            echo "::error::Incomplete release: $COUNT assets (expected >= 14). Re-drafting so it is not public."
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft
             exit 1
           fi
@@ -448,22 +442,56 @@ jobs:
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft
             exit 1
           fi
-          if ! gh attestation verify "$DL"/adrs-x86_64-unknown-linux-gnu.tar.xz --repo "$GITHUB_REPOSITORY"; then
-            echo "::error::No valid build provenance attestation for the linux x86_64 tarball. Re-drafting."
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft
+          echo "Release $TAG verified: complete asset set + checksum OK."
+
+  # Custom job (manual addition): checks the bundle is published and every archive
+  # carries this workflow's attestation for this tag. Kept apart from
+  # verify-release so a Sigstore or API outage never drafts a complete release.
+  # It fails without drafting; re-run it once the outage clears. The bundle's
+  # signature is checked by the packslip action before upload, not here.
+  verify-attestations:
+    needs:
+      - plan
+      - publish-packslip
+    runs-on: "ubuntu-latest"
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check the bundle is published and the archives are attested
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          DL="$(mktemp -d)"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$DL" \
+            --pattern packslip.sigstore.json --pattern 'adrs-*.tar.xz' --pattern 'adrs-*.zip'
+          test -f "$DL/packslip.sigstore.json" || { echo "::error::Release $TAG has no packslip.sigstore.json."; exit 1; }
+          # One archive per `targets` entry in dist-workspace.toml.
+          EXPECTED_ARCHIVES=5
+          shopt -s nullglob
+          archives=("$DL"/adrs-*.tar.xz "$DL"/adrs-*.zip)
+          if [ "${#archives[@]}" -ne "$EXPECTED_ARCHIVES" ]; then
+            echo "::error::Expected $EXPECTED_ARCHIVES archives on release $TAG, found ${#archives[@]}."
             exit 1
           fi
-          echo "Release $TAG verified: complete asset set + checksum + attestation OK."
+          for f in "${archives[@]}"; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-ref "refs/tags/$TAG"
+          done
 
   announce:
     needs:
       - plan
       - host
       - verify-release
+      - verify-attestations
     # use "always() && ..." to allow us to wait for all publish jobs while
     # still allowing individual publish jobs to skip themselves (for prereleases).
-    # "host" and "verify-release" however must succeed, no skipping allowed!
-    if: ${{ always() && needs.host.result == 'success' && needs.verify-release.result == 'success' }}
+    # "host", "verify-release" and "verify-attestations" however must succeed, no skipping allowed!
+    if: ${{ always() && needs.host.result == 'success' && needs.verify-release.result == 'success' && needs.verify-attestations.result == 'success' }}
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
